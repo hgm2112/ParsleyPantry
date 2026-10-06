@@ -1,0 +1,278 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireDal } from "@/lib/auth";
+import { parseCategoryLabel } from "@/lib/kitchenowl";
+
+export type ActionResult<T = null> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+export type ImportSummary = {
+  categories: { created: number };
+  items: { created: number; skipped: number };
+  recipes: { created: number; skipped: number };
+  ingredients: number;
+};
+
+const owlIngredientSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullish(),
+  optional: z.boolean().nullish(),
+});
+
+const owlExportSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string().min(1),
+      category: z.string().nullish(),
+      icon: z.string().nullish(),
+    }),
+  ),
+  recipes: z.array(
+    z.object({
+      name: z.string().min(1),
+      description: z.string().nullish(),
+      prep_time: z.number().nullish(),
+      cook_time: z.number().nullish(),
+      time: z.number().nullish(),
+      yields: z.number().nullish(),
+      source: z.string().nullish(),
+      tags: z.array(z.string()).nullish(),
+      items: z.array(owlIngredientSchema).nullish(),
+    }),
+  ),
+});
+
+const CHUNK = 100;
+
+type ChunkResult = { id: string; name: string }[];
+
+async function insertChunked(
+  supabase: Awaited<ReturnType<typeof requireDal>>["supabase"],
+  table: "categories" | "items" | "recipes" | "recipe_ingredients",
+  rows: Record<string, unknown>[],
+  select: string,
+): Promise<ChunkResult> {
+  const inserted: ChunkResult = [];
+  for (let index = 0; index < rows.length; index += CHUNK) {
+    const slice = rows.slice(index, index + CHUNK);
+    const { data, error } = await supabase.from(table).insert(slice).select(select);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    inserted.push(...((data ?? []) as unknown as ChunkResult));
+  }
+  return inserted;
+}
+
+export async function importKitchenOwl(
+  input: unknown,
+): Promise<ActionResult<ImportSummary>> {
+  try {
+    const parsed = owlExportSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "That file doesn't look like a KitchenOwl export (need items[] and recipes[])",
+      };
+    }
+
+    const { supabase, householdId, user } = await requireDal();
+    const { items: owlItems, recipes: owlRecipes } = parsed.data;
+
+    /* Categories ------------------------------------------------------ */
+
+    const { data: existingCategories } = await supabase
+      .from("categories")
+      .select("id, name, sort_order")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true });
+
+    const categoryByKey = new Map<string, string>();
+    let nextCategorySort = 0;
+    for (const row of (existingCategories ?? []) as {
+      id: string;
+      name: string;
+      sort_order: number;
+    }[]) {
+      categoryByKey.set(row.name.toLowerCase(), row.id);
+      nextCategorySort = Math.max(nextCategorySort, row.sort_order + 1);
+    }
+
+    const labelOrder: { label: string; name: string; icon: string | null }[] = [];
+    const seenLabels = new Set<string>();
+    for (const item of owlItems) {
+      const label = (item.category ?? "").trim();
+      if (!label || seenLabels.has(label.toLowerCase())) continue;
+      seenLabels.add(label.toLowerCase());
+      const parsedLabel = parseCategoryLabel(label);
+      labelOrder.push({ label, ...parsedLabel });
+    }
+
+    const queuedCategoryKeys = new Set<string>();
+    const pendingCategories = labelOrder.filter((entry) => {
+      const key = entry.name.toLowerCase();
+      if (categoryByKey.has(key) || queuedCategoryKeys.has(key)) return false;
+      queuedCategoryKeys.add(key);
+      return true;
+    });
+    if (pendingCategories.length > 0) {
+      const inserted = await insertChunked(
+        supabase,
+        "categories",
+        pendingCategories.map((entry) => ({
+          household_id: householdId,
+          name: entry.name,
+          icon: entry.icon,
+          sort_order: nextCategorySort++,
+        })),
+        "id, name",
+      );
+      for (const row of inserted) {
+        categoryByKey.set(row.name.toLowerCase(), row.id);
+      }
+    }
+
+    const categoryIdForLabel = (label: string | null | undefined): string | null => {
+      const trimmed = (label ?? "").trim();
+      if (!trimmed) return null;
+      return categoryByKey.get(parseCategoryLabel(trimmed).name.toLowerCase()) ?? null;
+    };
+
+    /* Items ----------------------------------------------------------- */
+
+    const { data: existingItems } = await supabase
+      .from("items")
+      .select("id, name")
+      .eq("household_id", householdId);
+
+    const itemByKey = new Map<string, { id: string; name: string }>();
+    for (const row of (existingItems ?? []) as { id: string; name: string }[]) {
+      itemByKey.set(row.name.toLowerCase(), { id: row.id, name: row.name });
+    }
+
+    const pendingItems: Record<string, unknown>[] = [];
+    const queuedItemKeys = new Set<string>();
+    let itemsSkipped = 0;
+    for (const owlItem of owlItems) {
+      const name = owlItem.name.trim();
+      const key = name.toLowerCase();
+      if (!name || itemByKey.has(key) || queuedItemKeys.has(key)) {
+        itemsSkipped += 1;
+        continue;
+      }
+      queuedItemKeys.add(key);
+      pendingItems.push({
+        household_id: householdId,
+        name,
+        category_id: categoryIdForLabel(owlItem.category),
+        icon: owlItem.icon ?? null,
+        created_by: user.id,
+      });
+    }
+
+    const insertedItems = await insertChunked(
+      supabase,
+      "items",
+      pendingItems,
+      "id, name",
+    );
+    for (const row of insertedItems) {
+      itemByKey.set(row.name.toLowerCase(), { id: row.id, name: row.name });
+    }
+
+    /* Recipes --------------------------------------------------------- */
+
+    const { data: existingRecipes } = await supabase
+      .from("recipes")
+      .select("name")
+      .eq("household_id", householdId);
+
+    const recipeKeys = new Set(
+      ((existingRecipes ?? []) as { name: string }[]).map((row) =>
+        row.name.trim().toLowerCase(),
+      ),
+    );
+
+    const pendingRecipes: Record<string, unknown>[] = [];
+    const queuedRecipeKeys = new Set<string>();
+    let recipesSkipped = 0;
+    const orderedRecipes: (z.infer<typeof owlExportSchema>["recipes"][number])[] = [];
+    for (const owlRecipe of owlRecipes) {
+      const key = owlRecipe.name.trim().toLowerCase();
+      if (!key || recipeKeys.has(key) || queuedRecipeKeys.has(key)) {
+        recipesSkipped += 1;
+        continue;
+      }
+      queuedRecipeKeys.add(key);
+      orderedRecipes.push(owlRecipe);
+      pendingRecipes.push({
+        household_id: householdId,
+        name: owlRecipe.name.trim(),
+        description: (owlRecipe.description ?? "").trim(),
+        prep_time: Math.max(0, Math.trunc(owlRecipe.prep_time ?? 0)),
+        cook_time: Math.max(0, Math.trunc(owlRecipe.cook_time ?? 0)),
+        time: Math.max(0, Math.trunc(owlRecipe.time ?? 0)),
+        yields: Math.max(1, Math.trunc(owlRecipe.yields ?? 1)),
+        source: owlRecipe.source?.trim() || null,
+        tags: owlRecipe.tags ?? [],
+        created_by: user.id,
+      });
+    }
+
+    const insertedRecipes = await insertChunked(
+      supabase,
+      "recipes",
+      pendingRecipes,
+      "id, name",
+    );
+    const recipeIdByKey = new Map(
+      insertedRecipes.map((row) => [row.name.toLowerCase(), row.id]),
+    );
+
+    let ingredientCount = 0;
+    const ingredientRows: Record<string, unknown>[] = [];
+    for (const owlRecipe of orderedRecipes) {
+      const recipeId = recipeIdByKey.get(owlRecipe.name.trim().toLowerCase());
+      if (!recipeId) continue;
+      (owlRecipe.items ?? []).forEach((ingredient, index) => {
+        const name = ingredient.name.trim();
+        if (!name) return;
+        ingredientRows.push({
+          household_id: householdId,
+          recipe_id: recipeId,
+          item_id: itemByKey.get(name.toLowerCase())?.id ?? null,
+          name,
+          quantity_text: (ingredient.description ?? "").trim(),
+          optional: ingredient.optional === true,
+          sort_order: index,
+        });
+      });
+    }
+    ingredientCount = ingredientRows.length;
+    await insertChunked(supabase, "recipe_ingredients", ingredientRows, "id");
+
+    revalidatePath("/", "layout");
+
+    return {
+      ok: true,
+      data: {
+        categories: { created: pendingCategories.length },
+        items: {
+          created: insertedItems.length,
+          skipped: itemsSkipped,
+        },
+        recipes: {
+          created: insertedRecipes.length,
+          skipped: recipesSkipped,
+        },
+        ingredients: ingredientCount,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Import failed",
+    };
+  }
+}
