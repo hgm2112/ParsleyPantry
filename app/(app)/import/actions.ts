@@ -11,7 +11,7 @@ export type ActionResult<T = null> =
 
 export type ImportSummary = {
   categories: { created: number };
-  items: { created: number; skipped: number };
+  items: { created: number; skipped: number; backfilled: number };
   recipes: { created: number; skipped: number };
   ingredients: number;
 };
@@ -143,22 +143,43 @@ export async function importKitchenOwl(
 
     const { data: existingItems } = await supabase
       .from("items")
-      .select("id, name")
+      .select("id, name, category_id")
       .eq("household_id", householdId);
 
-    const itemByKey = new Map<string, { id: string; name: string }>();
-    for (const row of (existingItems ?? []) as { id: string; name: string }[]) {
-      itemByKey.set(row.name.toLowerCase(), { id: row.id, name: row.name });
+    const itemByKey = new Map<
+      string,
+      { id: string; name: string; category_id: string | null }
+    >();
+    for (const row of (existingItems ?? []) as {
+      id: string;
+      name: string;
+      category_id: string | null;
+    }[]) {
+      itemByKey.set(row.name.toLowerCase(), {
+        id: row.id,
+        name: row.name,
+        category_id: row.category_id,
+      });
     }
 
     const pendingItems: Record<string, unknown>[] = [];
     const queuedItemKeys = new Set<string>();
+    const backfillByKey = new Map<string, string>();
     let itemsSkipped = 0;
     for (const owlItem of owlItems) {
       const name = owlItem.name.trim();
       const key = name.toLowerCase();
-      if (!name || itemByKey.has(key) || queuedItemKeys.has(key)) {
+      if (!name || queuedItemKeys.has(key)) {
         itemsSkipped += 1;
+        continue;
+      }
+      const existing = itemByKey.get(key);
+      if (existing) {
+        itemsSkipped += 1;
+        if (existing.category_id === null) {
+          const categoryId = categoryIdForLabel(owlItem.category);
+          if (categoryId) backfillByKey.set(key, categoryId);
+        }
         continue;
       }
       queuedItemKeys.add(key);
@@ -178,7 +199,33 @@ export async function importKitchenOwl(
       "id, name",
     );
     for (const row of insertedItems) {
-      itemByKey.set(row.name.toLowerCase(), { id: row.id, name: row.name });
+      itemByKey.set(row.name.toLowerCase(), {
+        id: row.id,
+        name: row.name,
+        category_id: null,
+      });
+    }
+
+    let itemsBackfilled = 0;
+    const backfills = [...backfillByKey.entries()]
+      .map(([key, categoryId]) => ({ id: itemByKey.get(key)?.id, categoryId }))
+      .filter((entry): entry is { id: string; categoryId: string } => !!entry.id);
+    for (let index = 0; index < backfills.length; index += CHUNK) {
+      const slice = backfills.slice(index, index + CHUNK);
+      const results = await Promise.all(
+        slice.map((entry) =>
+          supabase
+            .from("items")
+            .update({ category_id: entry.categoryId })
+            .eq("id", entry.id)
+            .eq("household_id", householdId)
+            .is("category_id", null)
+            .select("id"),
+        ),
+      );
+      for (const result of results) {
+        itemsBackfilled += (result.data ?? []).length;
+      }
     }
 
     /* Recipes --------------------------------------------------------- */
@@ -261,6 +308,7 @@ export async function importKitchenOwl(
         items: {
           created: insertedItems.length,
           skipped: itemsSkipped,
+          backfilled: itemsBackfilled,
         },
         recipes: {
           created: insertedRecipes.length,

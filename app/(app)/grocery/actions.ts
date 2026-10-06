@@ -238,6 +238,50 @@ export async function assignAisle(
   }
 }
 
+/**
+ * Durable per-store aisle memory on the catalog item: bread can sit in
+ * Aisle 10 at one store and somewhere else at another, across trips.
+ */
+export async function setItemStoreAisle(
+  itemId: string,
+  storeId: string,
+  aisleId: string | null,
+): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+
+    if (aisleId === null) {
+      const { error } = await supabase
+        .from("item_store_aisles")
+        .delete()
+        .eq("household_id", householdId)
+        .eq("item_id", itemId)
+        .eq("store_id", storeId);
+      if (error) return { ok: false, error: error.message };
+    } else {
+      const { error } = await supabase.from("item_store_aisles").upsert(
+        {
+          household_id: householdId,
+          item_id: itemId,
+          store_id: storeId,
+          aisle_id: aisleId,
+        },
+        { onConflict: "item_id,store_id" },
+      );
+      if (error) return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/grocery");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not save store aisle",
+    };
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Settings (selected store + view mode)                               */
 /* ------------------------------------------------------------------ */

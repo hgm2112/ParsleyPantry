@@ -25,6 +25,7 @@ import {
 import {
   assignAisle,
   deleteGroceryItem,
+  setItemStoreAisle,
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
 import type { CategoryRow, StoreAisleRow, StoreRow } from "@/lib/types";
@@ -36,6 +37,8 @@ type Props = {
   aisles: StoreAisleRow[];
   assignedAisleId: string | null;
   categories: CategoryRow[];
+  stores: StoreRow[];
+  rememberedByStore: Record<string, string | null>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: (patch: Partial<GroceryListItem>) => void;
@@ -48,11 +51,17 @@ export function ItemSheet({
   aisles,
   assignedAisleId,
   categories,
+  stores,
+  rememberedByStore,
   open,
   onOpenChange,
   onChanged,
   onDeleted,
 }: Props) {
+  const storeAisles = (storeId: string) =>
+    aisles
+      .filter((aisle) => aisle.store_id === storeId)
+      .sort((a, b) => a.sort_order - b.sort_order);
   const router = useRouter();
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(item.quantity);
@@ -86,14 +95,27 @@ export function ItemSheet({
     onOpenChange(false);
   }
 
-  async function changeAisle(aisleId: string) {
+  async function changeAisle(aisleId: string | null) {
     if (!store) return;
-    const result = await assignAisle(item.id, store.id, aisleId);
+    const result = item.item_id
+      ? await setItemStoreAisle(item.item_id, store.id, aisleId)
+      : await assignAisle(item.id, store.id, aisleId);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success("Aisle saved");
+    toast.success(item.item_id ? "Aisle remembered" : "Aisle saved");
+    router.refresh();
+  }
+
+  async function changeRemembered(storeId: string, aisleId: string | null) {
+    if (!item.item_id) return;
+    const result = await setItemStoreAisle(item.item_id, storeId, aisleId);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Aisle remembered");
     router.refresh();
   }
 
@@ -115,7 +137,11 @@ export function ItemSheet({
         <SheetHeader>
           <SheetTitle>Edit item</SheetTitle>
           <SheetDescription>
-            {store ? `Filing under ${store.name}` : "Quantity, unit, and category"}
+            {store
+              ? item.item_id
+                ? `Filing under ${store.name} — remembered for future trips`
+                : `Filing under ${store.name} (this trip only)`
+              : "Quantity, unit, and category"}
           </SheetDescription>
         </SheetHeader>
 
@@ -187,28 +213,73 @@ export function ItemSheet({
             </Select>
           </div>
 
-          {store && aisles.length > 0 ? (
+          {store && storeAisles(store.id).length > 0 ? (
             <div className="space-y-2">
               <Label>Aisle at {store.name}</Label>
               <Select
                 value={assignedAisleId ?? "__none"}
-                onValueChange={(value) => {
-                  if (!value || value === "__none") return;
-                  void changeAisle(value);
-                }}
+                onValueChange={(value) =>
+                  void changeAisle(
+                    !value || value === "__none" ? null : value,
+                  )
+                }
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Not filed yet" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">Needs an aisle</SelectItem>
-                  {aisles.map((aisle) => (
+                  {storeAisles(store.id).map((aisle) => (
                     <SelectItem key={aisle.id} value={aisle.id}>
                       {aisle.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          ) : null}
+
+          {item.item_id && stores.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Remember for future trips</Label>
+              <div className="space-y-2">
+                {stores.map((entry) => {
+                  const list = storeAisles(entry.id);
+                  if (list.length === 0) return null;
+                  const value = rememberedByStore[entry.id] ?? "__none";
+                  return (
+                    <div key={entry.id} className="flex items-center gap-2">
+                      <span className="w-36 shrink-0 truncate text-sm text-muted-foreground">
+                        {entry.name}
+                      </span>
+                      <Select
+                        value={value}
+                        onValueChange={(next) =>
+                          void changeRemembered(
+                            entry.id,
+                            !next || next === "__none" ? null : next,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-8 flex-1 text-sm">
+                          <SelectValue placeholder="Not set" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Not set</SelectItem>
+                          {list.map((aisle) => (
+                            <SelectItem key={aisle.id} value={aisle.id}>
+                              {aisle.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Used automatically whenever this item is added for that store.
+              </p>
             </div>
           ) : null}
         </div>

@@ -208,6 +208,9 @@ export function ImportUploader() {
             <li>{summary.ingredients} ingredients linked</li>
             <li>{summary.items.skipped} items already present</li>
             <li>{summary.recipes.skipped} recipes already present</li>
+            {summary.items.backfilled > 0 ? (
+              <li>{summary.items.backfilled} items categorized</li>
+            ) : null}
           </ul>
           <div className="flex gap-2">
             <Button size="sm" render={<Link href="/inventory" />}>

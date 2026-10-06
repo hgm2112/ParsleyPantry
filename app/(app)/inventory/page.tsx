@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { InventoryView } from "@/components/inventory/inventory-view";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { InventoryEntry } from "@/lib/types";
+import type { CategoryRow, InventoryEntry } from "@/lib/types";
 
 export const metadata = { title: "Inventory" };
 
@@ -30,14 +30,22 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const { data } = await supabase
-    .from("inventory")
-    .select("*, item:items!inner(*)")
-    .eq("household_id", householdId);
+  const [inventoryResult, categoriesResult] = await Promise.all([
+    supabase
+      .from("inventory")
+      .select("*, item:items!inner(*)")
+      .eq("household_id", householdId),
+    supabase
+      .from("categories")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
+  ]);
 
-  const rows = (data ?? []) as unknown as InventoryEntry[];
+  const rows = (inventoryResult.data ?? []) as unknown as InventoryEntry[];
+  const categories = (categoriesResult.data ?? []) as CategoryRow[];
 
-  return <InventoryView rows={rows} />;
+  return <InventoryView rows={rows} categories={categories} />;
 }
 
 export default function InventoryPage() {

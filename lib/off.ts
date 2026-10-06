@@ -1,5 +1,14 @@
 import { cacheLife } from "next/cache";
 
+/** Network/timeout failure reaching Open Food Facts — not a missing product. */
+export class OffUnreachableError extends Error {
+  constructor(cause?: unknown) {
+    super("Couldn't reach Open Food Facts — check your connection and try again.");
+    this.name = "OffUnreachableError";
+    this.cause = cause;
+  }
+}
+
 export type OffProduct = {
   barcode: string;
   name: string | null;
@@ -34,17 +43,22 @@ export async function lookupOffProduct(
 
   const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=${FIELDS}`;
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "ParsleyPantry/1.0 (personal pantry app)",
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(8000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        "User-Agent": "ParsleyPantry/1.0 (personal pantry app)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (error) {
+    throw new OffUnreachableError(error);
+  }
 
   if (!response.ok) return null;
 
-  const body = (await response.json()) as {
+  let body: {
     status?: number;
     product?: {
       product_name?: string;
@@ -56,6 +70,11 @@ export async function lookupOffProduct(
       expiration_date?: string;
     };
   };
+  try {
+    body = (await response.json()) as typeof body;
+  } catch (error) {
+    throw new OffUnreachableError(error);
+  }
 
   if (body.status !== 1 || !body.product) return null;
 

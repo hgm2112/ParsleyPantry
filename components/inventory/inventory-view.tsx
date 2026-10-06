@@ -38,7 +38,7 @@ import {
 import { expiryBucket } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { InventoryEntry, Location } from "@/lib/types";
+import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
 
 type Tab = "all" | Location;
 
@@ -49,7 +49,13 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "freezer", label: "Freezer" },
 ];
 
-export function InventoryView({ rows }: { rows: InventoryEntry[] }) {
+export function InventoryView({
+  rows,
+  categories,
+}: {
+  rows: InventoryEntry[];
+  categories: CategoryRow[];
+}) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -218,6 +224,12 @@ export function InventoryView({ rows }: { rows: InventoryEntry[] }) {
             <InventoryRow
               key={row.id}
               entry={row}
+              categoryName={
+                row.item.category_id
+                  ? (categories.find((entry) => entry.id === row.item.category_id)
+                      ?.name ?? null)
+                  : null
+              }
               onConsume={(mode) =>
                 setConsumeTarget({ entry: row, mode })
               }
@@ -291,9 +303,11 @@ function EmptyState({
 
 function InventoryRow({
   entry,
+  categoryName,
   onConsume,
 }: {
   entry: InventoryEntry;
+  categoryName: string | null;
   onConsume: (mode: "partial" | "last") => void;
 }) {
   const router = useRouter();
@@ -366,6 +380,11 @@ function InventoryRow({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <LocationBadge location={entry.location} />
+          {categoryName ? (
+            <span className="inline-flex max-w-40 items-center truncate rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+              {categoryName}
+            </span>
+          ) : null}
           <ExpiryChip date={entry.expiration_date} />
           {quantity <= 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200">

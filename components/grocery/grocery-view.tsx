@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ListChecks, Pencil, Plus, Settings2 } from "lucide-react";
+import { ListChecks, Loader2, Pencil, Plus, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
+  addGroceryItem,
   clearCheckedGrocery,
   setGrocerySettings,
   updateGroceryItem,
@@ -43,6 +45,14 @@ export type GroceryListItem = GroceryItemRow & {
   } | null;
 };
 
+export type CatalogEntry = {
+  id: string;
+  name: string;
+  unit: string | null;
+  category_id: string | null;
+  barcode: string | null;
+};
+
 export type GroceryRecipe = {
   id: string;
   name: string;
@@ -64,6 +74,8 @@ type Props = {
   settings: HouseholdSettingsRow;
   inventory: InventoryEntry[];
   recipes: GroceryRecipe[];
+  rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
+  catalog: CatalogEntry[];
 };
 
 type Group = { key: string; title: string; hint?: string; items: GroceryListItem[] };
@@ -77,6 +89,8 @@ export function GroceryView({
   settings,
   inventory,
   recipes,
+  rememberedAisles,
+  catalog,
 }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<GroceryViewMode>(settings.grocery_view_mode);
@@ -86,6 +100,9 @@ export function GroceryView({
   const [overrides, setOverrides] = useState<Record<string, Partial<GroceryListItem>>>({});
   const [editing, setEditing] = useState<GroceryListItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   const store = stores.find((entry) => entry.id === storeId) ?? null;
   const storeAisles = useMemo(
@@ -104,6 +121,15 @@ export function GroceryView({
     return map;
   }, [assignments, storeId]);
 
+  const rememberedByItem = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!storeId) return map;
+    for (const row of rememberedAisles) {
+      if (row.store_id === storeId) map.set(row.item_id, row.aisle_id);
+    }
+    return map;
+  }, [rememberedAisles, storeId]);
+
   const items = useMemo(
     () =>
       initialItems.map((item) =>
@@ -111,6 +137,56 @@ export function GroceryView({
       ),
     [initialItems, overrides],
   );
+
+  const effectiveAisle = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of items) {
+      const explicit = aisleByItem.get(item.id);
+      if (explicit) {
+        map.set(item.id, explicit);
+        continue;
+      }
+      if (item.item_id) {
+        const remembered = rememberedByItem.get(item.item_id);
+        if (remembered) map.set(item.id, remembered);
+      }
+    }
+    return map;
+  }, [items, aisleByItem, rememberedByItem]);
+
+  const stockByItem = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of inventory) {
+      map.set(entry.item_id, (map.get(entry.item_id) ?? 0) + entry.quantity);
+    }
+    return map;
+  }, [inventory]);
+
+  const onListSet = useMemo(
+    () =>
+      new Set(
+        items
+          .map((item) => item.item_id)
+          .filter((itemId): itemId is string => !!itemId),
+      ),
+    [items],
+  );
+
+  const searchResults = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    const scored: { entry: CatalogEntry; rank: number }[] = [];
+    for (const entry of catalog) {
+      const name = entry.name.toLowerCase();
+      const barcode = entry.barcode ?? "";
+      if (!name.includes(needle) && !barcode.includes(needle)) continue;
+      scored.push({ entry, rank: name.startsWith(needle) ? 0 : 1 });
+    }
+    scored.sort(
+      (a, b) => a.rank - b.rank || a.entry.name.localeCompare(b.entry.name),
+    );
+    return scored.slice(0, 8).map((entry) => entry.entry);
+  }, [catalog, query]);
 
   const totalLeft = items.filter((item) => !item.checked).length;
   const totalChecked = items.length - totalLeft;
@@ -120,10 +196,10 @@ export function GroceryView({
       const result: Group[] = storeAisles.map((aisle) => ({
         key: aisle.id,
         title: aisle.name,
-        items: items.filter((item) => aisleByItem.get(item.id) === aisle.id),
+        items: items.filter((item) => effectiveAisle.get(item.id) === aisle.id),
       }));
 
-      const unassigned = items.filter((item) => !aisleByItem.has(item.id));
+      const unassigned = items.filter((item) => !effectiveAisle.has(item.id));
       if (unassigned.length > 0) {
         result.push({
           key: "__unassigned",
@@ -167,7 +243,31 @@ export function GroceryView({
     }
 
     return ordered.filter((group) => group.items.length > 0);
-  }, [items, mode, store, storeAisles, aisleByItem, categories]);
+  }, [items, mode, store, storeAisles, effectiveAisle, categories]);
+
+  async function quickAdd(entry: CatalogEntry) {
+    if (onListSet.has(entry.id)) {
+      toast.message(`${entry.name} is already on the list`);
+      return;
+    }
+    setAddingId(entry.id);
+    const result = await addGroceryItem({
+      name: entry.name,
+      itemId: entry.id,
+      categoryId: entry.category_id,
+      quantity: 1,
+      unit: entry.unit,
+      source: "manual",
+    });
+    setAddingId(null);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setQuery("");
+    toast.success(`${entry.name} added to the list`);
+    router.refresh();
+  }
 
   function patchLocal(id: string, patch: Partial<GroceryListItem>) {
     setOverrides((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
@@ -286,13 +386,82 @@ export function GroceryView({
           </Button>
         </div>
 
+        <div
+          className="relative mt-2.5"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setSearchFocused(false);
+            }
+          }}
+        >
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                const first = searchResults[0];
+                if (first) void quickAdd(first);
+              } else if (event.key === "Escape") {
+                setQuery("");
+                setSearchFocused(false);
+              }
+            }}
+            placeholder="Type to add an item…"
+            className="h-9 pl-8 pr-3"
+            aria-label="Search catalog to add to grocery list"
+          />
+          {searchFocused && query.trim() ? (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border bg-background shadow-md">
+              {searchResults.length === 0 ? (
+                <p className="px-3 py-2.5 text-sm text-muted-foreground">
+                  No catalog match — use Add for recipes or a new item.
+                </p>
+              ) : (
+                searchResults.map((entry) => (
+                  <button
+                    type="button"
+                    key={entry.id}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => void quickAdd(entry)}
+                    disabled={addingId === entry.id}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-60"
+                  >
+                    {addingId === entry.id ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate">
+                      {entry.name}
+                      {entry.unit ? (
+                        <span className="text-muted-foreground"> · {entry.unit}</span>
+                      ) : null}
+                    </span>
+                    {stockByItem.get(entry.id) ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        ×{stockByItem.get(entry.id)} in pantry
+                      </span>
+                    ) : null}
+                    {onListSet.has(entry.id) ? (
+                      <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-200">
+                        on list
+                      </span>
+                    ) : null}
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+
         {mode === "aisle" && !store ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Create a store to shop by aisle —{" "}
+            Showing your categories —{" "}
             <Link href="/grocery/stores" className="underline">
-              manage stores
-            </Link>
-            .
+              create a store
+            </Link>{" "}
+            to arrange by a store&apos;s own aisles.
           </p>
         ) : null}
       </div>
@@ -387,9 +556,19 @@ export function GroceryView({
           key={editing.id}
           item={editing}
           store={store}
-          aisles={storeAisles}
-          assignedAisleId={aisleByItem.get(editing.id) ?? null}
+          aisles={aisles}
+          assignedAisleId={effectiveAisle.get(editing.id) ?? null}
           categories={categories}
+          stores={stores}
+          rememberedByStore={
+            editing.item_id
+              ? Object.fromEntries(
+                  rememberedAisles
+                    .filter((row) => row.item_id === editing.item_id)
+                    .map((row) => [row.store_id, row.aisle_id]),
+                )
+              : {}
+          }
           open
           onOpenChange={(open) => {
             if (!open) setEditing(null);

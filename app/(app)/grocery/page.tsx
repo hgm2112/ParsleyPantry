@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GroceryView } from "@/components/grocery/grocery-view";
+import { GroceryView, type CatalogEntry } from "@/components/grocery/grocery-view";
 import type {
   CategoryRow,
   GroceryItemRow,
@@ -47,10 +47,12 @@ async function GroceryContent() {
     storesResult,
     aislesResult,
     assignmentsResult,
+    rememberedResult,
     categoriesResult,
     settingsResult,
     inventoryResult,
     recipesResult,
+    catalogResult,
   ] = await Promise.all([
     supabase
       .from("grocery_items")
@@ -73,6 +75,10 @@ async function GroceryContent() {
       .select("grocery_item_id, store_id, aisle_id")
       .eq("household_id", householdId),
     supabase
+      .from("item_store_aisles")
+      .select("item_id, store_id, aisle_id")
+      .eq("household_id", householdId),
+    supabase
       .from("categories")
       .select("*")
       .eq("household_id", householdId)
@@ -91,6 +97,11 @@ async function GroceryContent() {
       .select(
         "id, household_id, name, description, prep_time, cook_time, time, yields, source, tags, recipe_ingredients(id, item_id, name, quantity_text, optional)",
       )
+      .eq("household_id", householdId)
+      .order("name", { ascending: true }),
+    supabase
+      .from("items")
+      .select("id, name, unit, category_id, barcode")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
   ]);
@@ -113,6 +124,12 @@ async function GroceryContent() {
     aisle_id: string;
   }[];
   const categories = (categoriesResult.data ?? []) as CategoryRow[];
+  const rememberedAisles = (rememberedResult.data ?? []) as {
+    item_id: string;
+    store_id: string;
+    aisle_id: string;
+  }[];
+  const catalog = (catalogResult.data ?? []) as CatalogEntry[];
   const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
   const inventory = (inventoryResult.data ?? []) as unknown as InventoryEntry[];
   const recipes = (recipesResult.data ?? []) as unknown as RecipeWithIngredients[];
@@ -134,6 +151,8 @@ async function GroceryContent() {
       }
       inventory={inventory}
       recipes={recipes}
+      rememberedAisles={rememberedAisles}
+      catalog={catalog}
     />
   );
 }
