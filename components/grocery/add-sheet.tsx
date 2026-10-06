@@ -26,6 +26,7 @@ import {
   addManyGroceryItems,
 } from "@/app/(app)/grocery/actions";
 import type { AddGroceryInput } from "@/app/(app)/grocery/actions";
+import { parseQuantityText } from "@/lib/stock";
 import type { CategoryRow, InventoryEntry } from "@/lib/types";
 import type { GroceryRecipe } from "@/components/grocery/grocery-view";
 
@@ -37,15 +38,6 @@ type Props = {
   categories: CategoryRow[];
   onAdded: () => void;
 };
-
-/** "6 oz" -> { quantity: 6, unit: "oz" } */
-function parseQuantityText(text: string): { quantity: number; unit: string | null } {
-  const match = text.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-  if (!match) return { quantity: 1, unit: text.trim() || null };
-  const quantity = Number(match[1]);
-  const unit = match[2]?.trim() || null;
-  return { quantity: quantity || 1, unit };
-}
 
 export function AddGrocerySheet({
   open,

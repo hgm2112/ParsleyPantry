@@ -18,3 +18,15 @@ export function earliest(
   if (!b) return a;
   return a <= b ? a : b;
 }
+
+/** "6 oz" -> { quantity: 6, unit: "oz" } */
+export function parseQuantityText(text: string): {
+  quantity: number;
+  unit: string | null;
+} {
+  const match = text.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!match) return { quantity: 1, unit: text.trim() || null };
+  const quantity = Number(match[1]);
+  const unit = match[2]?.trim() || null;
+  return { quantity: quantity || 1, unit };
+}

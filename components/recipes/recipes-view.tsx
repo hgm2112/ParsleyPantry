@@ -1,0 +1,103 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { BookOpen, Clock, Search, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import type { RecipeRow } from "@/lib/types";
+
+export function RecipesView({
+  recipes,
+  ingredientCounts,
+}: {
+  recipes: RecipeRow[];
+  ingredientCounts: Record<string, number>;
+}) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return recipes;
+    return recipes.filter(
+      (recipe) =>
+        recipe.name.toLowerCase().includes(needle) ||
+        recipe.tags.some((tag) => tag.toLowerCase().includes(needle)),
+    );
+  }, [recipes, query]);
+
+  return (
+    <div className="space-y-3">
+      {recipes.length > 6 ? (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search recipes or tags"
+            className="pl-8"
+          />
+        </div>
+      ) : null}
+
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
+          <BookOpen className="h-6 w-6 text-muted-foreground" />
+          <p className="text-sm font-medium">
+            {recipes.length === 0 ? "No recipes yet" : "Nothing matches"}
+          </p>
+          {recipes.length === 0 ? (
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Import from KitchenOwl (Settings → Import) or create one from
+              scratch.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((recipe) => {
+            const count = ingredientCounts[recipe.id] ?? 0;
+            return (
+              <li key={recipe.id}>
+                <Link
+                  href={`/recipes/${recipe.id}`}
+                  className="flex h-full flex-col gap-2 rounded-xl border bg-background p-4 transition-colors hover:border-green-700/50 hover:bg-accent/40"
+                >
+                  <span className="line-clamp-2 text-sm font-semibold">
+                    {recipe.name}
+                  </span>
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {recipe.time > 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {recipe.time}m
+                      </span>
+                    ) : null}
+                    {recipe.yields > 1 ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {recipe.yields}
+                      </span>
+                    ) : null}
+                    <span>{count} ingredients</span>
+                  </div>
+                  {recipe.tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {recipe.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
