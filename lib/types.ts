@@ -72,6 +72,9 @@ export interface InventoryWithItem extends InventoryRow {
   item: ItemRow | null;
 }
 
+/** Inner-joined inventory row: the item always exists. */
+export type InventoryEntry = InventoryRow & { item: ItemRow };
+
 export interface StoreRow {
   id: string;
   household_id: string;

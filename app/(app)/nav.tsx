@@ -23,6 +23,30 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+export function NavFallback() {
+  return (
+    <>
+      <header className="hidden md:block border-b bg-background/95 backdrop-blur sticky top-0 z-40">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
+          <span className="h-5 w-32 rounded bg-muted" />
+        </div>
+      </header>
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 border-t bg-background/95 backdrop-blur"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="grid h-full grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="flex items-center justify-center">
+              <span className="h-5 w-5 rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+      </nav>
+    </>
+  );
+}
+
 export function Nav() {
   const pathname = usePathname();
 
