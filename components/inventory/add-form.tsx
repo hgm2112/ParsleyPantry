@@ -268,6 +268,15 @@ export function AddForm({
             <p className="text-xs text-muted-foreground">
               {off.name}
               {off.brands ? ` · ${off.brands}` : ""}
+              {" · "}
+              <a
+                href={`https://world.openfoodfacts.org/product/${barcode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                via Open Food Facts (ODbL)
+              </a>
             </p>
           ) : null}
         </div>
