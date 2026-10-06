@@ -76,7 +76,11 @@ async function PlanWrapper({
 }) {
   const params = await searchParams;
   const raw = typeof params.week === "string" ? params.week : "";
-  const base = isIsoDate(raw) ? new Date(`${raw}T00:00:00Z`) : new Date();
-  const weekStart = mondayOf(base);
+  if (!isIsoDate(raw)) {
+    // No ?week= yet: the client redirects with its local Monday so the
+    // server never reads wall-clock time during prerender.
+    return <PlanView weekStart={null} days={[]} recipes={[]} />;
+  }
+  const weekStart = mondayOf(new Date(`${raw}T00:00:00Z`));
   return <PlanContent weekStart={weekStart} />;
 }

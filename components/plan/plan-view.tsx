@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { dayLabel, addDays, weekTitle } from "@/lib/plan";
+import { Skeleton } from "@/components/ui/skeleton";
+import { dayLabel, addDays, mondayOf, weekTitle } from "@/lib/plan";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
 import type { MealPlanDayRow } from "@/lib/types";
 import { DaySheet } from "@/components/plan/day-sheet";
@@ -16,16 +18,25 @@ export type PlannedDay = {
 };
 
 type Props = {
-  weekStart: string;
+  /** null = no ?week= param yet; the client redirects with its local Monday. */
+  weekStart: string | null;
   days: PlannedDay[];
   recipes: { id: string; name: string; time: number; tags: string[] }[];
 };
 
 export function PlanView({ weekStart, days, recipes }: Props) {
+  const router = useRouter();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [shopping, setShopping] = useState(false);
 
+  useEffect(() => {
+    if (weekStart === null) {
+      router.replace(`/plan?week=${mondayOf(new Date())}`);
+    }
+  }, [weekStart, router]);
+
   async function sendWeekToGrocery() {
+    if (!weekStart) return;
     setShopping(true);
     const result = await planWeekToGrocery(weekStart);
     setShopping(false);
@@ -40,6 +51,18 @@ export function PlanView({ weekStart, days, recipes }: Props) {
   }
 
   const openDay = openIndex !== null ? days[openIndex] : null;
+
+  if (weekStart === null) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-56" />
+        <Skeleton className="h-9 w-full" />
+        {Array.from({ length: 7 }).map((_, index) => (
+          <Skeleton key={index} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
