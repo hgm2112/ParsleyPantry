@@ -535,14 +535,14 @@ export function GroceryView({
           </button>
         </div>
       ) : (
-        <div className="columns-1 gap-4 sm:columns-2 xl:columns-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => {
             const tint = tintFor(group.title);
             return (
               <section
                 key={group.key}
                 className={cn(
-                  "mb-4 break-inside-avoid overflow-hidden rounded-xl border",
+                  "flex flex-col overflow-hidden rounded-xl border",
                   tint.header,
                 )}
               >
@@ -575,7 +575,7 @@ export function GroceryView({
                     ) : null}
                   </p>
                 ) : null}
-                <ul className="divide-y divide-black/5 bg-background">
+                <ul className="flex-1 divide-y divide-black/5 bg-background">
                   {group.items.map((item) => (
                     <li key={item.id} className="flex items-center gap-3 px-3 py-2">
                       <Checkbox
