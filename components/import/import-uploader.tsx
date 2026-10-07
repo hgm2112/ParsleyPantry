@@ -105,7 +105,7 @@ export function ImportUploader() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-dashed px-6 py-10 text-center">
-        <FileJson className="mx-auto mb-3 h-8 w-8 text-green-700 dark:text-green-400" />
+        <FileJson className="mx-auto mb-3 h-8 w-8 text-primary" />
         <p className="text-sm font-medium">KitchenOwl export (.json)</p>
         <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
           Brings over your item catalog, categories, and recipes. Existing
@@ -196,12 +196,12 @@ export function ImportUploader() {
       ) : null}
 
       {summary ? (
-        <div className="space-y-3 rounded-xl border border-green-700/30 bg-green-50 p-4 dark:bg-green-950/40">
-          <div className="flex items-center gap-2 text-sm font-medium text-green-900 dark:text-green-100">
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Import finished
           </div>
-          <ul className="grid grid-cols-2 gap-2 text-sm text-green-900/90 dark:text-green-100/90">
+          <ul className="grid grid-cols-2 gap-2 text-sm text-primary/90">
             <li>{summary.items.created} items added</li>
             <li>{summary.recipes.created} recipes added</li>
             <li>{summary.categories.created} categories added</li>

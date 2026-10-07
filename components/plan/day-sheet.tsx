@@ -171,7 +171,7 @@ export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
                     <span className="min-w-0 flex-1 truncate text-sm">
                       {recipe.name}
                       {recipe.id === currentRecipeId ? (
-                        <Check className="ml-1.5 inline h-3.5 w-3.5 text-green-700" />
+                        <Check className="ml-1.5 inline h-3.5 w-3.5 text-primary" />
                       ) : null}
                     </span>
                     {recipe.time > 0 ? (

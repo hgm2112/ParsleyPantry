@@ -37,6 +37,7 @@ import {
 } from "@/app/(app)/inventory/actions";
 import { expiryBucket } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
+import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
 
@@ -129,7 +130,7 @@ export function InventoryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold">Inventory</h1>
+            <h1 className="text-lg font-semibold">Pantry</h1>
             <p className="text-xs text-muted-foreground">
               {rows.length} tracked
               {lowCount > 0 ? (
@@ -176,7 +177,7 @@ export function InventoryView({
               className={cn(
                 "shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
                 tab === entry.value
-                  ? "border-green-700 bg-green-700 text-white dark:border-green-600 dark:bg-green-600"
+                  ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background text-muted-foreground hover:bg-accent",
               )}
             >
@@ -219,7 +220,7 @@ export function InventoryView({
           onScan={() => setScanOpen(true)}
         />
       ) : (
-        <ul className="divide-y rounded-xl border bg-background">
+        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((row) => (
             <InventoryRow
               key={row.id}
@@ -270,7 +271,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-      <div className="rounded-full bg-green-100 p-3 text-green-800 dark:bg-green-950 dark:text-green-200">
+      <div className="rounded-full bg-accent p-3 text-primary">
         <Search className="h-6 w-6" />
       </div>
       {hasRows ? (
@@ -359,66 +360,78 @@ function InventoryRow({
   }
 
   return (
-    <li className="flex items-center gap-2 px-3 py-2.5">
-      <Link
-        href={`/inventory/${entry.id}`}
-        prefetch
-        className="min-w-0 flex-1"
-      >
-        <div className="flex items-center gap-2">
+    <li className="rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
+      <div className="flex items-start gap-2.5">
+        <Link
+          href={`/inventory/${entry.id}`}
+          prefetch
+          className="flex min-w-0 flex-1 items-start gap-2.5"
+        >
           <span
             className={cn(
-              "truncate text-sm font-medium",
-              quantity <= 0 && "text-muted-foreground line-through",
+              "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
+              tileGradient(entry.item.name),
             )}
+            aria-hidden
           >
-            {entry.item.name}
+            {entry.item.icon ?? foodEmoji(entry.item.name)}
           </span>
-          {low ? (
-            <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-          ) : null}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <LocationBadge location={entry.location} />
-          {categoryName ? (
-            <span className="inline-flex max-w-40 items-center truncate rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-              {categoryName}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "truncate text-sm font-medium",
+                  quantity <= 0 && "text-muted-foreground line-through",
+                )}
+              >
+                {entry.item.name}
+              </span>
+              {low ? (
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              ) : null}
             </span>
-          ) : null}
-          <ExpiryChip date={entry.expiration_date} />
-          {quantity <= 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200">
-              Out
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              <LocationBadge location={entry.location} />
+              {categoryName ? (
+                <span className="inline-flex max-w-40 items-center truncate rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                  {categoryName}
+                </span>
+              ) : null}
+              <ExpiryChip date={entry.expiration_date} />
+              {quantity <= 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200">
+                  Out
+                </span>
+              ) : low ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  <TriangleAlert className="h-3 w-3" /> Low
+                </span>
+              ) : null}
             </span>
-          ) : low ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              <TriangleAlert className="h-3 w-3" /> Low
-            </span>
-          ) : null}
-        </div>
-      </Link>
+          </span>
+        </Link>
 
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="w-10 text-right text-sm font-semibold tabular-nums">
-          {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
-        </span>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label={`Use one ${entry.item.name}`}
-          disabled={quantity <= 0}
-          onClick={quickUse}
-        >
-          <Minus className="h-3.5 w-3.5" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" aria-label="More actions" />
-            }
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="w-10 text-right text-sm font-semibold tabular-nums">
+            {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
+          </span>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={`Use one ${entry.item.name}`}
+            disabled={quantity <= 0}
+            onClick={quickUse}
           >
-            <MoreHorizontal className="h-4 w-4" />
-          </DropdownMenuTrigger>
+            <Minus className="h-3.5 w-3.5" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label="More actions" />
+              }
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onSelect={() => {
@@ -466,6 +479,7 @@ function InventoryRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
 
       <ConfirmDialog

@@ -233,10 +233,10 @@ export function Scanner({
       {status === "scanning" ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="relative h-40 w-[85%] max-w-md rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]">
-            <div className="absolute left-0 top-0 h-6 w-6 border-l-4 border-t-4 border-green-400 rounded-tl-md" />
-            <div className="absolute right-0 top-0 h-6 w-6 border-r-4 border-t-4 border-green-400 rounded-tr-md" />
-            <div className="absolute bottom-0 left-0 h-6 w-6 border-b-4 border-l-4 border-green-400 rounded-bl-md" />
-            <div className="absolute bottom-0 right-0 h-6 w-6 border-b-4 border-r-4 border-green-400 rounded-br-md" />
+            <div className="absolute left-0 top-0 h-6 w-6 border-l-4 border-t-4 border-primary rounded-tl-md" />
+            <div className="absolute right-0 top-0 h-6 w-6 border-r-4 border-t-4 border-primary rounded-tr-md" />
+            <div className="absolute bottom-0 left-0 h-6 w-6 border-b-4 border-l-4 border-primary rounded-bl-md" />
+            <div className="absolute bottom-0 right-0 h-6 w-6 border-b-4 border-r-4 border-primary rounded-br-md" />
           </div>
         </div>
       ) : null}

@@ -4,7 +4,7 @@ import { InventoryView } from "@/components/inventory/inventory-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CategoryRow, InventoryEntry } from "@/lib/types";
 
-export const metadata = { title: "Inventory" };
+export const metadata = { title: "Pantry" };
 
 function InventorySkeleton() {
   return (

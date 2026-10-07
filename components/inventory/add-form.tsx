@@ -372,7 +372,7 @@ export function AddForm({
                 className={cn(
                   "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
                   location === entry.value
-                    ? "border-green-700 bg-green-700 text-white dark:border-green-600 dark:bg-green-600"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : "bg-background text-muted-foreground hover:bg-accent",
                 )}
               >
@@ -397,7 +397,7 @@ export function AddForm({
             {suggestion ? (
               <button
                 type="button"
-                className="rounded-full border border-green-700 px-2 py-0.5 font-medium text-green-700"
+                className="rounded-full border border-primary px-2 py-0.5 font-medium text-primary"
                 onClick={() => {
                   setExpiryTouched(true);
                   setExpirationDate(addDays(suggestion.days));

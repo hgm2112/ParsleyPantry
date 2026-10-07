@@ -111,7 +111,7 @@ export function StoresManager({
                       {store.name}
                     </span>
                     {active ? (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-200">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         Active
                       </span>
                     ) : null}

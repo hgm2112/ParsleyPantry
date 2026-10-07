@@ -29,6 +29,8 @@ import {
   updateCategory,
 } from "@/app/(app)/categories/actions";
 import type { CategoryRow } from "@/lib/types";
+import { tintFor } from "@/lib/tints";
+import { cn } from "@/lib/utils";
 
 export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
   const router = useRouter();
@@ -173,8 +175,15 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
                   />
                 </form>
               ) : (
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {category.name}
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                  <span
+                    className={cn(
+                      "size-2.5 shrink-0 rounded-full",
+                      tintFor(category.name).dot,
+                    )}
+                    aria-hidden
+                  />
+                  <span className="truncate">{category.name}</span>
                 </span>
               )}
 

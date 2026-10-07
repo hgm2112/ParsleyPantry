@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Clock, Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { cn } from "@/lib/utils";
 import type { RecipeRow } from "@/lib/types";
 
 export function RecipesView({
@@ -60,12 +62,21 @@ export function RecipesView({
               <li key={recipe.id}>
                 <Link
                   href={`/recipes/${recipe.id}`}
-                  className="flex h-full flex-col gap-2 rounded-xl border bg-background p-4 transition-colors hover:border-green-700/50 hover:bg-accent/40"
+                  className="flex h-full flex-col gap-2 overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:border-primary/50 hover:bg-accent/40"
                 >
-                  <span className="line-clamp-2 text-sm font-semibold">
+                  <span
+                    className={cn(
+                      "flex h-20 shrink-0 items-center justify-center bg-gradient-to-br text-3xl",
+                      tileGradient(recipe.name),
+                    )}
+                    aria-hidden
+                  >
+                    {foodEmoji(recipe.name, recipe.tags)}
+                  </span>
+                  <span className="line-clamp-2 px-4 text-sm font-semibold">
                     {recipe.name}
                   </span>
-                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-4 text-xs text-muted-foreground">
                     {recipe.time > 0 ? (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />
@@ -81,7 +92,7 @@ export function RecipesView({
                     <span>{count} ingredients</span>
                   </div>
                   {recipe.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1 px-4 pb-4">
                       {recipe.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}

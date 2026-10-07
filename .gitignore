@@ -45,3 +45,9 @@ next-env.d.ts
 
 # user's personal KitchenOwl export (import fixture, not for the repo)
 Parsley_export.json*
+
+# windows zone identifier junk
+*:Zone.Identifier
+
+# design reference mockup
+parsleypantry-web.png

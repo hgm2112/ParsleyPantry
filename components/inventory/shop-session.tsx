@@ -255,7 +255,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
               className={cn(
                 "rounded-md border px-2 py-1.5 text-sm font-medium transition-colors",
                 location === entry.value
-                  ? "border-green-700 bg-green-700 text-white dark:border-green-600 dark:bg-green-600"
+                  ? "border-primary bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
               )}
             >
@@ -296,7 +296,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
         />
         {flash ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-lg">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-lg">
               <CheckCircle2 className="h-4 w-4" /> {flash} added
             </span>
           </div>
@@ -528,7 +528,7 @@ function UnknownItemSheet({
             {suggestion ? (
               <button
                 type="button"
-                className="text-xs font-medium text-green-700"
+                className="text-xs font-medium text-primary"
                 onClick={() => {
                   setExpiryTouched(true);
                   setManualExpiry(addDays(suggestion.days));

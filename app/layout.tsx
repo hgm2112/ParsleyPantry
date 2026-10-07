@@ -15,14 +15,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "ParsleyPantry",
-    template: "%s · ParsleyPantry",
+    default: "Parsley Pantry",
+    template: "%s · Parsley Pantry",
   },
   description:
     "Barcode-first pantry inventory, grocery lists, recipes and meal planning for your household.",
   appleWebApp: {
     capable: true,
-    title: "ParsleyPantry",
+    title: "Parsley Pantry",
     statusBarStyle: "default",
   },
 };
@@ -31,7 +31,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#166534",
+  themeColor: "#009444",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

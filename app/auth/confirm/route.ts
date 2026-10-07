@@ -11,8 +11,8 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get("token_hash");
   const typeParam = searchParams.get("type") ?? "signup";
-  const next = searchParams.get("next") ?? "/inventory";
-  const safeNext = next.startsWith("/") ? next : "/inventory";
+  const next = searchParams.get("next") ?? "/home";
+  const safeNext = next.startsWith("/") ? next : "/home";
 
   if (tokenHash) {
     const supabase = await createClient();

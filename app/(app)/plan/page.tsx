@@ -5,7 +5,7 @@ import { PlanView, type PlannedDay } from "@/components/plan/plan-view";
 import { addDays, isIsoDate, mondayOf } from "@/lib/plan";
 import type { MealPlanDayRow, RecipeRow } from "@/lib/types";
 
-export const metadata = { title: "Plan" };
+export const metadata = { title: "Meal plan" };
 
 function PlanSkeleton() {
   return (

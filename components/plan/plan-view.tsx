@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayLabel, addDays, mondayOf, weekTitle } from "@/lib/plan";
+import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { cn } from "@/lib/utils";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
 import type { MealPlanDayRow } from "@/lib/types";
 import { DaySheet } from "@/components/plan/day-sheet";
@@ -130,6 +132,16 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                   <span className="text-sm font-semibold tabular-nums leading-tight">
                     {label.dayOfMonth}
                   </span>
+                </span>
+
+                <span
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-lg",
+                    recipe ? tileGradient(recipe.name) : "bg-muted",
+                  )}
+                  aria-hidden
+                >
+                  {recipe ? foodEmoji(recipe.name, recipe.tags) : ""}
                 </span>
 
                 <span className="min-w-0 flex-1">

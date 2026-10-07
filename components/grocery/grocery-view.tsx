@@ -24,6 +24,7 @@ import {
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
 import { categoryMatchKey } from "@/lib/kitchenowl";
+import { tintFor } from "@/lib/tints";
 import type {
   CategoryRow,
   GroceryItemRow,
@@ -399,7 +400,7 @@ export function GroceryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold">Grocery list</h1>
+            <h1 className="text-lg font-semibold">Shopping list</h1>
             <p className="text-xs text-muted-foreground">
               {totalLeft} to buy
               {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
@@ -415,6 +416,28 @@ export function GroceryView({
               <Plus /> Add
             </Button>
           </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{
+                width: `${
+                  items.length === 0
+                    ? 0
+                    : Math.round((totalChecked / items.length) * 100)
+                }%`,
+              }}
+            />
+          </div>
+          <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
+            {totalChecked} of {items.length} ·{" "}
+            {items.length === 0
+              ? 0
+              : Math.round((totalChecked / items.length) * 100)}
+            %
+          </span>
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -445,7 +468,7 @@ export function GroceryView({
               className={cn(
                 "px-3 py-1.5 text-sm font-medium disabled:opacity-40",
                 mode === "aisle"
-                  ? "bg-green-700 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
               )}
             >
@@ -457,7 +480,7 @@ export function GroceryView({
               className={cn(
                 "px-3 py-1.5 text-sm font-medium",
                 mode === "category"
-                  ? "bg-green-700 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
               )}
             >
@@ -534,7 +557,7 @@ export function GroceryView({
                       </span>
                     ) : null}
                     {onListSet.has(entry.id) ? (
-                      <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-200">
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         on list
                       </span>
                     ) : null}
@@ -576,74 +599,78 @@ export function GroceryView({
         </div>
       ) : (
         <div className="space-y-4">
-          {groups.map((group) => (
-            <section key={group.key}>
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.title}
-                </h2>
-                <span className="text-xs text-muted-foreground">
-                  {group.items.filter((item) => !item.checked).length} left
-                </span>
-              </div>
-              {group.hint ? (
-                <p className="mb-1.5 text-xs text-muted-foreground">
-                  {group.hint}
-                  {group.adopt ? (
-                    <>
-                      {" "}
+          {groups.map((group) => {
+            const tint = tintFor(group.title);
+            return (
+              <section
+                key={group.key}
+                className={cn("overflow-hidden rounded-xl border", tint.header)}
+              >
+                <div className="flex items-baseline justify-between px-3 py-2">
+                  <h2 className="text-sm font-semibold">{group.title}</h2>
+                  <span className="text-xs opacity-70">
+                    {group.items.filter((item) => !item.checked).length} left
+                  </span>
+                </div>
+                {group.hint ? (
+                  <p className="px-3 pb-2 text-xs opacity-80">
+                    {group.hint}
+                    {group.adopt ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="underline disabled:no-underline"
+                          disabled={adoptBusy}
+                          onClick={() => void adoptAisles()}
+                        >
+                          {adoptBusy ? "Adding aisles…" : "Use my categories as aisles"}
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+                <ul className="divide-y divide-black/5 bg-background">
+                  {group.items.map((item) => (
+                    <li key={item.id} className="flex items-center gap-3 px-3 py-2">
+                      <Checkbox
+                        checked={item.checked}
+                        onCheckedChange={() => void toggleChecked(item)}
+                        aria-label={`Mark ${item.name} as bought`}
+                      />
                       <button
                         type="button"
-                        className="underline disabled:no-underline"
-                        disabled={adoptBusy}
-                        onClick={() => void adoptAisles()}
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => setEditing(item)}
                       >
-                        {adoptBusy ? "Adding aisles…" : "Use my categories as aisles"}
+                        <span
+                          className={cn(
+                            "block truncate text-sm font-medium",
+                            item.checked && "text-muted-foreground line-through",
+                          )}
+                        >
+                          {item.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.quantity}
+                          {item.unit ? ` ${item.unit}` : ""}
+                          {item.source !== "manual" ? ` · from ${item.source}` : ""}
+                        </span>
                       </button>
-                    </>
-                  ) : null}
-                </p>
-              ) : null}
-              <ul className="divide-y rounded-xl border bg-background">
-                {group.items.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 px-3 py-2">
-                    <Checkbox
-                      checked={item.checked}
-                      onCheckedChange={() => void toggleChecked(item)}
-                      aria-label={`Mark ${item.name} as bought`}
-                    />
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 text-left"
-                      onClick={() => setEditing(item)}
-                    >
-                      <span
-                        className={cn(
-                          "block truncate text-sm font-medium",
-                          item.checked && "text-muted-foreground line-through",
-                        )}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Edit ${item.name}`}
+                        onClick={() => setEditing(item)}
                       >
-                        {item.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.quantity}
-                        {item.unit ? ` ${item.unit}` : ""}
-                        {item.source !== "manual" ? ` · from ${item.source}` : ""}
-                      </span>
-                    </button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Edit ${item.name}`}
-                      onClick={() => setEditing(item)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       )}
 

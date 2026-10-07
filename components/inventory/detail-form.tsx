@@ -200,7 +200,7 @@ export function InventoryDetail({
                 className={cn(
                   "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
                   entry.location === location.value
-                    ? "border-green-700 bg-green-700 text-white dark:border-green-600 dark:bg-green-600"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : "bg-background text-muted-foreground hover:bg-accent",
                 )}
               >

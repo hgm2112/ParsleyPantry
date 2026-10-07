@@ -1,34 +1,105 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
+  Calendar,
   CalendarDays,
+  House,
   Package,
+  Search,
   Settings,
   ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useHour } from "@/lib/use-now";
+import { ParsleyMark, TAGLINE, Wordmark } from "@/components/brand";
 
-const items = [
-  { href: "/inventory", label: "Inventory", icon: Package },
-  { href: "/grocery", label: "Grocery", icon: ShoppingCart },
+const sidebarItems = [
+  { href: "/home", label: "Home", icon: House },
+  { href: "/plan", label: "Meal plan", icon: CalendarDays },
+  { href: "/inventory", label: "Pantry", icon: Package },
+  { href: "/grocery", label: "Shopping list", icon: ShoppingCart },
+  { href: "/recipes", label: "Recipes", icon: BookOpen },
+  { href: "/calendar", label: "Calendar", icon: Calendar },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
+const mobileItems = [
+  { href: "/home", label: "Home", icon: House },
+  { href: "/inventory", label: "Pantry", icon: Package },
+  { href: "/grocery", label: "Shopping", icon: ShoppingCart },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/plan", label: "Plan", icon: CalendarDays },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function greetingFor(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/** Time-of-day greeting; hour comes from the client snapshot post-hydration. */
+export function Greeting({ name }: { name: string | null }) {
+  const hour = useHour();
+  return (
+    <span>
+      {greetingFor(hour)}, {name ?? "you"}
+    </span>
+  );
+}
+
+export function SearchForm({ className }: { className?: string }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      role="search"
+      className={cn("relative w-full max-w-md", className)}
+    >
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search for recipes, ingredients, or meals…"
+        className="h-9 w-full rounded-full border border-input bg-muted/60 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/40"
+      />
+    </form>
+  );
+}
+
 export function NavFallback() {
   return (
     <>
-      <header className="hidden md:block border-b bg-background/95 backdrop-blur sticky top-0 z-40">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
-          <span className="h-5 w-32 rounded bg-muted" />
+      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col border-r bg-sidebar">
+        <div className="flex h-16 items-center px-5">
+          <span className="h-6 w-36 rounded bg-muted" />
+        </div>
+        <div className="flex-1 space-y-1 px-3">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <div key={index} className="h-9 rounded-lg bg-muted/60" />
+          ))}
+        </div>
+      </aside>
+      <header className="md:pl-60 border-b bg-background/95 backdrop-blur sticky top-0 z-40">
+        <div className="flex h-14 items-center gap-4 px-4">
+          <span className="h-9 w-full max-w-md rounded-full bg-muted" />
         </div>
       </header>
       <nav
@@ -47,63 +118,121 @@ export function NavFallback() {
   );
 }
 
-export function Nav() {
+function SidebarNav({ pathname }: { pathname: string }) {
+  return (
+    <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col border-r bg-sidebar z-40">
+      <div className="flex h-16 items-center px-5">
+        <Wordmark markClassName="h-7 w-8" />
+      </div>
+      <nav className="flex-1 space-y-1 px-3 py-2">
+        {sidebarItems.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              isActive(pathname, href)
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+            )}
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div className="flex flex-col items-center gap-2 border-t px-4 py-5">
+        <ParsleyMark className="h-16 w-20" />
+        <p className="text-center text-xs font-medium italic text-muted-foreground">
+          {TAGLINE}
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+function MobileHeader() {
+  return (
+    <header className="md:hidden sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
+      <Wordmark href="/home" className="text-base" markClassName="h-6 w-7" />
+      <div className="flex items-center gap-1">
+        <Link
+          href="/search"
+          aria-label="Search"
+          className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Search className="h-5 w-5" />
+        </Link>
+        <Link
+          href="/settings"
+          aria-label="Settings"
+          className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Settings className="h-5 w-5" />
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+function DesktopHeader({ name }: { name: string | null }) {
+  return (
+    <header className="hidden md:block sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+      <div className="flex h-14 items-center gap-4 px-6">
+        <SearchForm />
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            <Greeting name={name} />
+          </span>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+          >
+            {(name ?? "p").slice(0, 1).toUpperCase()}
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function MobileNav({ pathname }: { pathname: string }) {
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="grid grid-cols-5">
+        {mobileItems.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+              isActive(pathname, href)
+                ? "text-primary"
+                : "text-muted-foreground",
+            )}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </Link>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+export function Nav({ name }: { name: string | null }) {
   const pathname = usePathname();
 
   return (
     <>
-      {/* Desktop top nav */}
-      <header className="hidden md:block border-b bg-background/95 backdrop-blur sticky top-0 z-40">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
-          <Link href="/inventory" className="flex items-center gap-2 font-semibold">
-            <span className="rounded-md bg-green-700 text-white px-2 py-0.5 text-sm">
-              PP
-            </span>
-            ParsleyPantry
-          </Link>
-          <nav className="flex items-center gap-1">
-            {items.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  isActive(pathname, href)
-                    ? "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-100"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
-
-      {/* Mobile bottom nav */}
-      <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="grid grid-cols-5">
-          {items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
-                isActive(pathname, href)
-                  ? "text-green-700 dark:text-green-400"
-                  : "text-muted-foreground",
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {label}
-            </Link>
-          ))}
-        </div>
-      </nav>
+      <SidebarNav pathname={pathname} />
+      <MobileHeader />
+      <DesktopHeader name={name} />
+      <MobileNav pathname={pathname} />
     </>
   );
 }

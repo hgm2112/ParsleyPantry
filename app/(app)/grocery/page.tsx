@@ -12,7 +12,7 @@ import type {
   StoreRow,
 } from "@/lib/types";
 
-export const metadata = { title: "Grocery list" };
+export const metadata = { title: "Shopping list" };
 
 type RecipeWithIngredients = RecipeRow & {
   recipe_ingredients: {

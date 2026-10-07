@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = [
+  "/home",
   "/inventory",
   "/grocery",
   "/recipes",
   "/plan",
+  "/calendar",
+  "/search",
   "/settings",
   "/join",
 ];
@@ -30,7 +33,7 @@ export function proxy(request: NextRequest) {
 
   if (pathname === "/") {
     return NextResponse.redirect(
-      new URL(session ? "/inventory" : "/login", request.url),
+      new URL(session ? "/home" : "/login", request.url),
     );
   }
 
@@ -45,7 +48,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (AUTH_PAGES.some((page) => pathname === page) && session) {
-    return NextResponse.redirect(new URL("/inventory", request.url));
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
   return NextResponse.next();
