@@ -40,7 +40,7 @@ function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h1 className="text-lg font-semibold">Sign in</h1>
+        <h1 className="text-lg font-bold">Sign in</h1>
         <p className="text-sm text-muted-foreground">
           Welcome back to your pantry.
         </p>

@@ -105,7 +105,7 @@ export function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-40 text-center font-semibold">
+          <span className="min-w-40 text-center font-bold">
             {monthLabel(effectiveMonth)}
           </span>
           <button
@@ -132,7 +132,7 @@ export function CalendarView({
           {WEEKDAYS.map((weekday) => (
             <div
               key={weekday}
-              className="pb-1 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              className="pb-1 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground"
             >
               {weekday}
             </div>
@@ -157,7 +157,7 @@ export function CalendarView({
                   className={cn(
                     "mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
                     day.isToday &&
-                      "bg-primary font-semibold text-primary-foreground",
+                      "bg-primary font-bold text-primary-foreground",
                   )}
                 >
                   {day.day}

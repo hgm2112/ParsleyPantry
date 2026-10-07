@@ -73,7 +73,7 @@ export function RecipesView({
                   >
                     {foodEmoji(recipe.name, recipe.tags)}
                   </span>
-                  <span className="line-clamp-2 px-4 text-sm font-semibold">
+                  <span className="line-clamp-2 px-4 text-sm font-bold">
                     {recipe.name}
                   </span>
                   <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-4 text-xs text-muted-foreground">

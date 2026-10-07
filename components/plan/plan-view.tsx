@@ -70,7 +70,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold">Meal plan</h1>
+          <h1 className="text-lg font-bold">Meal plan</h1>
           <p className="text-xs text-muted-foreground">
             {weekTitle(weekStart)}
           </p>
@@ -129,7 +129,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                   <span className="text-[10px] font-medium uppercase text-muted-foreground">
                     {label.weekday}
                   </span>
-                  <span className="text-sm font-semibold tabular-nums leading-tight">
+                  <span className="text-sm font-bold tabular-nums leading-tight">
                     {label.dayOfMonth}
                   </span>
                 </span>

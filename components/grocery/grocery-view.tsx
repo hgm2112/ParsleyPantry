@@ -307,7 +307,7 @@ export function GroceryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold">Shopping list</h1>
+            <h1 className="text-lg font-bold">Shopping list</h1>
             <p className="text-xs text-muted-foreground">
               {totalLeft} to buy
               {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
@@ -514,7 +514,7 @@ export function GroceryView({
                 className={cn("overflow-hidden rounded-xl border", tint.header)}
               >
                 <div className="flex items-baseline justify-between px-3 py-2">
-                  <h2 className="text-sm font-semibold">{group.title}</h2>
+                  <h2 className="text-sm font-bold">{group.title}</h2>
                   <span className="text-xs opacity-70">
                     {group.items.filter((item) => !item.checked).length} left
                   </span>

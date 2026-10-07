@@ -18,7 +18,7 @@ export default function ImportPage() {
           <ArrowLeft />
         </Button>
         <div>
-          <h1 className="text-lg font-semibold">Import from KitchenOwl</h1>
+          <h1 className="text-lg font-bold">Import from KitchenOwl</h1>
           <p className="text-xs text-muted-foreground">
             One-time migration of your catalog and recipes.
           </p>

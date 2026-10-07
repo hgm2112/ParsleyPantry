@@ -145,19 +145,19 @@ export function ImportUploader() {
         <div className="space-y-3 rounded-xl border p-4">
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-xl font-semibold tabular-nums">
+              <p className="text-xl font-bold tabular-nums">
                 {parsed.items.length}
               </p>
               <p className="text-xs text-muted-foreground">Items</p>
             </div>
             <div>
-              <p className="text-xl font-semibold tabular-nums">
+              <p className="text-xl font-bold tabular-nums">
                 {parsed.recipes.length}
               </p>
               <p className="text-xs text-muted-foreground">Recipes</p>
             </div>
             <div>
-              <p className="text-xl font-semibold tabular-nums">
+              <p className="text-xl font-bold tabular-nums">
                 {categoryPreview.length}
               </p>
               <p className="text-xs text-muted-foreground">Categories</p>

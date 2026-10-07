@@ -150,7 +150,7 @@ export function ShoppingWidget({
                     tint.header,
                   )}
                 >
-                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold">
+                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-bold">
                     <span>{group.title}</span>
                     <span className="opacity-70">
                       {group.items.filter((item) => !item.checked).length} left

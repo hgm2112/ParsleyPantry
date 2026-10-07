@@ -130,7 +130,7 @@ export function InventoryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold">Pantry</h1>
+            <h1 className="text-lg font-bold">Pantry</h1>
             <p className="text-xs text-muted-foreground">
               {rows.length} tracked
               {lowCount > 0 ? (
@@ -412,7 +412,7 @@ function InventoryRow({
         </Link>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className="w-10 text-right text-sm font-semibold tabular-nums">
+          <span className="w-10 text-right text-sm font-bold tabular-nums">
             {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
           </span>
           <Button

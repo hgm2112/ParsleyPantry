@@ -56,7 +56,7 @@ export default function RecipesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold">Recipes</h1>
+          <h1 className="text-lg font-bold">Recipes</h1>
           <p className="text-xs text-muted-foreground">
             Push ingredients to the grocery list in one tap.
           </p>

@@ -130,7 +130,7 @@ export function InventoryDetail({
             <ArrowLeft />
           </Button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold">
+            <h1 className="truncate text-lg font-bold">
               {entry.item.name}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -175,7 +175,7 @@ export function InventoryDetail({
             >
               −
             </Button>
-            <span className="w-12 text-center text-xl font-semibold tabular-nums">
+            <span className="w-12 text-center text-xl font-bold tabular-nums">
               {entry.quantity % 1 === 0 ? entry.quantity : entry.quantity.toFixed(1)}
             </span>
             <Button

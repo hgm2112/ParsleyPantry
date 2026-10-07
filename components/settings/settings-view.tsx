@@ -48,7 +48,7 @@ function Section({
   return (
     <section className="space-y-3 rounded-xl border p-4">
       <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-sm font-bold">{title}</h2>
         {description ? (
           <p className="text-xs text-muted-foreground">{description}</p>
         ) : null}
@@ -308,7 +308,7 @@ export function SettingsView({
                   <span className="block truncate text-sm font-medium">
                     {name}
                     {isSelf ? (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                      <span className="ml-1.5 text-xs text-muted-foreground">
                         you
                       </span>
                     ) : null}

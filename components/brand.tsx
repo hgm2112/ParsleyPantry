@@ -40,7 +40,7 @@ export function Wordmark({
   return (
     <Link
       href={href}
-      className={cn("flex items-center gap-2 font-semibold", className)}
+      className={cn("flex items-center gap-2 font-bold", className)}
     >
       <ParsleyMark className={cn("h-7 w-8", markClassName)} />
       <span>Parsley Pantry</span>

@@ -234,7 +234,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-lg font-semibold">I just bought these</h1>
+            <h1 className="text-lg font-bold">I just bought these</h1>
             <p className="text-xs text-muted-foreground">
               Continuous scanner · keeps rolling between items
             </p>
@@ -332,7 +332,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
                     {entry.expirationDate ? ` · exp ${entry.expirationDate}` : ""}
                   </p>
                 </div>
-                <span className="text-sm font-semibold tabular-nums">
+                <span className="text-sm font-bold tabular-nums">
                   +{entry.added}
                 </span>
                 <Button
@@ -500,7 +500,7 @@ function UnknownItemSheet({
               >
                 −
               </Button>
-              <span className="flex-1 text-center text-lg font-semibold tabular-nums">
+              <span className="flex-1 text-center text-lg font-bold tabular-nums">
                 {quantity}
               </span>
               <Button

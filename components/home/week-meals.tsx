@@ -102,7 +102,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
               className="group rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
             >
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-semibold">{label.weekday}</span>
+                <span className="text-sm font-bold">{label.weekday}</span>
                 <span className="text-xs text-muted-foreground">
                   {label.month} {label.dayOfMonth}
                 </span>

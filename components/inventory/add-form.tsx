@@ -226,7 +226,7 @@ export function AddForm({
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-lg font-semibold">Add to inventory</h1>
+            <h1 className="text-lg font-bold">Add to inventory</h1>
             <p className="text-xs text-muted-foreground">
               Full control — quantity, expiry, and location.
             </p>

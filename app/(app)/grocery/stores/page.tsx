@@ -67,7 +67,7 @@ export default function StoresPage() {
           <ArrowLeft />
         </Button>
         <div>
-          <h1 className="text-lg font-semibold">Stores &amp; aisles</h1>
+          <h1 className="text-lg font-bold">Stores &amp; aisles</h1>
           <p className="text-xs text-muted-foreground">
             Each store gets its own aisle layout — use categories anywhere else.
           </p>

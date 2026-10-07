@@ -75,7 +75,7 @@ export function Upcoming({
       <div className="space-y-3">
         {entries.meals.map((entry) => (
           <div key={entry.label}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               {entry.label}
             </p>
             <Link
@@ -90,7 +90,7 @@ export function Upcoming({
 
         {entries.expiring.length > 0 ? (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Expiring soon
             </p>
             <ul className="mt-0.5 space-y-0.5">

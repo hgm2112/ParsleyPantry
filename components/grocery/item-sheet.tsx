@@ -168,7 +168,7 @@ export function ItemSheet({
                 >
                   <Minus />
                 </Button>
-                <span className="flex-1 text-center font-semibold tabular-nums">
+                <span className="flex-1 text-center font-bold tabular-nums">
                   {quantity}
                 </span>
                 <Button
