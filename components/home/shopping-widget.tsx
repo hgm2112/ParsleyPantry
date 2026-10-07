@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
@@ -11,10 +12,15 @@ import {
   buildCategoryGroups,
   resolveEffectiveAisle,
 } from "@/lib/grocery-groups";
-import { updateGroceryItem } from "@/app/(app)/grocery/actions";
+import {
+  clearCheckedGrocery,
+  restoreGroceryItems,
+  updateGroceryItem,
+} from "@/app/(app)/grocery/actions";
 import { Button } from "@/components/ui/button";
 import type {
   CategoryRow,
+  GrocerySource,
   HouseholdSettingsRow,
   StoreAisleRow,
   StoreRow,
@@ -28,6 +34,7 @@ export type ShoppingPreviewItem = {
   unit: string | null;
   checked: boolean;
   category_id: string | null;
+  source: GrocerySource;
   item: { id: string; category_id: string | null } | null;
 };
 
@@ -48,6 +55,7 @@ export function ShoppingWidget({
   rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
   settings: HouseholdSettingsRow | null;
 }) {
+  const router = useRouter();
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -106,6 +114,48 @@ export function ShoppingWidget({
       });
       toast.error(result.error);
     }
+  }
+
+  async function restoreCleared(removed: ShoppingPreviewItem[]) {
+    const result = await restoreGroceryItems(
+      removed.map((item) => ({
+        id: item.id,
+        item_id: item.item_id,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        category_id: item.category_id,
+        source: item.source,
+      })),
+    );
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Restored");
+    router.refresh();
+  }
+
+  async function clearChecked() {
+    const removed = resolved.filter((item) => item.checked);
+    if (removed.length === 0) return;
+    const result = await clearCheckedGrocery();
+    if (!result.ok) {
+      toast.error(result.error);
+      router.refresh();
+      return;
+    }
+    toast.success(
+      `Cleared ${removed.length} item${removed.length === 1 ? "" : "s"}`,
+      {
+        duration: 10000,
+        action: {
+          label: "Undo",
+          onClick: () => void restoreCleared(removed),
+        },
+      },
+    );
+    router.refresh();
   }
 
   return (
@@ -188,6 +238,17 @@ export function ShoppingWidget({
               );
             })}
           </div>
+
+          {checkedCount > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={() => void clearChecked()}
+            >
+              Clear {checkedCount} checked
+            </Button>
+          ) : null}
 
           <Button
             render={<Link href="/grocery" />}

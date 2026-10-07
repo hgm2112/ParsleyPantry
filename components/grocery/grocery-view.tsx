@@ -20,6 +20,7 @@ import {
   adoptCategoryAisles,
   addGroceryItem,
   clearCheckedGrocery,
+  restoreGroceryItems,
   setGrocerySettings,
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
@@ -289,16 +290,50 @@ export function GroceryView({
     router.refresh();
   }
 
+  async function restoreCleared(removed: GroceryListItem[]) {
+    const result = await restoreGroceryItems(
+      removed.map((item) => ({
+        id: item.id,
+        item_id: item.item_id,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        category_id: item.category_id,
+        source: item.source,
+      })),
+    );
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Restored");
+    router.refresh();
+  }
+
   async function clearChecked() {
     const removed = items.filter((item) => item.checked);
+    if (removed.length === 0) return;
     setOverrides((current) => {
       const copy = { ...current };
       for (const item of removed) delete copy[item.id];
       return copy;
     });
     const result = await clearCheckedGrocery();
-    if (!result.ok) toast.error(result.error);
-    else toast.success(`Cleared ${removed.length} checked`);
+    if (!result.ok) {
+      toast.error(result.error);
+      router.refresh();
+      return;
+    }
+    toast.success(
+      `Cleared ${removed.length} item${removed.length === 1 ? "" : "s"}`,
+      {
+        duration: 10000,
+        action: {
+          label: "Undo",
+          onClick: () => void restoreCleared(removed),
+        },
+      },
+    );
     router.refresh();
   }
 
@@ -314,11 +349,6 @@ export function GroceryView({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {totalChecked > 0 ? (
-              <Button variant="ghost" size="sm" onClick={clearChecked}>
-                <ListChecks /> Clear
-              </Button>
-            ) : null}
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus /> Add
             </Button>
@@ -543,7 +573,11 @@ export function GroceryView({
                       <Checkbox
                         checked={item.checked}
                         onCheckedChange={() => void toggleChecked(item)}
-                        aria-label={`Mark ${item.name} as bought`}
+                        aria-label={
+                          item.checked
+                            ? `Put ${item.name} back on the list`
+                            : `Mark ${item.name} as bought`
+                        }
                       />
                       <button
                         type="button"
@@ -580,6 +614,14 @@ export function GroceryView({
           })}
         </div>
       )}
+
+      {totalChecked > 0 ? (
+        <div className="sticky bottom-16 z-30 -mx-3 border-t bg-background/95 px-3 py-2.5 backdrop-blur md:bottom-0 md:-mx-6 md:px-6">
+          <Button size="lg" className="w-full" onClick={clearChecked}>
+            <ListChecks /> Finish shopping · {totalChecked}
+          </Button>
+        </div>
+      ) : null}
 
       <AddGrocerySheet
         open={addOpen}

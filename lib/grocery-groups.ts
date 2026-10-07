@@ -19,7 +19,15 @@ export type AisleSourceItem = {
   item_id: string | null;
   category_id: string | null;
   item?: { category_id: string | null } | null;
+  checked?: boolean;
 };
+
+/** Unchecked keep their incoming order; checked sink to the group bottom. */
+function sinkChecked<T extends { checked?: boolean }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => Number(a.checked ?? false) - Number(b.checked ?? false),
+  );
+}
 
 export type GroceryGrouping<T> = {
   key: string;
@@ -129,7 +137,7 @@ export function resolveEffectiveAisle<T extends AisleSourceItem>(
 }
 
 /** Store aisles in sort_order, each holding its items; unfiled items last. */
-export function buildAisleGroups<T extends { id: string }>(
+export function buildAisleGroups<T extends { id: string; checked?: boolean }>(
   items: T[],
   storeAisles: StoreAisleRow[],
   effectiveAisle: Map<string, string>,
@@ -149,7 +157,9 @@ export function buildAisleGroups<T extends { id: string }>(
     });
   }
 
-  return result.filter((group) => group.items.length > 0);
+  return result
+    .filter((group) => group.items.length > 0)
+    .map((group) => ({ ...group, items: sinkChecked(group.items) }));
 }
 
 /** Categories in sort_order → unlisted categories → Other (null) last. */
@@ -187,5 +197,7 @@ export function buildCategoryGroups<T extends AisleSourceItem>(
     ordered.push({ key: OTHER_GROUP_KEY, title: "Other", items: leftovers });
   }
 
-  return ordered.filter((group) => group.items.length > 0);
+  return ordered
+    .filter((group) => group.items.length > 0)
+    .map((group) => ({ ...group, items: sinkChecked(group.items) }));
 }

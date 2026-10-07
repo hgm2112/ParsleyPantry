@@ -174,6 +174,57 @@ export async function clearCheckedGrocery(): Promise<ActionResult> {
   }
 }
 
+const restoreSchema = z
+  .array(
+    z.object({
+      id: uuid,
+      item_id: uuid.nullish(),
+      name: z.string().trim().min(1).max(160),
+      quantity: z.number().min(0).max(9999),
+      unit: z.string().trim().max(32).nullish(),
+      category_id: uuid.nullish(),
+      source: z.enum(["manual", "low_stock", "consume", "recipe", "planner"]),
+    }),
+  )
+  .max(200);
+
+export type RestoreGroceryInput = z.input<typeof restoreSchema>;
+
+/** Re-inserts rows deleted by clearCheckedGrocery so a clear can be undone. */
+export async function restoreGroceryItems(
+  items: RestoreGroceryInput,
+): Promise<ActionResult<{ restored: number }>> {
+  try {
+    const parsed = restoreSchema.safeParse(items);
+    if (!parsed.success) return { ok: false, error: "Invalid input" };
+    if (parsed.data.length === 0) return { ok: true, data: { restored: 0 } };
+    const { supabase, householdId, user } = await requireDal();
+
+    const { error } = await supabase.from("grocery_items").insert(
+      parsed.data.map((item) => ({
+        id: item.id,
+        household_id: householdId,
+        item_id: item.item_id ?? null,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit ?? null,
+        category_id: item.category_id ?? null,
+        checked: true,
+        source: item.source,
+        created_by: user.id,
+      })),
+    );
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/grocery");
+    return { ok: true, data: { restored: parsed.data.length } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not restore items",
+    };
+  }
+}
+
 export async function addManyGroceryItems(
   inputs: AddGroceryInput[],
 ): Promise<ActionResult<{ added: number; skipped: number }>> {
