@@ -433,8 +433,17 @@ export function AddForm({
           <div className="space-y-2">
             <Label>Category</Label>
             <Select
-              value={categoryId}
-              onValueChange={(value) => setCategoryId(value ?? "")}
+              value={categoryId || "__none"}
+              items={[
+                { value: "__none", label: "None" },
+                ...categories.map((category) => ({
+                  value: category.id,
+                  label: category.name,
+                })),
+              ]}
+              onValueChange={(value) =>
+                setCategoryId(value && value !== "__none" ? value : "")
+              }
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="None" />

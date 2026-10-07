@@ -277,7 +277,17 @@ export function AddGrocerySheet({
               </div>
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={manualCategory} onValueChange={(value) => setManualCategory(value ?? "__none")}>
+                <Select
+                  value={manualCategory}
+                  items={[
+                    { value: "__none", label: "None" },
+                    ...categories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    })),
+                  ]}
+                  onValueChange={(value) => setManualCategory(value ?? "__none")}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="None" />
                   </SelectTrigger>

@@ -3,14 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
-import { parseCategoryLabel } from "@/lib/kitchenowl";
+import { categoryMatchKey, parseCategoryLabel } from "@/lib/kitchenowl";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
 export type ImportSummary = {
-  categories: { created: number };
+  categories: { created: number; renamed: number };
   items: { created: number; skipped: number; backfilled: number };
   recipes: { created: number; skipped: number };
   ingredients: number;
@@ -88,34 +88,78 @@ export async function importKitchenOwl(
       .eq("household_id", householdId)
       .order("sort_order", { ascending: true });
 
-    const categoryByKey = new Map<string, string>();
+    const categoryByKey = new Map<string, { id: string; name: string }>();
     let nextCategorySort = 0;
     for (const row of (existingCategories ?? []) as {
       id: string;
       name: string;
       sort_order: number;
     }[]) {
-      categoryByKey.set(row.name.toLowerCase(), row.id);
+      categoryByKey.set(categoryMatchKey(row.name), {
+        id: row.id,
+        name: row.name,
+      });
       nextCategorySort = Math.max(nextCategorySort, row.sort_order + 1);
     }
 
-    const labelOrder: { label: string; name: string; icon: string | null }[] = [];
-    const seenLabels = new Set<string>();
+    type LabelEntry = {
+      label: string;
+      name: string;
+      icon: string | null;
+      number: number | null;
+      order: number;
+    };
+    const labelOrder: LabelEntry[] = [];
+    const seenLabelKeys = new Set<string>();
     for (const item of owlItems) {
       const label = (item.category ?? "").trim();
-      if (!label || seenLabels.has(label.toLowerCase())) continue;
-      seenLabels.add(label.toLowerCase());
-      const parsedLabel = parseCategoryLabel(label);
-      labelOrder.push({ label, ...parsedLabel });
+      if (!label) continue;
+      const key = categoryMatchKey(label);
+      if (!key || seenLabelKeys.has(key)) continue;
+      seenLabelKeys.add(key);
+      labelOrder.push({ label, order: labelOrder.length, ...parseCategoryLabel(label) });
+    }
+    labelOrder.sort(
+      (a, b) =>
+        (a.number ?? Number.MAX_SAFE_INTEGER) -
+          (b.number ?? Number.MAX_SAFE_INTEGER) || a.order - b.order,
+    );
+
+    // Restore the original KitchenOwl labels (emoji + aisle number) on
+    // categories that were first imported without them.
+    const categoryRenames = labelOrder.flatMap((entry) => {
+      const existing = categoryByKey.get(categoryMatchKey(entry.label));
+      return existing && existing.name !== entry.name
+        ? [{ id: existing.id, name: entry.name }]
+        : [];
+    });
+    let categoriesRenamed = 0;
+    for (let index = 0; index < categoryRenames.length; index += CHUNK) {
+      const slice = categoryRenames.slice(index, index + CHUNK);
+      const results = await Promise.all(
+        slice.map((entry) =>
+          supabase
+            .from("categories")
+            .update({ name: entry.name })
+            .eq("id", entry.id)
+            .eq("household_id", householdId)
+            .select("id"),
+        ),
+      );
+      for (const result of results) {
+        categoriesRenamed += (result.data ?? []).length;
+      }
+    }
+    for (const entry of categoryRenames) {
+      const current = categoryByKey.get(
+        categoryMatchKey(entry.name),
+      );
+      if (current && current.id === entry.id) current.name = entry.name;
     }
 
-    const queuedCategoryKeys = new Set<string>();
-    const pendingCategories = labelOrder.filter((entry) => {
-      const key = entry.name.toLowerCase();
-      if (categoryByKey.has(key) || queuedCategoryKeys.has(key)) return false;
-      queuedCategoryKeys.add(key);
-      return true;
-    });
+    const pendingCategories = labelOrder.filter(
+      (entry) => !categoryByKey.has(categoryMatchKey(entry.label)),
+    );
     if (pendingCategories.length > 0) {
       const inserted = await insertChunked(
         supabase,
@@ -129,14 +173,17 @@ export async function importKitchenOwl(
         "id, name",
       );
       for (const row of inserted) {
-        categoryByKey.set(row.name.toLowerCase(), row.id);
+        categoryByKey.set(categoryMatchKey(row.name), {
+          id: row.id,
+          name: row.name,
+        });
       }
     }
 
     const categoryIdForLabel = (label: string | null | undefined): string | null => {
       const trimmed = (label ?? "").trim();
       if (!trimmed) return null;
-      return categoryByKey.get(parseCategoryLabel(trimmed).name.toLowerCase()) ?? null;
+      return categoryByKey.get(categoryMatchKey(trimmed))?.id ?? null;
     };
 
     /* Items ----------------------------------------------------------- */
@@ -304,7 +351,7 @@ export async function importKitchenOwl(
     return {
       ok: true,
       data: {
-        categories: { created: pendingCategories.length },
+        categories: { created: pendingCategories.length, renamed: categoriesRenamed },
         items: {
           created: insertedItems.length,
           skipped: itemsSkipped,

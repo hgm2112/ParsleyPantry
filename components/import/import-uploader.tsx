@@ -205,6 +205,9 @@ export function ImportUploader() {
             <li>{summary.items.created} items added</li>
             <li>{summary.recipes.created} recipes added</li>
             <li>{summary.categories.created} categories added</li>
+            {summary.categories.renamed > 0 ? (
+              <li>{summary.categories.renamed} categories restored to full labels</li>
+            ) : null}
             <li>{summary.ingredients} ingredients linked</li>
             <li>{summary.items.skipped} items already present</li>
             <li>{summary.recipes.skipped} recipes already present</li>

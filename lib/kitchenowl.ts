@@ -27,34 +27,42 @@ export type KitchenOwlExport = {
   recipes: KitchenOwlRecipe[];
 };
 
-const EMOJI_TOKEN = /^\p{Extended_Pictographic}[\uFE0F\u200D\p{Extended_Pictographic}]*/u;
-const NUMBER_TOKEN = /^\d+$/;
+const LEADING_EMOJI = /^(?:\p{Extended_Pictographic}[\uFE0F\u200D\p{Extended_Pictographic}]*\s*)+/u;
+const AISLE_NUMBER = /^(\d+)\s*-\s*/;
 
 /**
  * KitchenOwl category labels look like "🥫 12 - Canned food",
  * "🥬 Fruits and vegetables", or plain "Kroger".
- * Splits them into a display name plus the leading emoji as an icon.
+ * The display name keeps the label verbatim (emoji + aisle number);
+ * icon/number are also extracted for metadata and ordering.
  */
 export function parseCategoryLabel(label: string): {
   name: string;
   icon: string | null;
+  number: number | null;
 } {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return { name: label.trim(), icon: null };
+  const name = label.trim().replace(/\s+/g, " ");
+  if (!name) return { name: label.trim(), icon: null, number: null };
 
-  let icon: string | null = null;
-  if (EMOJI_TOKEN.test(parts[0])) {
-    icon = parts[0];
-    parts.shift();
-  }
+  const iconMatch = LEADING_EMOJI.exec(name);
+  const icon = iconMatch ? iconMatch[0].trim() || null : null;
+  const afterIcon = iconMatch ? name.slice(iconMatch[0].length) : name;
+  const numberMatch = AISLE_NUMBER.exec(afterIcon);
+  const number = numberMatch ? Number(numberMatch[1]) : null;
 
-  // Strip aisle numbering like "12 -"
-  if (parts.length >= 2 && NUMBER_TOKEN.test(parts[0]) && parts[1] === "-") {
-    parts.splice(0, 2);
-  }
+  return { name, icon, number };
+}
 
-  const name = parts.join(" ").trim();
-  return { name: name || label.trim(), icon };
+/**
+ * Stable matching key for a category/aisle label: emoji and aisle
+ * numbering stripped, trimmed, lowercased — so "Cleaning Aisle" and
+ * "🧼 14 - Cleaning Aisle" always match each other.
+ */
+export function categoryMatchKey(label: string): string {
+  let rest = label.trim().replace(/\s+/g, " ");
+  rest = rest.replace(LEADING_EMOJI, "");
+  rest = rest.replace(AISLE_NUMBER, "");
+  return rest.trim().toLowerCase();
 }
 
 export function isKitchenOwlExport(value: unknown): value is KitchenOwlExport {

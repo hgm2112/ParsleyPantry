@@ -197,6 +197,13 @@ export function ItemSheet({
             <Label>Category</Label>
             <Select
               value={categoryId}
+              items={[
+                { value: "__none", label: "None" },
+                ...categories.map((category) => ({
+                  value: category.id,
+                  label: category.name,
+                })),
+              ]}
               onValueChange={(value) => setCategoryId(value ?? "__none")}
             >
               <SelectTrigger className="w-full">
@@ -218,6 +225,13 @@ export function ItemSheet({
               <Label>Aisle at {store.name}</Label>
               <Select
                 value={assignedAisleId ?? "__none"}
+                items={[
+                  { value: "__none", label: "Needs an aisle" },
+                  ...storeAisles(store.id).map((aisle) => ({
+                    value: aisle.id,
+                    label: aisle.name,
+                  })),
+                ]}
                 onValueChange={(value) =>
                   void changeAisle(
                     !value || value === "__none" ? null : value,
@@ -254,6 +268,13 @@ export function ItemSheet({
                       </span>
                       <Select
                         value={value}
+                        items={[
+                          { value: "__none", label: "Not set" },
+                          ...list.map((aisle) => ({
+                            value: aisle.id,
+                            label: aisle.name,
+                          })),
+                        ]}
                         onValueChange={(next) =>
                           void changeRemembered(
                             entry.id,

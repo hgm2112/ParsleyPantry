@@ -17,11 +17,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
+  adoptCategoryAisles,
   addGroceryItem,
   clearCheckedGrocery,
   setGrocerySettings,
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
+import { categoryMatchKey } from "@/lib/kitchenowl";
 import type {
   CategoryRow,
   GroceryItemRow,
@@ -78,7 +80,13 @@ type Props = {
   catalog: CatalogEntry[];
 };
 
-type Group = { key: string; title: string; hint?: string; items: GroceryListItem[] };
+type Group = {
+  key: string;
+  title: string;
+  hint?: string;
+  adopt?: boolean;
+  items: GroceryListItem[];
+};
 
 export function GroceryView({
   initialItems,
@@ -103,6 +111,7 @@ export function GroceryView({
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [adoptBusy, setAdoptBusy] = useState(false);
 
   const store = stores.find((entry) => entry.id === storeId) ?? null;
   const storeAisles = useMemo(
@@ -138,6 +147,21 @@ export function GroceryView({
     [initialItems, overrides],
   );
 
+  const aisleByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const aisle of storeAisles) {
+      const key = categoryMatchKey(aisle.name);
+      if (key && !map.has(key)) map.set(key, aisle.id);
+    }
+    return map;
+  }, [storeAisles]);
+
+  const categoryNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const category of categories) map.set(category.id, category.name);
+    return map;
+  }, [categories]);
+
   const effectiveAisle = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of items) {
@@ -148,11 +172,29 @@ export function GroceryView({
       }
       if (item.item_id) {
         const remembered = rememberedByItem.get(item.item_id);
-        if (remembered) map.set(item.id, remembered);
+        if (remembered) {
+          map.set(item.id, remembered);
+          continue;
+        }
+      }
+      const categoryId = item.category_id ?? item.item?.category_id ?? null;
+      const categoryName = categoryId
+        ? categoryNames.get(categoryId) ?? null
+        : null;
+      if (categoryName) {
+        const matched = aisleByKey.get(categoryMatchKey(categoryName));
+        if (matched) map.set(item.id, matched);
       }
     }
     return map;
-  }, [items, aisleByItem, rememberedByItem]);
+  }, [items, aisleByItem, rememberedByItem, categoryNames, aisleByKey]);
+
+  const missingAisleCount = useMemo(() => {
+    if (!store) return 0;
+    return categories.filter(
+      (category) => !aisleByKey.has(categoryMatchKey(category.name)),
+    ).length;
+  }, [store, categories, aisleByKey]);
 
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -205,6 +247,7 @@ export function GroceryView({
           key: "__unassigned",
           title: "Needs an aisle",
           hint: "Tap an item to file it under an aisle",
+          adopt: missingAisleCount > 0,
           items: unassigned,
         });
       }
@@ -243,7 +286,7 @@ export function GroceryView({
     }
 
     return ordered.filter((group) => group.items.length > 0);
-  }, [items, mode, store, storeAisles, effectiveAisle, categories]);
+  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount]);
 
   async function quickAdd(entry: CatalogEntry) {
     if (onListSet.has(entry.id)) {
@@ -295,6 +338,23 @@ export function GroceryView({
     if (!result.ok) toast.error(result.error);
   }
 
+  async function adoptAisles() {
+    if (!store) return;
+    setAdoptBusy(true);
+    const result = await adoptCategoryAisles(store.id);
+    setAdoptBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      result.data.created > 0
+        ? `Added ${result.data.created} aisles from your categories`
+        : "Your store already has all those aisles",
+    );
+    router.refresh();
+  }
+
   async function clearChecked() {
     const removed = items.filter((item) => item.checked);
     setOverrides((current) => {
@@ -333,7 +393,11 @@ export function GroceryView({
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {stores.length > 0 ? (
-            <Select value={storeId ?? ""} onValueChange={(value) => void changeStore(value ?? "")}>
+            <Select
+              value={storeId}
+              items={stores.map((entry) => ({ value: entry.id, label: entry.name }))}
+              onValueChange={(value) => void changeStore(value ?? "")}
+            >
               <SelectTrigger className="h-8 w-44 text-sm">
                 <SelectValue placeholder="Pick a store" />
               </SelectTrigger>
@@ -497,7 +561,22 @@ export function GroceryView({
                 </span>
               </div>
               {group.hint ? (
-                <p className="mb-1.5 text-xs text-muted-foreground">{group.hint}</p>
+                <p className="mb-1.5 text-xs text-muted-foreground">
+                  {group.hint}
+                  {group.adopt ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="underline disabled:no-underline"
+                        disabled={adoptBusy}
+                        onClick={() => void adoptAisles()}
+                      >
+                        {adoptBusy ? "Adding aisles…" : "Use my categories as aisles"}
+                      </button>
+                    </>
+                  ) : null}
+                </p>
               ) : null}
               <ul className="divide-y rounded-xl border bg-background">
                 {group.items.map((item) => (

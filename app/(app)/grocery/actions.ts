@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
+import { categoryMatchKey, parseCategoryLabel } from "@/lib/kitchenowl";
 import type {
   GroceryViewMode,
   StoreAisleRow,
@@ -278,6 +279,90 @@ export async function setItemStoreAisle(
       ok: false,
       error:
         error instanceof Error ? error.message : "Could not save store aisle",
+    };
+  }
+}
+
+/**
+ * Creates aisles the store is missing for your household categories
+ * (numbered aisles first), so category-matched filing can place items.
+ */
+export async function adoptCategoryAisles(
+  storeId: string,
+): Promise<ActionResult<{ created: number }>> {
+  try {
+    const { supabase, householdId } = await requireDal();
+
+    const [categoriesResult, storeResult, aislesResult] = await Promise.all([
+      supabase
+        .from("categories")
+        .select("id, name, sort_order")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("stores")
+        .select("id")
+        .eq("household_id", householdId)
+        .eq("id", storeId)
+        .maybeSingle(),
+      supabase
+        .from("store_aisles")
+        .select("*")
+        .eq("household_id", householdId)
+        .eq("store_id", storeId),
+    ]);
+    if (categoriesResult.error) {
+      return { ok: false, error: categoriesResult.error.message };
+    }
+    if (!storeResult.data) return { ok: false, error: "Store not found" };
+
+    const existing = (aislesResult.data ?? []) as StoreAisleRow[];
+    const taken = new Set(existing.map((aisle) => categoryMatchKey(aisle.name)));
+    const rows = (categoriesResult.data ?? []) as {
+      id: string;
+      name: string;
+      sort_order: number;
+    }[];
+
+    const ordered = rows
+      .map((row) => ({ ...row, number: parseCategoryLabel(row.name).number }))
+      .sort(
+        (a, b) =>
+          (a.number ?? Number.MAX_SAFE_INTEGER) -
+            (b.number ?? Number.MAX_SAFE_INTEGER) ||
+          a.sort_order - b.sort_order,
+      );
+
+    let nextSort = existing.reduce(
+      (max, aisle) => Math.max(max, aisle.sort_order),
+      -1,
+    ) + 1;
+    const pending = ordered
+      .filter((row) => {
+        const key = categoryMatchKey(row.name);
+        if (!key || taken.has(key)) return false;
+        taken.add(key);
+        return true;
+      })
+      .map((row) => ({
+        household_id: householdId,
+        store_id: storeId,
+        name: row.name,
+        sort_order: nextSort++,
+      }));
+
+    if (pending.length > 0) {
+      const { error } = await supabase.from("store_aisles").insert(pending);
+      if (error) return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/grocery");
+    revalidatePath("/grocery/stores");
+    return { ok: true, data: { created: pending.length } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not add aisles",
     };
   }
 }

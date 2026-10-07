@@ -336,6 +336,10 @@ export function SettingsView({
           <Label>Default location</Label>
           <Select
             value={settings?.default_location ?? "pantry"}
+            items={LOCATIONS.map((location) => ({
+              value: location.value,
+              label: location.label,
+            }))}
             onValueChange={(value) => {
               if (value) void changeDefaultLocation(value);
             }}

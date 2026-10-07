@@ -257,6 +257,13 @@ export function InventoryDetail({
           <Label htmlFor="category">Category</Label>
           <Select
             value={categoryId || "__none"}
+            items={[
+              { value: "__none", label: "None" },
+              ...categories.map((category) => ({
+                value: category.id,
+                label: category.name,
+              })),
+            ]}
             onValueChange={(value) => {
               setCategoryId(!value || value === "__none" ? "" : value);
             }}
