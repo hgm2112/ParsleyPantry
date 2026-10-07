@@ -285,10 +285,10 @@ export async function setItemStoreAisle(
 }
 
 /**
- * Creates aisles the store is missing for your household categories (in
- * category order), then syncs every store's aisle list from the categories:
- * paired aisles are renamed to the category's current label and reordered to
- * match — so seeded aisles pick up emoji + aisle numbers too.
+ * Links a store to the household categories (follow_categories = true),
+ * creates the aisles it's missing for them (in category order), then syncs
+ * that store's list: paired aisles take the category's current label and
+ * order. Other stores are never touched.
  */
 export async function adoptCategoryAisles(
   storeId: string,
@@ -318,6 +318,13 @@ export async function adoptCategoryAisles(
       return { ok: false, error: categoriesResult.error.message };
     }
     if (!storeResult.data) return { ok: false, error: "Store not found" };
+
+    const { error: followError } = await supabase
+      .from("stores")
+      .update({ follow_categories: true })
+      .eq("id", storeId)
+      .eq("household_id", householdId);
+    if (followError) return { ok: false, error: followError.message };
 
     const existing = (aislesResult.data ?? []) as StoreAisleRow[];
     const taken = new Set(existing.map((aisle) => categoryMatchKey(aisle.name)));
@@ -350,7 +357,7 @@ export async function adoptCategoryAisles(
       if (error) return { ok: false, error: error.message };
     }
 
-    await syncStoreAislesToCategories(supabase, householdId);
+    await syncStoreAislesToCategories(supabase, householdId, storeId);
 
     revalidatePath("/grocery");
     revalidatePath("/grocery/stores");
@@ -612,6 +619,89 @@ export async function moveAisle(
       .eq("id", other.id);
 
     revalidatePath("/grocery");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not reorder",
+    };
+  }
+}
+
+/**
+ * Unlinks a store from the categories (its aisles stay put and become
+ * hand-managed). Turning it on runs the full adopt: link, create missing,
+ * sync.
+ */
+export async function setStoreFollowCategories(
+  storeId: string,
+  follow: boolean,
+): Promise<ActionResult> {
+  if (follow) {
+    const result = await adoptCategoryAisles(storeId);
+    return result.ok ? { ok: true, data: null } : result;
+  }
+  try {
+    const { supabase, householdId } = await requireDal();
+    const { error } = await supabase
+      .from("stores")
+      .update({ follow_categories: false })
+      .eq("id", storeId)
+      .eq("household_id", householdId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/grocery");
+    revalidatePath("/grocery/stores");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not update store",
+    };
+  }
+}
+
+/**
+ * Drag-and-drop save for a hand-managed store: sets sort_order from the
+ * given id order. Fails if the ids don't exactly cover this store's aisles.
+ */
+export async function reorderStoreAisles(
+  storeId: string,
+  ids: string[],
+): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const { data, error } = await supabase
+      .from("store_aisles")
+      .select("id")
+      .eq("household_id", householdId)
+      .eq("store_id", storeId);
+    if (error) return { ok: false, error: error.message };
+
+    const valid = new Set(
+      ((data ?? []) as { id: string }[]).map((aisle) => aisle.id),
+    );
+    const ordered = ids.filter((id) => valid.has(id));
+    if (ordered.length !== valid.size) {
+      return { ok: false, error: "That order doesn't match this store's aisles" };
+    }
+
+    const results = await Promise.all(
+      ordered.map((id, index) =>
+        supabase
+          .from("store_aisles")
+          .update({ sort_order: index })
+          .eq("id", id)
+          .eq("household_id", householdId)
+          .select("id"),
+      ),
+    );
+    for (const result of results) {
+      if (result.error) return { ok: false, error: result.error.message };
+    }
+
+    revalidatePath("/grocery");
+    revalidatePath("/grocery/stores");
     return { ok: true, data: null };
   } catch (error) {
     return {

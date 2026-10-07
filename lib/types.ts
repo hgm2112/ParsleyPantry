@@ -80,6 +80,7 @@ export interface StoreRow {
   household_id: string;
   name: string;
   sort_order: number;
+  follow_categories: boolean;
 }
 
 export interface StoreAisleRow {

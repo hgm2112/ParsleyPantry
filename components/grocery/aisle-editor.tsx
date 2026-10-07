@@ -17,13 +17,21 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  SortableList,
+  SortableRow,
+  useRowReorder,
+} from "@/components/sortable";
 import {
   createAisle,
   deleteAisle,
   deleteStore,
   moveAisle,
+  reorderStoreAisles,
   setGrocerySettings,
+  setStoreFollowCategories,
   updateAisle,
   updateStore,
 } from "@/app/(app)/grocery/actions";
@@ -45,6 +53,19 @@ export function AisleEditor({
   const [editingName, setEditingName] = useState("");
   const [deletingAisle, setDeletingAisle] = useState<StoreAisleRow | null>(null);
   const [storeDeleteOpen, setStoreDeleteOpen] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  const following = store.follow_categories;
+
+  const reorder = useRowReorder(aisles, async (ids) => {
+    const result = await reorderStoreAisles(store.id, ids);
+    if (!result.ok) {
+      toast.error(result.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  });
 
   async function saveStoreName() {
     if (!storeDirty || !storeName.trim()) return;
@@ -72,6 +93,7 @@ export function AisleEditor({
       return;
     }
     setNewAisle("");
+    reorder.reset();
     toast.success(`${trimmed} added`);
     router.refresh();
   }
@@ -88,6 +110,7 @@ export function AisleEditor({
       return;
     }
     setEditingId(null);
+    reorder.reset();
     router.refresh();
   }
 
@@ -97,6 +120,7 @@ export function AisleEditor({
       toast.error(result.error);
       return;
     }
+    reorder.reset();
     router.refresh();
   }
 
@@ -109,6 +133,24 @@ export function AisleEditor({
     }
     toast.success("Aisle removed");
     setDeletingAisle(null);
+    reorder.reset();
+    router.refresh();
+  }
+
+  async function toggleFollow(checked: boolean) {
+    setFollowBusy(true);
+    const result = await setStoreFollowCategories(store.id, checked);
+    setFollowBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    reorder.reset();
+    toast.success(
+      checked
+        ? `${store.name} now follows your categories`
+        : `${store.name} manages its own aisles now`,
+    );
     router.refresh();
   }
 
@@ -186,17 +228,44 @@ export function AisleEditor({
         </Button>
       </div>
 
-      <form onSubmit={submitAisle} className="flex gap-2">
-        <Input
-          value={newAisle}
-          onChange={(event) => setNewAisle(event.target.value)}
-          placeholder="Add an aisle (e.g. 12 – Canned food)"
+      <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Follow my categories</p>
+          <p className="text-xs text-muted-foreground">
+            {following ? (
+              <>
+                Labels and order come from your categories —{" "}
+                <Link href="/categories" className="underline">
+                  reorder them there
+                </Link>
+                .
+              </>
+            ) : (
+              "This store keeps its own aisle numbers and contents."
+            )}
+          </p>
+        </div>
+        <Switch
+          checked={following}
+          disabled={followBusy}
+          onCheckedChange={(checked) => void toggleFollow(checked)}
+          aria-label="Follow my categories"
         />
-        <Button type="submit" disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-          Add
-        </Button>
-      </form>
+      </div>
+
+      {following ? null : (
+        <form onSubmit={submitAisle} className="flex gap-2">
+          <Input
+            value={newAisle}
+            onChange={(event) => setNewAisle(event.target.value)}
+            placeholder="Add an aisle (e.g. 12 – Canned food)"
+          />
+          <Button type="submit" disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+            Add
+          </Button>
+        </form>
+      )}
 
       {aisles.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center">
@@ -207,9 +276,18 @@ export function AisleEditor({
           </p>
         </div>
       ) : (
-        <ol className="divide-y rounded-xl border bg-background">
-          {aisles.map((aisle, index) => (
-            <li key={aisle.id} className="flex items-center gap-2 px-3 py-2">
+        <SortableList
+          ids={reorder.ids}
+          dndProps={reorder.dndProps}
+          className="divide-y rounded-xl border bg-background"
+        >
+          {reorder.displayed.map((aisle, index) => (
+            <SortableRow
+              key={aisle.id}
+              id={aisle.id}
+              draggable={!following}
+              dragLabel={`Drag to reorder ${aisle.name}`}
+            >
               <span className="w-6 text-center text-xs tabular-nums text-muted-foreground">
                 {index + 1}
               </span>
@@ -236,49 +314,51 @@ export function AisleEditor({
                 </span>
               )}
 
-              <div className="flex shrink-0 items-center">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={index === 0}
-                  onClick={() => void move(aisle, "up")}
-                  aria-label={`Move ${aisle.name} up`}
-                >
-                  <ArrowUp />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={index === aisles.length - 1}
-                  onClick={() => void move(aisle, "down")}
-                  aria-label={`Move ${aisle.name} down`}
-                >
-                  <ArrowDown />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => {
-                    setEditingId(aisle.id);
-                    setEditingName(aisle.name);
-                  }}
-                  aria-label={`Rename ${aisle.name}`}
-                >
-                  <Pencil />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive"
-                  onClick={() => setDeletingAisle(aisle)}
-                  aria-label={`Delete ${aisle.name}`}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            </li>
+              {following ? null : (
+                <div className="flex shrink-0 items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={index === 0}
+                    onClick={() => void move(aisle, "up")}
+                    aria-label={`Move ${aisle.name} up`}
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={index === reorder.displayed.length - 1}
+                    onClick={() => void move(aisle, "down")}
+                    aria-label={`Move ${aisle.name} down`}
+                  >
+                    <ArrowDown />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      setEditingId(aisle.id);
+                      setEditingName(aisle.name);
+                    }}
+                    aria-label={`Rename ${aisle.name}`}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive"
+                    onClick={() => setDeletingAisle(aisle)}
+                    aria-label={`Delete ${aisle.name}`}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              )}
+            </SortableRow>
           ))}
-        </ol>
+        </SortableList>
       )}
 
       <ConfirmDialog

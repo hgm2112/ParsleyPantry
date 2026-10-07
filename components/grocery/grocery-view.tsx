@@ -24,6 +24,7 @@ import {
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
 import { categoryMatchKey } from "@/lib/kitchenowl";
+import { planStoreAisles } from "@/lib/aisle-plan";
 import type {
   CategoryRow,
   GroceryItemRow,
@@ -190,26 +191,24 @@ export function GroceryView({
   }, [items, aisleByItem, rememberedByItem, categoryNames, aisleByKey]);
 
   const missingAisleCount = useMemo(() => {
-    if (!store) return 0;
+    if (!store?.follow_categories) return 0;
     return categories.filter(
       (category) => !aisleByKey.has(categoryMatchKey(category.name)),
     ).length;
   }, [store, categories, aisleByKey]);
 
-  // Paired aisles whose label drifted from the category (e.g. aisles seeded
-  // before the import learned to restore emoji + aisle numbers).
+  // For stores that follow the categories: diff the list against what it
+  // should be — wrong labels, pairings, or order all count as drift.
+  // Independent stores (own aisle numbers/contents) never count.
   const aisleSyncNeeded = useMemo(() => {
-    if (!store) return false;
-    const aisleNames = new Map<string, string>();
-    for (const aisle of storeAisles) {
-      const key = categoryMatchKey(aisle.name);
-      if (key && !aisleNames.has(key)) aisleNames.set(key, aisle.name);
-    }
-    return categories.some((category) => {
-      const aisleName = aisleNames.get(categoryMatchKey(category.name));
-      return aisleName !== undefined && aisleName !== category.name;
-    });
-  }, [store, storeAisles, categories]);
+    if (!store?.follow_categories) return false;
+    const plan = planStoreAisles(categories, storeAisles);
+    return plan.some(
+      (entry, index) =>
+        storeAisles[index].id !== entry.id ||
+        storeAisles[index].name !== entry.name,
+    );
+  }, [store, categories, storeAisles]);
 
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -543,7 +542,9 @@ export function GroceryView({
             to arrange by a store&apos;s own aisles.
           </p>
         ) : null}
-        {mode === "aisle" && store && aisleSyncNeeded ? (
+        {mode === "aisle" &&
+        store &&
+        (aisleSyncNeeded || missingAisleCount > 0) ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Your store&apos;s aisles are behind your categories —{" "}
             <button

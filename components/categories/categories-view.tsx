@@ -15,9 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
+  SortableList,
+  SortableRow,
+  useRowReorder,
+} from "@/components/sortable";
+import {
   createCategory,
   deleteCategory,
   moveCategory,
+  reorderCategories,
   updateCategory,
 } from "@/app/(app)/categories/actions";
 import type { CategoryRow } from "@/lib/types";
@@ -29,6 +35,16 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [deleting, setDeleting] = useState<CategoryRow | null>(null);
+
+  const reorder = useRowReorder(categories, async (ids) => {
+    const result = await reorderCategories(ids);
+    if (!result.ok) {
+      toast.error(result.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -42,6 +58,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
       return;
     }
     setNewName("");
+    reorder.reset();
     toast.success(`${trimmed} added`);
     router.refresh();
   }
@@ -58,6 +75,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
       return;
     }
     setEditingId(null);
+    reorder.reset();
     router.refresh();
   }
 
@@ -67,6 +85,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
       toast.error(result.error);
       return;
     }
+    reorder.reset();
     router.refresh();
   }
 
@@ -79,6 +98,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
     }
     toast.success("Category removed");
     setDeleting(null);
+    reorder.reset();
     router.refresh();
   }
 
@@ -105,9 +125,17 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
           </p>
         </div>
       ) : (
-        <ol className="divide-y rounded-xl border bg-background">
-          {categories.map((category, index) => (
-            <li key={category.id} className="flex items-center gap-2 px-3 py-2">
+        <SortableList
+          ids={reorder.ids}
+          dndProps={reorder.dndProps}
+          className="divide-y rounded-xl border bg-background"
+        >
+          {reorder.displayed.map((category, index) => (
+            <SortableRow
+              key={category.id}
+              id={category.id}
+              dragLabel={`Drag to reorder ${category.name}`}
+            >
               <span className="w-6 text-center text-xs tabular-nums text-muted-foreground">
                 {index + 1}
               </span>
@@ -147,7 +175,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  disabled={index === categories.length - 1}
+                  disabled={index === reorder.displayed.length - 1}
                   onClick={() => void move(category, "down")}
                   aria-label={`Move ${category.name} down`}
                 >
@@ -174,9 +202,9 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
                   <Trash2 />
                 </Button>
               </div>
-            </li>
+            </SortableRow>
           ))}
-        </ol>
+        </SortableList>
       )}
 
       <ConfirmDialog
