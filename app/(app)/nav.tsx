@@ -122,7 +122,7 @@ function SidebarNav({ pathname }: { pathname: string }) {
   return (
     <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col border-r bg-sidebar z-40">
       <div className="flex h-16 items-center px-5">
-        <Wordmark markClassName="h-7 w-8" />
+        <Wordmark markClassName="h-8.75 w-10" />
       </div>
       <nav className="flex-1 space-y-1 px-3 py-2">
         {sidebarItems.map(({ href, label, icon: Icon }) => (
@@ -154,7 +154,7 @@ function SidebarNav({ pathname }: { pathname: string }) {
 function MobileHeader() {
   return (
     <header className="md:hidden sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
-      <Wordmark href="/home" className="text-base" markClassName="h-6 w-7" />
+      <Wordmark href="/home" className="text-base" markClassName="h-7.5 w-8.75" />
       <div className="flex items-center gap-1">
         <Link
           href="/search"

@@ -72,8 +72,8 @@ export function Wordmark({
       href={href}
       className={cn("flex items-center gap-2 font-extrabold", className)}
     >
-      <ParsleyMark className={cn("h-7 w-8", markClassName)} />
-      <span className={cn(gabriola.className, "text-[1.5em] font-normal leading-none")}>
+      <ParsleyMark className={cn("h-8.75 w-10", markClassName)} />
+      <span className={cn(gabriola.className, "text-[1.875em] font-normal leading-none -translate-y-[0.06em]")}>
         Parsley Pantry
       </span>
     </Link>
