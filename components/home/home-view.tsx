@@ -11,6 +11,7 @@ import {
 import { SmartActions } from "@/components/home/smart-actions";
 import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
+import type { RecipeOption } from "@/components/plan/day-dialog";
 import type {
   CategoryRow,
   HomeMeal,
@@ -45,6 +46,7 @@ export function HomeView({
   assignments,
   rememberedAisles,
   settings,
+  recipes,
 }: {
   meals: HomeMeal[];
   pantry: InventoryEntry[];
@@ -55,15 +57,16 @@ export function HomeView({
   assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
   rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
   settings: HouseholdSettingsRow | null;
+  recipes: RecipeOption[];
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="hidden lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block">
-        <WeekMeals meals={meals} />
+        <WeekMeals meals={meals} recipes={recipes} />
       </div>
 
       <div className="lg:col-start-3 lg:row-start-1">
-        <SmartActions pantry={pantry} grocery={grocery} meals={meals} />
+        <SmartActions pantry={pantry} grocery={grocery} meals={meals} recipes={recipes} />
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
@@ -84,7 +87,7 @@ export function HomeView({
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
         <PantryInsights rows={pantry} />
-        <MiniCalendar meals={meals} />
+        <MiniCalendar meals={meals} recipes={recipes} />
         <PromoCard />
       </div>
     </div>

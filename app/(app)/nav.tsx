@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
-  Calendar,
   CalendarDays,
   House,
   Package,
@@ -23,7 +22,6 @@ const sidebarItems = [
   { href: "/inventory", label: "Pantry", icon: Package },
   { href: "/grocery", label: "Shopping list", icon: ShoppingCart },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

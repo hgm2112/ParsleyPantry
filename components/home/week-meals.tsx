@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -11,9 +10,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
-import { addDays, dayLabel, mondayOf, weekTitle } from "@/lib/plan";
+import { addDays, dateLabel, dayIndexOf, mondayOf, weekTitle } from "@/lib/plan";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { Button } from "@/components/ui/button";
+import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "dessert"];
@@ -36,22 +36,35 @@ const TYPE_CHIP: Record<string, string> = {
   Dessert: "bg-rose-100 text-rose-800",
 };
 
-export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
+export function WeekMeals({
+  meals,
+  recipes,
+}: {
+  meals: HomeMeal[];
+  recipes: RecipeOption[];
+}) {
   const today = useToday();
   const [offset, setOffset] = useState(0);
+  const [openDate, setOpenDate] = useState<string | null>(null);
 
-  const weekStart = useMemo(() => {
-    const base = mondayOf(new Date(`${today}T00:00:00Z`));
-    return offset === 0 ? base : addDays(base, offset * 7);
-  }, [today, offset]);
+  // Rolling 7-day window that always leads with today.
+  const start = useMemo(() => addDays(today, offset * 7), [today, offset]);
+  const dates = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(start, index)),
+    [start],
+  );
 
-  const weekEnd = addDays(weekStart, 6);
-  const weekMeals = meals.filter(
-    (meal) => meal.week_start >= weekStart && meal.week_start <= weekEnd,
-  );
-  const byDay = new Map<number, HomeMeal>(
-    weekMeals.map((meal) => [meal.day_index, meal]),
-  );
+  const byDate = useMemo(() => {
+    const map = new Map<string, HomeMeal>();
+    for (const meal of meals) {
+      map.set(addDays(meal.week_start, meal.day_index), meal);
+    }
+    return map;
+  }, [meals]);
+
+  const firstUnplanned = dates.find((iso) => !byDate.get(iso)?.recipe) ?? today;
+
+  const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
 
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -61,41 +74,45 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
         <div className="mx-auto flex items-center gap-1">
           <button
             type="button"
-            aria-label="Previous week"
+            aria-label="Previous 7 days"
             onClick={() => setOffset((value) => value - 1)}
             className="rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-36 text-center text-sm font-semibold text-muted-foreground">
-            {weekTitle(weekStart)}
+            {weekTitle(start)}
           </span>
           <button
             type="button"
-            aria-label="Next week"
+            aria-label="Next 7 days"
             onClick={() => setOffset((value) => value + 1)}
             className="rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <Button render={<Link href="/plan" />} size="sm">
+        <Button size="sm" onClick={() => setOpenDate(firstUnplanned)}>
           <Plus className="h-4 w-4" /> Add Meal
         </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        {Array.from({ length: 7 }, (_, index) => {
-          const label = dayLabel(index, weekStart);
-          const meal = byDay.get(index) ?? null;
+        {dates.map((iso) => {
+          const label = dateLabel(iso);
+          const meal = byDate.get(iso) ?? null;
           const recipe = meal?.recipe ?? null;
           const type = recipe ? mealType(recipe.tags) : null;
 
           return (
-            <Link
-              key={index}
-              href="/plan"
-              className="group rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
+            <button
+              key={iso}
+              type="button"
+              onClick={() => setOpenDate(iso)}
+              className={cn(
+                "group rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/50 hover:shadow-sm",
+                iso === today && "border-primary bg-primary/5",
+              )}
             >
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-extrabold">{label.weekday}</span>
@@ -142,10 +159,20 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
                   <span className="text-xs font-semibold">Plan</span>
                 </div>
               )}
-            </Link>
+            </button>
           );
         })}
       </div>
+
+      {openDate ? (
+        <DayDialog
+          key={openDate}
+          weekStart={mondayOf(new Date(`${openDate}T00:00:00Z`))}
+          day={{ index: dayIndexOf(openDate), entry: openMeal }}
+          recipes={recipes}
+          onDone={() => setOpenDate(null)}
+        />
+      ) : null}
     </section>
   );
 }

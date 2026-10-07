@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
-import { addDays } from "@/lib/plan";
+import { addDays, dayIndexOf, mondayOf } from "@/lib/plan";
+import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -18,21 +18,27 @@ function monthLabel(year: number, month: number): string {
   });
 }
 
-export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
+export function MiniCalendar({
+  meals,
+  recipes,
+}: {
+  meals: HomeMeal[];
+  recipes: RecipeOption[];
+}) {
   const today = useToday();
+  const [openDate, setOpenDate] = useState<string | null>(null);
 
   const [cursor, setCursor] = useState(() => {
     const [year, month] = today.split("-").map(Number);
     return { year: year ?? 2026, month: (month ?? 1) - 1 };
   });
 
-  /** Exact ISO dates with a planned recipe. */
-  const plannedDates = useMemo(() => {
-    const dates = new Set<string>();
+  const byDate = useMemo(() => {
+    const map = new Map<string, HomeMeal>();
     for (const meal of meals) {
-      if (meal.recipe_id) dates.add(addDays(meal.week_start, meal.day_index));
+      if (meal.recipe_id) map.set(addDays(meal.week_start, meal.day_index), meal);
     }
-    return dates;
+    return map;
   }, [meals]);
 
   const days = useMemo(() => {
@@ -50,10 +56,10 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
         day: date.getUTCDate(),
         inMonth: date.getUTCMonth() === cursor.month,
         isToday: iso === today,
-        hasMeal: plannedDates.has(iso),
+        hasMeal: byDate.has(iso),
       };
     });
-  }, [cursor, plannedDates, today]);
+  }, [cursor, byDate, today]);
 
   function stepMonth(delta: number) {
     setCursor((current) => {
@@ -62,16 +68,12 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
     });
   }
 
+  const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
+
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-lg font-extrabold">Calendar</h2>
-        <Link
-          href="/calendar"
-          className="ml-auto text-sm font-semibold text-primary hover:underline"
-        >
-          View full calendar →
-        </Link>
       </div>
 
       <div className="mb-2 flex items-center justify-between">
@@ -106,9 +108,11 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
           </span>
         ))}
         {days.map((day) => (
-          <Link
+          <button
             key={day.iso}
-            href="/plan"
+            type="button"
+            onClick={() => setOpenDate(day.iso)}
+            aria-label={`Plan meal for ${day.iso}`}
             className={cn(
               "relative mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors",
               day.inMonth ? "text-foreground" : "text-muted-foreground/50",
@@ -120,9 +124,19 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
             {day.hasMeal && !day.isToday ? (
               <span className="absolute bottom-0.5 size-1 rounded-full bg-primary" />
             ) : null}
-          </Link>
+          </button>
         ))}
       </div>
+
+      {openDate ? (
+        <DayDialog
+          key={openDate}
+          weekStart={mondayOf(new Date(`${openDate}T00:00:00Z`))}
+          day={{ index: dayIndexOf(openDate), entry: openMeal }}
+          recipes={recipes}
+          onDone={() => setOpenDate(null)}
+        />
+      ) : null}
     </section>
   );
 }

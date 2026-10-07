@@ -17,6 +17,29 @@ export function isIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+/** Meal-plan day index (0 = Monday … 6 = Sunday) for an ISO date. */
+export function dayIndexOf(isoDate: string): number {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  return (date.getUTCDay() + 6) % 7;
+}
+
+/** Label for an exact ISO date (works for rolling, non-Monday windows). */
+export function dateLabel(isoDate: string): {
+  weekday: string;
+  dayOfMonth: string;
+  month: string;
+} {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  return {
+    weekday: date.toLocaleDateString("en-US", {
+      weekday: "short",
+      timeZone: "UTC",
+    }),
+    dayOfMonth: String(date.getUTCDate()),
+    month: date.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+  };
+}
+
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 export function dayLabel(index: number, weekStart: string): {

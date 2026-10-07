@@ -9,13 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   clearMealDay,
   saveMealNote,
@@ -24,14 +24,16 @@ import {
 import { dayLabel } from "@/lib/plan";
 import type { PlannedDay } from "@/components/plan/plan-view";
 
+export type RecipeOption = { id: string; name: string; time: number; tags: string[] };
+
 type Props = {
   weekStart: string;
   day: PlannedDay;
-  recipes: { id: string; name: string; time: number; tags: string[] }[];
+  recipes: RecipeOption[];
   onDone: () => void;
 };
 
-export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
+export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
   const router = useRouter();
   const label = dayLabel(day.index, weekStart);
   const currentRecipeId = day.entry?.recipe_id ?? null;
@@ -114,20 +116,20 @@ export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
   }
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onDone()}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto gap-3">
-        <SheetHeader>
-          <SheetTitle>
+    <Dialog open onOpenChange={(open) => !open && onDone()}>
+      <DialogContent className="max-h-[85vh] gap-3 overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
             {label.weekday} {label.month} {label.dayOfMonth}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {currentRecipe
               ? currentRecipe.name
               : "Pick a recipe, or just leave a note"}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="space-y-3 px-4">
+        <div className="space-y-3">
           {currentRecipe ? (
             <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
               <span className="min-w-0 truncate text-sm font-semibold">
@@ -206,7 +208,7 @@ export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
           </div>
         </div>
 
-        <SheetFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="destructive"
             onClick={() => void clearDay()}
@@ -217,8 +219,8 @@ export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
           <Button onClick={onDone} className="flex-1">
             Done
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

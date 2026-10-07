@@ -10,6 +10,7 @@ import { foodEmoji } from "@/lib/tiles";
 import { mondayOf } from "@/lib/plan";
 import { useToday } from "@/lib/use-now";
 import { addGroceryItem } from "@/app/(app)/grocery/actions";
+import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type { InventoryEntry } from "@/lib/types";
@@ -28,12 +29,14 @@ type Props = {
   pantry: InventoryEntry[];
   grocery: ShoppingPreviewItem[];
   meals: HomeMeal[];
+  recipes: RecipeOption[];
 };
 
-export function SmartActions({ pantry, grocery, meals }: Props) {
+export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   const today = useToday();
   const [busy, setBusy] = useState(false);
   const [lowOnList, setLowOnList] = useState<boolean | null>(null);
+  const [dinnerOpen, setDinnerOpen] = useState(false);
 
   const expiring = pantry.filter((row) => {
     const days = daysUntil(row.expiration_date);
@@ -148,7 +151,11 @@ export function SmartActions({ pantry, grocery, meals }: Props) {
       key: "dinner",
       emoji: "🍽️",
       line: "Dinner isn't planned",
-      action: <Link href={`/plan?week=${weekStart}`}>Pick a meal →</Link>,
+      action: (
+        <button type="button" onClick={() => setDinnerOpen(true)}>
+          Pick a meal →
+        </button>
+      ),
       tint: "border-violet-200 bg-violet-50 text-violet-900",
     });
   }
@@ -194,6 +201,15 @@ export function SmartActions({ pantry, grocery, meals }: Props) {
           </div>
         ))}
       </div>
+
+      {dinnerOpen ? (
+        <DayDialog
+          weekStart={weekStart}
+          day={{ index: todayIndex, entry: todayEntry }}
+          recipes={recipes}
+          onDone={() => setDinnerOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

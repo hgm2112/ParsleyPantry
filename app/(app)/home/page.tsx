@@ -8,6 +8,7 @@ import type {
   CategoryRow,
   HouseholdSettingsRow,
   InventoryEntry,
+  RecipeRow,
   StoreAisleRow,
   StoreRow,
 } from "@/lib/types";
@@ -43,6 +44,7 @@ async function HomeContent() {
     assignmentsResult,
     rememberedResult,
     settingsResult,
+    recipesResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -87,6 +89,11 @@ async function HomeContent() {
       .select("*")
       .eq("household_id", householdId)
       .maybeSingle(),
+    supabase
+      .from("recipes")
+      .select("id, name, time, tags")
+      .eq("household_id", householdId)
+      .order("name", { ascending: true }),
   ]);
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
@@ -106,6 +113,10 @@ async function HomeContent() {
     aisle_id: string;
   }[];
   const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
+  const recipes = (recipesResult.data ?? []) as Pick<
+    RecipeRow,
+    "id" | "name" | "time" | "tags"
+  >[];
 
   return (
     <HomeView
@@ -118,6 +129,7 @@ async function HomeContent() {
       assignments={assignments}
       rememberedAisles={rememberedAisles}
       settings={settings}
+      recipes={recipes}
     />
   );
 }

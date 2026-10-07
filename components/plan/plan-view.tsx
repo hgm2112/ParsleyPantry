@@ -12,7 +12,7 @@ import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
 import type { MealPlanDayRow } from "@/lib/types";
-import { DaySheet } from "@/components/plan/day-sheet";
+import { DayDialog } from "@/components/plan/day-dialog";
 
 export type PlannedDay = {
   index: number;
@@ -188,7 +188,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
       ) : null}
 
       {openDay ? (
-        <DaySheet
+        <DayDialog
           key={openDay.index}
           weekStart={weekStart}
           day={openDay}
