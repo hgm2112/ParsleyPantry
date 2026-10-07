@@ -177,7 +177,7 @@ function MobileHeader() {
 
 function DesktopHeader({ name }: { name: string | null }) {
   return (
-    <header className="hidden md:block sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+    <header className="hidden md:block sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:pl-60">
       <div className="flex h-14 items-center gap-4 px-6">
         <SearchForm />
         <div className="ml-auto flex items-center gap-3">
