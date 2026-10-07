@@ -44,7 +44,7 @@ import type {
   StoreRow,
 } from "@/lib/types";
 import { AddGrocerySheet } from "@/components/grocery/add-sheet";
-import { ItemSheet } from "@/components/grocery/item-sheet";
+import { ItemDialog } from "@/components/grocery/item-dialog";
 
 export type GroceryListItem = GroceryItemRow & {
   item: {
@@ -654,23 +654,13 @@ export function GroceryView({
       />
 
       {editing ? (
-        <ItemSheet
+        <ItemDialog
           key={editing.id}
           item={editing}
           store={store}
           aisles={aisles}
           assignedAisleId={effectiveAisle.get(editing.id) ?? null}
           categories={categories}
-          stores={stores}
-          rememberedByStore={
-            editing.item_id
-              ? Object.fromEntries(
-                  rememberedAisles
-                    .filter((row) => row.item_id === editing.item_id)
-                    .map((row) => [row.store_id, row.aisle_id]),
-                )
-              : {}
-          }
           open
           onOpenChange={(open) => {
             if (!open) setEditing(null);
