@@ -38,6 +38,7 @@ export async function createCategory(
         name: trimmed,
         icon: null,
         sort_order: sortOrder,
+        seed_stores: false,
       })
       .select("*")
       .single();
