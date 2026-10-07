@@ -6,25 +6,47 @@ import { Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { tintFor } from "@/lib/tints";
+import {
+  buildAisleGroups,
+  buildCategoryGroups,
+  resolveEffectiveAisle,
+} from "@/lib/grocery-groups";
 import { updateGroceryItem } from "@/app/(app)/grocery/actions";
 import { Button } from "@/components/ui/button";
-import type { CategoryRow } from "@/lib/types";
+import type {
+  CategoryRow,
+  HouseholdSettingsRow,
+  StoreAisleRow,
+  StoreRow,
+} from "@/lib/types";
 
 export type ShoppingPreviewItem = {
   id: string;
+  item_id: string | null;
   name: string;
   quantity: number;
   unit: string | null;
   checked: boolean;
   category_id: string | null;
+  item: { id: string; category_id: string | null } | null;
 };
 
 export function ShoppingWidget({
   items,
   categories,
+  stores,
+  aisles,
+  assignments,
+  rememberedAisles,
+  settings,
 }: {
   items: ShoppingPreviewItem[];
   categories: CategoryRow[];
+  stores: StoreRow[];
+  aisles: StoreAisleRow[];
+  assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
+  rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
+  settings: HouseholdSettingsRow | null;
 }) {
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -38,22 +60,37 @@ export function ShoppingWidget({
   const checkedCount = resolved.filter((item) => item.checked).length;
   const percent = total === 0 ? 0 : Math.round((checkedCount / total) * 100);
 
+  const mode = settings?.grocery_view_mode ?? "aisle";
+  const storeId = settings?.selected_store_id ?? stores[0]?.id ?? null;
+  const store = stores.find((entry) => entry.id === storeId) ?? null;
+
+  const storeAisles = useMemo(
+    () =>
+      aisles
+        .filter((aisle) => aisle.store_id === storeId)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [aisles, storeId],
+  );
+
+  const effectiveAisle = useMemo(
+    () =>
+      resolveEffectiveAisle(
+        resolved,
+        storeId,
+        storeAisles,
+        assignments,
+        rememberedAisles,
+        categories,
+      ),
+    [resolved, storeId, storeAisles, assignments, rememberedAisles, categories],
+  );
+
   const groups = useMemo(() => {
-    const nameById = new Map(
-      categories.map((category) => [category.id, category.name]),
-    );
-    const byCategory = new Map<string | null, ShoppingPreviewItem[]>();
-    for (const item of resolved) {
-      const list = byCategory.get(item.category_id) ?? [];
-      list.push(item);
-      byCategory.set(item.category_id, list);
+    if (mode === "aisle" && store) {
+      return buildAisleGroups(resolved, storeAisles, effectiveAisle);
     }
-    return [...byCategory.entries()].map(([categoryId, groupItems]) => ({
-      key: categoryId ?? "uncategorized",
-      title: categoryId ? (nameById.get(categoryId) ?? "Other") : "Other",
-      items: groupItems.sort((a, b) => Number(a.checked) - Number(b.checked)),
-    }));
-  }, [resolved, categories]);
+    return buildCategoryGroups(resolved, categories);
+  }, [resolved, mode, store, storeAisles, effectiveAisle, categories]);
 
   async function toggle(item: ShoppingPreviewItem) {
     const next = !item.checked;

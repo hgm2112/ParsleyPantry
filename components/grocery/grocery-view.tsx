@@ -24,6 +24,13 @@ import {
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
 import { categoryMatchKey } from "@/lib/kitchenowl";
+import {
+  UNASSIGNED_GROUP_KEY,
+  aisleNameKeyMap,
+  buildAisleGroups,
+  buildCategoryGroups,
+  resolveEffectiveAisle,
+} from "@/lib/grocery-groups";
 import { tintFor } from "@/lib/tints";
 import type {
   CategoryRow,
@@ -123,22 +130,7 @@ export function GroceryView({
     [aisles, storeId],
   );
 
-  const aisleByItem = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const row of assignments) {
-      if (row.store_id === storeId) map.set(row.grocery_item_id, row.aisle_id);
-    }
-    return map;
-  }, [assignments, storeId]);
-
-  const rememberedByItem = useMemo(() => {
-    const map = new Map<string, string>();
-    if (!storeId) return map;
-    for (const row of rememberedAisles) {
-      if (row.store_id === storeId) map.set(row.item_id, row.aisle_id);
-    }
-    return map;
-  }, [rememberedAisles, storeId]);
+  const aisleByKey = useMemo(() => aisleNameKeyMap(storeAisles), [storeAisles]);
 
   const items = useMemo(
     () =>
@@ -148,64 +140,18 @@ export function GroceryView({
     [initialItems, overrides],
   );
 
-  const aisleByKey = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const aisle of storeAisles) {
-      const key = categoryMatchKey(aisle.name);
-      if (key && !map.has(key)) map.set(key, aisle.id);
-    }
-    return map;
-  }, [storeAisles]);
-
-  const aisleByCategoryId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const aisle of storeAisles) {
-      if (aisle.category_id && !map.has(aisle.category_id)) {
-        map.set(aisle.category_id, aisle.id);
-      }
-    }
-    return map;
-  }, [storeAisles]);
-
-  const categoryNames = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const category of categories) map.set(category.id, category.name);
-    return map;
-  }, [categories]);
-
-  const effectiveAisle = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of items) {
-      const explicit = aisleByItem.get(item.id);
-      if (explicit) {
-        map.set(item.id, explicit);
-        continue;
-      }
-      if (item.item_id) {
-        const remembered = rememberedByItem.get(item.item_id);
-        if (remembered) {
-          map.set(item.id, remembered);
-          continue;
-        }
-      }
-      const categoryId = item.category_id ?? item.item?.category_id ?? null;
-      if (categoryId) {
-        const linked = aisleByCategoryId.get(categoryId);
-        if (linked) {
-          map.set(item.id, linked);
-          continue;
-        }
-      }
-      const categoryName = categoryId
-        ? categoryNames.get(categoryId) ?? null
-        : null;
-      if (categoryName) {
-        const matched = aisleByKey.get(categoryMatchKey(categoryName));
-        if (matched) map.set(item.id, matched);
-      }
-    }
-    return map;
-  }, [items, aisleByItem, rememberedByItem, categoryNames, aisleByKey, aisleByCategoryId]);
+  const effectiveAisle = useMemo(
+    () =>
+      resolveEffectiveAisle(
+        items,
+        storeId,
+        storeAisles,
+        assignments,
+        rememberedAisles,
+        categories,
+      ),
+    [items, storeId, storeAisles, assignments, rememberedAisles, categories],
+  );
 
   // Categories that would seed here but have no aisle yet — linked or by
   // name. Drives the "Use my categories as aisles" rescue button.
@@ -262,57 +208,18 @@ export function GroceryView({
 
   const groups: Group[] = useMemo(() => {
     if (mode === "aisle" && store) {
-      const result: Group[] = storeAisles.map((aisle) => ({
-        key: aisle.id,
-        title: aisle.name,
-        items: items.filter((item) => effectiveAisle.get(item.id) === aisle.id),
-      }));
-
-      const unassigned = items.filter((item) => !effectiveAisle.has(item.id));
-      if (unassigned.length > 0) {
-        result.push({
-          key: "__unassigned",
-          title: "Needs an aisle",
-          hint: "Tap an item to file it under an aisle",
-          adopt: missingAisleCount > 0,
-          items: unassigned,
-        });
-      }
-
-      return result.filter((group) => group.items.length > 0);
+      return buildAisleGroups(items, storeAisles, effectiveAisle).map((group) =>
+        group.key === UNASSIGNED_GROUP_KEY
+          ? {
+              ...group,
+              hint: "Tap an item to file it under an aisle",
+              adopt: missingAisleCount > 0,
+            }
+          : group,
+      );
     }
 
-    const byCategory = new Map<string | null, GroceryListItem[]>();
-    for (const item of items) {
-      const categoryId = item.category_id ?? item.item?.category_id ?? null;
-      const list = byCategory.get(categoryId) ?? [];
-      list.push(item);
-      byCategory.set(categoryId, list);
-    }
-
-    const ordered: Group[] = categories.map((category) => ({
-      key: category.id,
-      title: category.name,
-      items: byCategory.get(category.id) ?? [],
-    }));
-    const leftovers = byCategory.get(null) ?? [];
-    const claimed = new Set(categories.map((category) => category.id));
-    for (const [categoryId, list] of byCategory) {
-      if (categoryId && !claimed.has(categoryId)) {
-        ordered.push({
-          key: categoryId,
-          title:
-            categories.find((category) => category.id === categoryId)?.name ??
-            "Other",
-          items: list,
-        });
-      }
-    }
-    if (leftovers.length > 0) {
-      ordered.push({ key: "__other", title: "Other", items: leftovers });
-    }
-
-    return ordered.filter((group) => group.items.length > 0);
+    return buildCategoryGroups(items, categories);
   }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount]);
 
   async function quickAdd(entry: CatalogEntry) {

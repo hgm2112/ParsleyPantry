@@ -11,7 +11,13 @@ import {
 import { QuickActions } from "@/components/home/quick-actions";
 import { Upcoming } from "@/components/home/upcoming";
 import { MiniCalendar } from "@/components/home/mini-calendar";
-import type { CategoryRow, InventoryEntry } from "@/lib/types";
+import type {
+  CategoryRow,
+  HouseholdSettingsRow,
+  InventoryEntry,
+  StoreAisleRow,
+  StoreRow,
+} from "@/lib/types";
 
 function PromoCard() {
   return (
@@ -33,11 +39,21 @@ export function HomeView({
   pantry,
   categories,
   grocery,
+  stores,
+  aisles,
+  assignments,
+  rememberedAisles,
+  settings,
 }: {
   meals: HomeMeal[];
   pantry: InventoryEntry[];
   categories: CategoryRow[];
   grocery: ShoppingPreviewItem[];
+  stores: StoreRow[];
+  aisles: StoreAisleRow[];
+  assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
+  rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
+  settings: HouseholdSettingsRow | null;
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -54,7 +70,15 @@ export function HomeView({
       </div>
 
       <div className="lg:col-start-2 lg:row-start-2">
-        <ShoppingWidget items={grocery} categories={categories} />
+        <ShoppingWidget
+          items={grocery}
+          categories={categories}
+          stores={stores}
+          aisles={aisles}
+          assignments={assignments}
+          rememberedAisles={rememberedAisles}
+          settings={settings}
+        />
       </div>
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">

@@ -3,10 +3,13 @@ import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HomeView } from "@/components/home/home-view";
 import type { HomeMeal } from "@/components/home/week-meals";
+import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type {
   CategoryRow,
-  GroceryItemRow,
+  HouseholdSettingsRow,
   InventoryEntry,
+  StoreAisleRow,
+  StoreRow,
 } from "@/lib/types";
 
 export const metadata = { title: "Home" };
@@ -27,11 +30,6 @@ function HomeSkeleton() {
   );
 }
 
-type GroceryPreview = Pick<
-  GroceryItemRow,
-  "id" | "name" | "quantity" | "unit" | "checked" | "category_id"
->;
-
 async function HomeContent() {
   const { supabase, householdId } = await requireDal();
 
@@ -40,6 +38,11 @@ async function HomeContent() {
     inventoryResult,
     categoriesResult,
     groceryResult,
+    storesResult,
+    aislesResult,
+    assignmentsResult,
+    rememberedResult,
+    settingsResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -57,14 +60,52 @@ async function HomeContent() {
       .order("sort_order", { ascending: true }),
     supabase
       .from("grocery_items")
-      .select("id, name, quantity, unit, checked, category_id")
+      .select("id, item_id, name, quantity, unit, checked, category_id, item:items(id, category_id)")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
+    supabase
+      .from("stores")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("store_aisles")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("grocery_item_aisles")
+      .select("grocery_item_id, store_id, aisle_id")
       .eq("household_id", householdId),
+    supabase
+      .from("item_store_aisles")
+      .select("item_id, store_id, aisle_id")
+      .eq("household_id", householdId),
+    supabase
+      .from("household_settings")
+      .select("*")
+      .eq("household_id", householdId)
+      .maybeSingle(),
   ]);
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
   const pantry = (inventoryResult.data ?? []) as InventoryEntry[];
   const categories = (categoriesResult.data ?? []) as CategoryRow[];
-  const grocery = (groceryResult.data ?? []) as GroceryPreview[];
+  const grocery = (groceryResult.data ?? []) as unknown as ShoppingPreviewItem[];
+  const stores = (storesResult.data ?? []) as StoreRow[];
+  const aisles = (aislesResult.data ?? []) as StoreAisleRow[];
+  const assignments = (assignmentsResult.data ?? []) as {
+    grocery_item_id: string;
+    store_id: string;
+    aisle_id: string;
+  }[];
+  const rememberedAisles = (rememberedResult.data ?? []) as {
+    item_id: string;
+    store_id: string;
+    aisle_id: string;
+  }[];
+  const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
 
   return (
     <HomeView
@@ -72,6 +113,11 @@ async function HomeContent() {
       pantry={pantry}
       categories={categories}
       grocery={grocery}
+      stores={stores}
+      aisles={aisles}
+      assignments={assignments}
+      rememberedAisles={rememberedAisles}
+      settings={settings}
     />
   );
 }
