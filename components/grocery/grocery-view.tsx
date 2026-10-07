@@ -134,6 +134,17 @@ export function GroceryView({
 
   const aisleByKey = useMemo(() => aisleNameKeyMap(storeAisles), [storeAisles]);
 
+  // Categories that are acting as store aisles are not item categories —
+  // keep them out of the add/edit pickers.
+  const pickerCategories = useMemo(() => {
+    const aisleLinked = new Set(
+      aisles
+        .map((aisle) => aisle.category_id)
+        .filter((id): id is string => id !== null),
+    );
+    return categories.filter((category) => !aisleLinked.has(category.id));
+  }, [aisles, categories]);
+
   const items = useMemo(
     () =>
       initialItems.map((item) =>
@@ -652,7 +663,7 @@ export function GroceryView({
         onOpenChange={setAddOpen}
         inventory={inventory}
         recipes={recipes}
-        categories={categories}
+        categories={pickerCategories}
         onAdded={() => router.refresh()}
       />
 
@@ -663,7 +674,7 @@ export function GroceryView({
           store={store}
           aisles={aisles}
           assignedAisleId={effectiveAisle.get(editing.id) ?? null}
-          categories={categories}
+          categories={pickerCategories}
           open
           onOpenChange={(open) => {
             if (!open) setEditing(null);

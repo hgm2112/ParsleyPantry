@@ -64,6 +64,7 @@ export function ItemDialog({
   const [unit, setUnit] = useState(item.unit ?? "");
   const [categoryId, setCategoryId] = useState(item.category_id ?? "__none");
   const [saleOnly, setSaleOnly] = useState(item.sale_only);
+  const [aisleId, setAisleId] = useState(assignedAisleId);
   const [busy, setBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -78,11 +79,24 @@ export function ItemDialog({
       categoryId: categoryId === "__none" ? null : categoryId,
       saleOnly,
     });
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       toast.error(result.error);
       return;
     }
+    // Pin the aisle shown in the dialog: it may only be category-derived,
+    // and a category edit must never silently unfile the item.
+    if (store && aisleId) {
+      const aisleResult = item.item_id
+        ? await setItemStoreAisle(item.item_id, store.id, aisleId)
+        : await assignAisle(item.id, store.id, aisleId);
+      if (!aisleResult.ok) {
+        setBusy(false);
+        toast.error(aisleResult.error);
+        return;
+      }
+    }
+    setBusy(false);
     onChanged({
       name: trimmed || item.name,
       quantity,
@@ -211,7 +225,7 @@ export function ItemDialog({
           <div className="space-y-2">
             <Label>Aisle at {store.name}</Label>
             <Select
-              value={assignedAisleId ?? "__none"}
+              value={aisleId ?? "__none"}
               items={[
                 { value: "__none", label: "Needs an aisle" },
                 ...storeAisles(store.id).map((aisle) => ({
@@ -219,9 +233,11 @@ export function ItemDialog({
                   label: aisle.name,
                 })),
               ]}
-              onValueChange={(value) =>
-                void changeAisle(!value || value === "__none" ? null : value)
-              }
+              onValueChange={(value) => {
+                const next = !value || value === "__none" ? null : value;
+                setAisleId(next);
+                void changeAisle(next);
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Not filed yet" />
