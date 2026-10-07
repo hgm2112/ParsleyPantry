@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HomeView } from "@/components/home/home-view";
-import type { HomeMeal } from "@/components/home/week-meals";
+import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type {
   CategoryRow,
@@ -17,10 +17,9 @@ export const metadata = { title: "Home" };
 function HomeSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <Skeleton className="rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 h-[26rem]" />
-      <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-40" />
-      <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-2 h-96" />
-      <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-2 h-96" />
+      <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-1 h-96" />
+      <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-1 h-96" />
+      <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
         <Skeleton className="h-48 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />

@@ -144,6 +144,10 @@ export interface MealPlanDayRow {
   note: string | null;
 }
 
+export type HomeMeal = MealPlanDayRow & {
+  recipe: { id: string; name: string; time: number; tags: string[] } | null;
+};
+
 export const LOCATIONS: { value: Location; label: string; icon: string }[] = [
   { value: "pantry", label: "Pantry", icon: "package" },
   { value: "fridge", label: "Fridge", icon: "refrigerator" },

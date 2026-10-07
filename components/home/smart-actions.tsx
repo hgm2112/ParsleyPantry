@@ -10,7 +10,7 @@ import { foodEmoji } from "@/lib/tiles";
 import { mondayOf } from "@/lib/plan";
 import { useToday } from "@/lib/use-now";
 import { addGroceryItem } from "@/app/(app)/grocery/actions";
-import type { HomeMeal } from "@/components/home/week-meals";
+import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type { InventoryEntry } from "@/lib/types";
 
