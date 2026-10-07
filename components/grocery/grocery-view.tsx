@@ -539,6 +539,7 @@ export function GroceryView({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => {
             const tint = tintFor(group.title);
+            const emoji = aisleEmoji(group.title);
             return (
               <section
                 key={group.key}
@@ -549,9 +550,11 @@ export function GroceryView({
               >
                 <div className="flex items-baseline justify-between px-3 py-2">
                   <h2 className="text-sm font-extrabold">
-                    <span className="mr-1.5" aria-hidden>
-                      {aisleEmoji(group.title)}
-                    </span>
+                    {emoji ? (
+                      <span className="mr-1.5" aria-hidden>
+                        {emoji}
+                      </span>
+                    ) : null}
                     {group.title}
                   </h2>
                   <span className="text-xs opacity-70">

@@ -97,8 +97,10 @@ export function foodEmoji(name: string, tags: string[] = []): string {
   return FALLBACK[hashString(name) % FALLBACK.length];
 }
 
-/** Emoji for a store aisle or category title (aisle words → food → cart). */
-export function aisleEmoji(name: string): string {
+/** Emoji for a store aisle or category title (aisle words → food → cart).
+ *  Returns null when the title already carries an emoji of its own. */
+export function aisleEmoji(name: string): string | null {
+  if (/\p{Extended_Pictographic}/u.test(name)) return null;
   const lower = name.toLowerCase();
   for (const [pattern, emoji] of AISLE_KEYWORDS) {
     if (pattern.test(lower)) return emoji;
