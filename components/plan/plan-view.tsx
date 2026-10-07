@@ -46,9 +46,9 @@ export function PlanView({ weekStart, days, recipes }: Props) {
       toast.error(result.error);
       return;
     }
-    const { added, skipped } = result.data;
+    const { reserved, added, skipped } = result.data;
     toast.success(
-      `${added} ingredient${added === 1 ? "" : "s"} added${skipped ? ` · ${skipped} already on the list` : ""}`,
+      `${reserved} reserved from pantry · ${added} added${skipped ? ` · ${skipped} already on the list` : ""}`,
     );
   }
 
@@ -168,6 +168,11 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                   ) : null}
                 </span>
 
+                {day.entry?.made_at ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    Made ✓
+                  </span>
+                ) : null}
                 <span className="text-xs text-muted-foreground">
                   {recipe || note ? "Edit" : "Add"}
                 </span>

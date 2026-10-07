@@ -143,6 +143,17 @@ export interface MealPlanDayRow {
   day_index: number;
   recipe_id: string | null;
   note: string | null;
+  made_at: string | null;
+}
+
+export interface StockHoldRow {
+  id: string;
+  household_id: string;
+  item_id: string;
+  quantity: number;
+  unit: string | null;
+  week_start: string;
+  day_index: number;
 }
 
 export type HomeMeal = MealPlanDayRow & {

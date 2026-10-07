@@ -19,6 +19,11 @@ export function earliest(
   return a <= b ? a : b;
 }
 
+/** Stock pool key: reservations and stock buckets are per item+unit. */
+export function stockPoolKey(itemId: string, unit: string | null): string {
+  return `${itemId}__${(unit ?? "").toLowerCase()}`;
+}
+
 /** "6 oz" -> { quantity: 6, unit: "oz" } */
 export function parseQuantityText(text: string): {
   quantity: number;

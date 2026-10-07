@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -116,7 +117,10 @@ export function WeekMeals({
             >
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-extrabold">{label.weekday}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {meal?.made_at ? (
+                    <Check className="h-3.5 w-3.5 text-primary" aria-label="Made" />
+                  ) : null}
                   {label.month} {label.dayOfMonth}
                 </span>
               </div>

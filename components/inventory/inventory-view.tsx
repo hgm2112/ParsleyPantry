@@ -36,7 +36,7 @@ import {
   updateInventory,
 } from "@/app/(app)/inventory/actions";
 import { expiryBucket } from "@/lib/expiry";
-import { isLowStock } from "@/lib/stock";
+import { isLowStock, stockPoolKey } from "@/lib/stock";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
@@ -53,9 +53,11 @@ const TABS: { value: Tab; label: string }[] = [
 export function InventoryView({
   rows,
   categories,
+  holdsByItem,
 }: {
   rows: InventoryEntry[];
   categories: CategoryRow[];
+  holdsByItem: Record<string, number>;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -231,6 +233,9 @@ export function InventoryView({
                       ?.name ?? null)
                   : null
               }
+              onHold={
+                holdsByItem[stockPoolKey(row.item_id, row.unit)] ?? 0
+              }
               onConsume={(mode) =>
                 setConsumeTarget({ entry: row, mode })
               }
@@ -305,10 +310,12 @@ function EmptyState({
 function InventoryRow({
   entry,
   categoryName,
+  onHold,
   onConsume,
 }: {
   entry: InventoryEntry;
   categoryName: string | null;
+  onHold: number;
   onConsume: (mode: "partial" | "last") => void;
 }) {
   const router = useRouter();
@@ -398,6 +405,11 @@ function InventoryRow({
                 </span>
               ) : null}
               <ExpiryChip date={entry.expiration_date} />
+              {onHold > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+                  {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
+                </span>
+              ) : null}
               {quantity <= 0 ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
                   Out

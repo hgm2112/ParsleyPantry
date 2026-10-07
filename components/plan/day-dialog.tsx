@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Search, Trash2, X } from "lucide-react";
+import { Check, ChefHat, Loader2, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   clearMealDay,
+  markMealMade,
   saveMealNote,
   setMealDay,
 } from "@/app/(app)/plan/actions";
@@ -115,6 +116,19 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
     onDone();
   }
 
+  async function markMade() {
+    setBusy(true);
+    const result = await markMealMade({ weekStart, dayIndex: day.index });
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Marked as made — pantry updated");
+    router.refresh();
+    onDone();
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onDone()}>
       <DialogContent className="max-h-[85vh] gap-3 overflow-y-auto">
@@ -144,6 +158,23 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
                 <X /> Remove
               </Button>
             </div>
+          ) : null}
+
+          {currentRecipe && !day.entry?.made_at ? (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => void markMade()}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="animate-spin" /> : <ChefHat />}
+              Mark as made
+            </Button>
+          ) : null}
+          {day.entry?.made_at ? (
+            <p className="flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-sm font-semibold text-primary">
+              <Check className="h-4 w-4" /> Made
+            </p>
           ) : null}
 
           <div className="relative">
