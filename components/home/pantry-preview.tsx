@@ -31,7 +31,7 @@ export function PantryPreview({
     });
   }, [rows, query, activeCategory]);
 
-  const visible = filtered.slice(0, 12);
+  const visible = filtered.slice(0, 16);
 
   const usedCategoryIds = useMemo(() => {
     const ids = new Set<string>();
@@ -42,7 +42,7 @@ export function PantryPreview({
   }, [rows]);
 
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm">
+    <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Package className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-bold">Pantry</h2>
@@ -108,7 +108,7 @@ export function PantryPreview({
             : "Nothing matches."}
         </p>
       ) : (
-        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {visible.map((row) => {
             const emoji = row.item.icon ?? foodEmoji(row.item.name);
             return (

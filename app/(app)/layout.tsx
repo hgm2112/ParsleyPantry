@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <NavWithProfile />
       </Suspense>
       <div className="md:pl-60">
-        <main className="w-full max-w-6xl mx-auto px-4 pb-28 pt-5 md:px-6 md:pb-12">
+        <main className="w-full max-w-7xl mx-auto px-4 pb-28 pt-5 md:px-6 md:pb-12">
           {children}
         </main>
       </div>
