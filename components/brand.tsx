@@ -1,8 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
+import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 
 export const TAGLINE = "Shop once. Cook easy. Eat well.";
+
+/** Wordmark-only display face (Microsoft Gabriola, self-hosted). */
+const gabriola = localFont({
+  src: "../fonts/gabriola.ttf",
+  weight: "400",
+  display: "swap",
+  variable: "--font-gabriola",
+});
 
 /**
  * Parsley illustration (user-provided artwork). Rendered unoptimized so the
@@ -28,6 +37,27 @@ export function ParsleyMark({
   );
 }
 
+/** Full Parsley Pantry logo (user-provided artwork), portrait 936×1008. */
+export function LogoMark({
+  className,
+  alt = "",
+}: {
+  className?: string;
+  alt?: string;
+}) {
+  return (
+    <Image
+      src="/parsleypantrylogo.svg"
+      alt={alt}
+      width={936}
+      height={1008}
+      unoptimized
+      className={cn("select-none", className)}
+      aria-hidden={alt === "" ? true : undefined}
+    />
+  );
+}
+
 export function Wordmark({
   className,
   markClassName,
@@ -43,7 +73,7 @@ export function Wordmark({
       className={cn("flex items-center gap-2 font-extrabold", className)}
     >
       <ParsleyMark className={cn("h-7 w-8", markClassName)} />
-      <span>Parsley Pantry</span>
+      <span className={gabriola.className}>Parsley Pantry</span>
     </Link>
   );
 }

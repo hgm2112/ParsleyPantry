@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ParsleyMark, TAGLINE, Wordmark } from "@/components/brand";
+import { LogoMark, TAGLINE, Wordmark } from "@/components/brand";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -9,7 +9,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-        <ParsleyMark className="h-16 w-20" />
+        <LogoMark className="h-16 w-auto" />
         <p className="text-sm font-semibold text-foreground">{TAGLINE}</p>
         <p className="text-xs text-muted-foreground">
           One pantry for the whole household — scan, track, and shop from
