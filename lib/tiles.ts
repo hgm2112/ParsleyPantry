@@ -55,6 +55,30 @@ const GRADIENTS = [
   "from-cyan-100 to-sky-50",
 ];
 
+const AISLE_KEYWORDS: [RegExp, string][] = [
+  [/\b(freezer|frozen)\b/, "🧊"],
+  [/\b(drink|drinks|juice|soda|beverage|beverages)\b/, "🥤"],
+  [/\b(canned|can)\b/, "🥫"],
+  [/\b(baking|bake)\b/, "🧁"],
+  [/\b(cleaning|cleaner|household)\b/, "🧹"],
+  [/\b(paper|toilet|tissue)\b/, "🧻"],
+  [/\b(meat|butcher)\b/, "🥩"],
+  [/\b(deli)\b/, "🥪"],
+  [/\b(produce|fruit|fruits|vegetable|vegetables|veg)\b/, "🥬"],
+  [/\b(bread|bakery)\b/, "🍞"],
+  [/\b(dairy|egg|eggs|milk)\b/, "🥚"],
+  [/\b(breakfast|cereal)\b/, "🥣"],
+  [/\b(snack|snacks|chip|chips)\b/, "🍟"],
+  [/\b(cookie|cookies|candy|cracker|crackers|sweets)\b/, "🍪"],
+  [/\b(mexican|asian|international|ethnic|world)\b/, "🌮"],
+  [/\b(pasta|rice|grain|grains)\b/, "🍝"],
+  [/\b(sauce|sauces|condiment|condiments|spice|spices)\b/, "🧂"],
+  [/\b(personal|hygiene|care|beauty)\b/, "🧴"],
+  [/\b(pet|pets|dog|cat)\b/, "🐾"],
+  [/\b(baby|babies|infant)\b/, "🍼"],
+  [/\b(health|pharmacy|vitamin|medicine)\b/, "💊"],
+];
+
 export function hashString(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -71,6 +95,18 @@ export function foodEmoji(name: string, tags: string[] = []): string {
     if (pattern.test(haystack)) return emoji;
   }
   return FALLBACK[hashString(name) % FALLBACK.length];
+}
+
+/** Emoji for a store aisle or category title (aisle words → food → cart). */
+export function aisleEmoji(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [pattern, emoji] of AISLE_KEYWORDS) {
+    if (pattern.test(lower)) return emoji;
+  }
+  for (const [pattern, emoji] of KEYWORDS) {
+    if (pattern.test(lower)) return emoji;
+  }
+  return "🛒";
 }
 
 /** Pastel gradient background classes ("from-… to-…"). */
