@@ -536,7 +536,7 @@ export function GroceryView({
 
         {mode === "aisle" && !store ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Showing your categories—{" "}
+            Showing your categories —{" "}
             <Link href="/grocery/stores" className="underline">
               create a store
             </Link>{" "}
@@ -545,7 +545,7 @@ export function GroceryView({
         ) : null}
         {mode === "aisle" && store && aisleSyncNeeded ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Your store&apos;s aisles are behind your categories—{" "}
+            Your store&apos;s aisles are behind your categories —{" "}
             <button
               type="button"
               className="underline disabled:no-underline"
