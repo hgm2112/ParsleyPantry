@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   SortableList,
@@ -24,6 +25,7 @@ import {
   deleteCategory,
   moveCategory,
   reorderCategories,
+  setCategorySeedStores,
   updateCategory,
 } from "@/app/(app)/categories/actions";
 import type { CategoryRow } from "@/lib/types";
@@ -86,6 +88,20 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
       return;
     }
     reorder.reset();
+    router.refresh();
+  }
+
+  async function toggleSeed(category: CategoryRow, seed: boolean) {
+    const result = await setCategorySeedStores(category.id, seed);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      seed
+        ? `${category.name} will seed store aisles`
+        : `${category.name} won't seed store aisles`,
+    );
     router.refresh();
   }
 
@@ -163,6 +179,11 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
               )}
 
               <div className="flex shrink-0 items-center">
+                <Switch
+                  checked={category.seed_stores}
+                  onCheckedChange={(checked) => void toggleSeed(category, checked)}
+                  aria-label={`Seed stores from ${category.name}`}
+                />
                 <Button
                   variant="ghost"
                   size="icon-sm"

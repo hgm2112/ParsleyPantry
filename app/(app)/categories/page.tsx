@@ -51,7 +51,8 @@ export default function CategoriesPage() {
         <div>
           <h1 className="text-lg font-semibold">Categories</h1>
           <p className="text-xs text-muted-foreground">
-            The order here drives grocery groups and store aisles.
+            Order drives grocery groups. Drag the ⠿ handle (or use ↑↓) to
+            reorder; the switch picks which categories seed store aisles.
           </p>
         </div>
       </div>

@@ -8,16 +8,17 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  ListPlus,
   Loader2,
   Pencil,
   Plus,
+  RotateCcw,
   Store,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   SortableList,
@@ -25,13 +26,14 @@ import {
   useRowReorder,
 } from "@/components/sortable";
 import {
+  adoptCategoryAisles,
   createAisle,
   deleteAisle,
   deleteStore,
   moveAisle,
   reorderStoreAisles,
+  resetStoreFromCategories,
   setGrocerySettings,
-  setStoreFollowCategories,
   updateAisle,
   updateStore,
 } from "@/app/(app)/grocery/actions";
@@ -53,9 +55,8 @@ export function AisleEditor({
   const [editingName, setEditingName] = useState("");
   const [deletingAisle, setDeletingAisle] = useState<StoreAisleRow | null>(null);
   const [storeDeleteOpen, setStoreDeleteOpen] = useState(false);
-  const [followBusy, setFollowBusy] = useState(false);
-
-  const following = store.follow_categories;
+  const [seedBusy, setSeedBusy] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const reorder = useRowReorder(aisles, async (ids) => {
     const result = await reorderStoreAisles(store.id, ids);
@@ -137,20 +138,31 @@ export function AisleEditor({
     router.refresh();
   }
 
-  async function toggleFollow(checked: boolean) {
-    setFollowBusy(true);
-    const result = await setStoreFollowCategories(store.id, checked);
-    setFollowBusy(false);
+  async function seedAisles() {
+    setSeedBusy(true);
+    const result = await adoptCategoryAisles(store.id);
+    setSeedBusy(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     reorder.reset();
     toast.success(
-      checked
-        ? `${store.name} now follows your categories`
-        : `${store.name} manages its own aisles now`,
+      result.data.created > 0
+        ? `Added ${result.data.created} aisles from your categories`
+        : "Nothing to add — every seed category already has an aisle here",
     );
+    router.refresh();
+  }
+
+  async function resetAisles() {
+    const result = await resetStoreFromCategories(store.id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    reorder.reset();
+    toast.success(`${store.name} reset from your categories`);
     router.refresh();
   }
 
@@ -228,44 +240,50 @@ export function AisleEditor({
         </Button>
       </div>
 
-      <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+      <div className="space-y-2 rounded-xl border px-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-sm font-medium">Follow my categories</p>
+          <p className="text-sm font-medium">From your categories</p>
           <p className="text-xs text-muted-foreground">
-            {following ? (
-              <>
-                Labels and order come from your categories —{" "}
-                <Link href="/categories" className="underline">
-                  reorder them there
-                </Link>
-                .
-              </>
-            ) : (
-              "This store keeps its own aisle numbers and contents."
-            )}
+            Add the seed aisles this store is missing, or reset the whole
+            list to match. What you change here stays until you reset it —{" "}
+            <Link href="/categories" className="underline">
+              manage categories
+            </Link>
+            .
           </p>
         </div>
-        <Switch
-          checked={following}
-          disabled={followBusy}
-          onCheckedChange={(checked) => void toggleFollow(checked)}
-          aria-label="Follow my categories"
-        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={seedBusy}
+            onClick={() => void seedAisles()}
+          >
+            {seedBusy ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <ListPlus />
+            )}
+            Add missing from my categories
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
+            <RotateCcw />
+            Reset from my categories
+          </Button>
+        </div>
       </div>
 
-      {following ? null : (
-        <form onSubmit={submitAisle} className="flex gap-2">
-          <Input
-            value={newAisle}
-            onChange={(event) => setNewAisle(event.target.value)}
-            placeholder="Add an aisle (e.g. 12 – Canned food)"
-          />
-          <Button type="submit" disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-            Add
-          </Button>
-        </form>
-      )}
+      <form onSubmit={submitAisle} className="flex gap-2">
+        <Input
+          value={newAisle}
+          onChange={(event) => setNewAisle(event.target.value)}
+          placeholder="Add an aisle (e.g. 12 – Canned food)"
+        />
+        <Button type="submit" disabled={busy}>
+          {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+          Add
+        </Button>
+      </form>
 
       {aisles.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center">
@@ -285,7 +303,6 @@ export function AisleEditor({
             <SortableRow
               key={aisle.id}
               id={aisle.id}
-              draggable={!following}
               dragLabel={`Drag to reorder ${aisle.name}`}
             >
               <span className="w-6 text-center text-xs tabular-nums text-muted-foreground">
@@ -314,52 +331,59 @@ export function AisleEditor({
                 </span>
               )}
 
-              {following ? null : (
-                <div className="flex shrink-0 items-center">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={index === 0}
-                    onClick={() => void move(aisle, "up")}
-                    aria-label={`Move ${aisle.name} up`}
-                  >
-                    <ArrowUp />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={index === reorder.displayed.length - 1}
-                    onClick={() => void move(aisle, "down")}
-                    aria-label={`Move ${aisle.name} down`}
-                  >
-                    <ArrowDown />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => {
-                      setEditingId(aisle.id);
-                      setEditingName(aisle.name);
-                    }}
-                    aria-label={`Rename ${aisle.name}`}
-                  >
-                    <Pencil />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-destructive"
-                    onClick={() => setDeletingAisle(aisle)}
-                    aria-label={`Delete ${aisle.name}`}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              )}
+              <div className="flex shrink-0 items-center">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === 0}
+                  onClick={() => void move(aisle, "up")}
+                  aria-label={`Move ${aisle.name} up`}
+                >
+                  <ArrowUp />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === reorder.displayed.length - 1}
+                  onClick={() => void move(aisle, "down")}
+                  aria-label={`Move ${aisle.name} down`}
+                >
+                  <ArrowDown />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    setEditingId(aisle.id);
+                    setEditingName(aisle.name);
+                  }}
+                  aria-label={`Rename ${aisle.name}`}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-destructive"
+                  onClick={() => setDeletingAisle(aisle)}
+                  aria-label={`Delete ${aisle.name}`}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
             </SortableRow>
           ))}
         </SortableList>
       )}
+
+      <ConfirmDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title={`Reset ${store.name} from your categories?`}
+        description="Aisle labels and order are overwritten with your seed categories. Manual extras stay at the end. You can't undo this from here."
+        confirmLabel="Reset aisles"
+        onConfirm={resetAisles}
+      />
 
       <ConfirmDialog
         open={deletingAisle !== null}

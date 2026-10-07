@@ -1,17 +1,26 @@
 import { categoryMatchKey } from "@/lib/kitchenowl";
 
-export type AislePlanEntry = { id: string; name: string };
+export type AislePlanEntry = {
+  id: string;
+  name: string;
+  categoryId: string | null;
+};
 
-type CategoryLike = { name: string; sort_order: number };
-type AisleLike = { id: string; name: string; sort_order: number };
+type CategoryLike = { id: string; name: string; sort_order: number };
+type AisleLike = {
+  id: string;
+  name: string;
+  sort_order: number;
+  category_id?: string | null;
+};
 
 /**
- * Pure pairing/ordering shared by the server sync and the grocery UI's
- * drift detection. Pairs each aisle with a category (exact name first, then
- * match key) and returns the aisle list a store *should* have: paired rows
- * follow category order and take the category's label, unmatched (manual)
- * rows keep their relative order at the end. Same set of aisles, planned
- * order — safe to diff against the store's actual list.
+ * Pure pairing/ordering shared by the server reset and the seed flow's
+ * view of a store list. Pairs each aisle with a category — FK link first
+ * (rename-proof), then exact name, then match key — and returns the aisle
+ * list a store *should* have: paired rows follow category order and take
+ * the category's label, unmatched (manual) rows keep their relative order
+ * at the end.
  */
 export function planStoreAisles(
   categories: CategoryLike[],
@@ -22,45 +31,58 @@ export function planStoreAisles(
   );
   const pool = [...aisles].sort((a, b) => a.sort_order - b.sort_order);
 
-  const pairedByCategory = new Map<string, AisleLike>();
+  const paired = new Map<string, AisleLike>();
   const claimed = new Set<string>();
-  // Exact-name matches first, so a rename can never collide with a row that
-  // already holds the category's label.
+
+  // Existing category links win: a store can rename both sides freely.
   for (const category of orderedCategories) {
-    const key = categoryMatchKey(category.name);
-    if (!key || claimed.has(key)) continue;
     const match = pool.find(
-      (aisle) => aisle.name.toLowerCase() === category.name.toLowerCase(),
+      (aisle) => !claimed.has(aisle.id) && aisle.category_id === category.id,
     );
     if (match) {
-      claimed.add(key);
-      pairedByCategory.set(key, match);
+      claimed.add(match.id);
+      paired.set(category.id, match);
     }
   }
+  // Exact-name matches next, so a rename can never collide with a row that
+  // already holds the category's label.
   for (const category of orderedCategories) {
-    const key = categoryMatchKey(category.name);
-    if (!key || claimed.has(key)) continue;
-    const index = pool.findIndex(
-      (aisle) => categoryMatchKey(aisle.name) === key,
+    if (paired.has(category.id)) continue;
+    const match = pool.find(
+      (aisle) =>
+        !claimed.has(aisle.id) &&
+        aisle.name.toLowerCase() === category.name.toLowerCase(),
     );
-    if (index >= 0) {
-      claimed.add(key);
-      pairedByCategory.set(key, pool[index]);
+    if (match) {
+      claimed.add(match.id);
+      paired.set(category.id, match);
     }
   }
-
-  const pairedIds = new Set(
-    [...pairedByCategory.values()].map((aisle) => aisle.id),
-  );
+  // Match-key pairs for emoji/number-prefixed variants of the same label.
+  for (const category of orderedCategories) {
+    if (paired.has(category.id)) continue;
+    const key = categoryMatchKey(category.name);
+    if (!key) continue;
+    const match = pool.find(
+      (aisle) => !claimed.has(aisle.id) && categoryMatchKey(aisle.name) === key,
+    );
+    if (match) {
+      claimed.add(match.id);
+      paired.set(category.id, match);
+    }
+  }
 
   const entries: AislePlanEntry[] = [];
   for (const category of orderedCategories) {
-    const key = categoryMatchKey(category.name);
-    const aisle = key ? pairedByCategory.get(key) : undefined;
-    if (aisle) entries.push({ id: aisle.id, name: category.name });
+    const aisle = paired.get(category.id);
+    if (aisle) {
+      entries.push({ id: aisle.id, name: category.name, categoryId: category.id });
+    }
   }
   for (const aisle of pool) {
-    if (!pairedIds.has(aisle.id)) entries.push({ id: aisle.id, name: aisle.name });
+    if (!claimed.has(aisle.id)) {
+      entries.push({ id: aisle.id, name: aisle.name, categoryId: null });
+    }
   }
   return entries;
 }

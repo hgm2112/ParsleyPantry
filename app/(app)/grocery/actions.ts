@@ -285,10 +285,11 @@ export async function setItemStoreAisle(
 }
 
 /**
- * Links a store to the household categories (follow_categories = true),
- * creates the aisles it's missing for them (in category order), then syncs
- * that store's list: paired aisles take the category's current label and
- * order. Other stores are never touched.
+ * Seeds ONE store's aisle list from the household categories: creates the
+ * aisles it's missing (seed-enabled categories only) and links rows to
+ * their category via category_id so later renames never duplicate. Never
+ * renames or reorders what the store already has — after seeding, the
+ * store owns its list. Other stores are never touched.
  */
 export async function adoptCategoryAisles(
   storeId: string,
@@ -301,6 +302,7 @@ export async function adoptCategoryAisles(
         .from("categories")
         .select("id, name, sort_order")
         .eq("household_id", householdId)
+        .eq("seed_stores", true)
         .order("sort_order", { ascending: true }),
       supabase
         .from("stores")
@@ -317,47 +319,70 @@ export async function adoptCategoryAisles(
     if (categoriesResult.error) {
       return { ok: false, error: categoriesResult.error.message };
     }
+    if (aislesResult.error) {
+      return { ok: false, error: aislesResult.error.message };
+    }
     if (!storeResult.data) return { ok: false, error: "Store not found" };
 
-    const { error: followError } = await supabase
-      .from("stores")
-      .update({ follow_categories: true })
-      .eq("id", storeId)
-      .eq("household_id", householdId);
-    if (followError) return { ok: false, error: followError.message };
-
     const existing = (aislesResult.data ?? []) as StoreAisleRow[];
-    const taken = new Set(existing.map((aisle) => categoryMatchKey(aisle.name)));
-    const rows = (categoriesResult.data ?? []) as {
+    const linkedCategoryIds = new Set(
+      existing
+        .map((aisle) => aisle.category_id)
+        .filter((id): id is string => id !== null),
+    );
+    const unlinkedByKey = new Map<string, StoreAisleRow>();
+    for (const aisle of existing) {
+      if (aisle.category_id) continue;
+      const key = categoryMatchKey(aisle.name);
+      if (key && !unlinkedByKey.has(key)) unlinkedByKey.set(key, aisle);
+    }
+
+    let nextSort =
+      existing.reduce((max, aisle) => Math.max(max, aisle.sort_order), -1) + 1;
+    const links: { id: string; categoryId: string }[] = [];
+    const pending: {
+      household_id: string;
+      store_id: string;
+      name: string;
+      sort_order: number;
+      category_id: string;
+    }[] = [];
+
+    for (const row of (categoriesResult.data ?? []) as {
       id: string;
       name: string;
       sort_order: number;
-    }[];
-
-    let nextSort = existing.reduce(
-      (max, aisle) => Math.max(max, aisle.sort_order),
-      -1,
-    ) + 1;
-    const pending = rows
-      .filter((row) => {
-        const key = categoryMatchKey(row.name);
-        if (!key || taken.has(key)) return false;
-        taken.add(key);
-        return true;
-      })
-      .map((row) => ({
+    }[]) {
+      if (linkedCategoryIds.has(row.id)) continue;
+      const key = categoryMatchKey(row.name);
+      const match = key ? unlinkedByKey.get(key) : undefined;
+      if (match) {
+        links.push({ id: match.id, categoryId: row.id });
+        unlinkedByKey.delete(key!);
+        linkedCategoryIds.add(row.id);
+        continue;
+      }
+      pending.push({
         household_id: householdId,
         store_id: storeId,
         name: row.name,
         sort_order: nextSort++,
-      }));
+        category_id: row.id,
+      });
+    }
 
+    for (const link of links) {
+      const { error } = await supabase
+        .from("store_aisles")
+        .update({ category_id: link.categoryId })
+        .eq("id", link.id)
+        .eq("household_id", householdId);
+      if (error) return { ok: false, error: error.message };
+    }
     if (pending.length > 0) {
       const { error } = await supabase.from("store_aisles").insert(pending);
       if (error) return { ok: false, error: error.message };
     }
-
-    await syncStoreAislesToCategories(supabase, householdId, storeId);
 
     revalidatePath("/grocery");
     revalidatePath("/grocery/stores");
@@ -366,6 +391,39 @@ export async function adoptCategoryAisles(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not add aisles",
+    };
+  }
+}
+
+/**
+ * Explicitly overwrites ONE store's aisle list with the seed-enabled
+ * categories: paired rows take the category's label and order, manual
+ * extras stay at the end. The destructive counterpart to the seed button.
+ */
+export async function resetStoreFromCategories(
+  storeId: string,
+): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const { data: store, error } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("household_id", householdId)
+      .eq("id", storeId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!store) return { ok: false, error: "Store not found" };
+
+    await syncStoreAislesToCategories(supabase, householdId, storeId);
+
+    revalidatePath("/grocery");
+    revalidatePath("/grocery/stores");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not reset store aisles",
     };
   }
 }
@@ -629,41 +687,8 @@ export async function moveAisle(
 }
 
 /**
- * Unlinks a store from the categories (its aisles stay put and become
- * hand-managed). Turning it on runs the full adopt: link, create missing,
- * sync.
- */
-export async function setStoreFollowCategories(
-  storeId: string,
-  follow: boolean,
-): Promise<ActionResult> {
-  if (follow) {
-    const result = await adoptCategoryAisles(storeId);
-    return result.ok ? { ok: true, data: null } : result;
-  }
-  try {
-    const { supabase, householdId } = await requireDal();
-    const { error } = await supabase
-      .from("stores")
-      .update({ follow_categories: false })
-      .eq("id", storeId)
-      .eq("household_id", householdId);
-    if (error) return { ok: false, error: error.message };
-    revalidatePath("/grocery");
-    revalidatePath("/grocery/stores");
-    return { ok: true, data: null };
-  } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not update store",
-    };
-  }
-}
-
-/**
- * Drag-and-drop save for a hand-managed store: sets sort_order from the
- * given id order. Fails if the ids don't exactly cover this store's aisles.
+ * Drag-and-drop save: sets sort_order from the given id order. Fails if
+ * the ids don't exactly cover this store's aisles.
  */
 export async function reorderStoreAisles(
   storeId: string,

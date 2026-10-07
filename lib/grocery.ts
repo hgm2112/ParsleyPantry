@@ -55,10 +55,12 @@ export async function ensureGroceryItem(
 }
 
 /**
- * Brings ONE store's aisle list in line with the household categories:
- * renames paired aisles to the category's current label and rewrites the
- * order so paired aisles follow the category order while manual extras keep
- * their relative order at the end. Only writes rows that changed.
+ * Brings ONE store's aisle list in line with the household's seed-enabled
+ * categories: renames paired aisles to the category's current label, heals
+ * their category link, and rewrites the order so paired aisles follow the
+ * category order while manual extras keep their relative order at the end.
+ * Only writes rows that changed. Called by the explicit per-store reset —
+ * nothing runs this automatically.
  */
 export async function syncStoreAislesToCategories(
   supabase: SupabaseClient,
@@ -68,8 +70,9 @@ export async function syncStoreAislesToCategories(
   const [categoriesResult, aislesResult] = await Promise.all([
     supabase
       .from("categories")
-      .select("name, sort_order")
+      .select("id, name, sort_order")
       .eq("household_id", householdId)
+      .eq("seed_stores", true)
       .order("sort_order", { ascending: true }),
     supabase
       .from("store_aisles")
@@ -86,6 +89,7 @@ export async function syncStoreAislesToCategories(
   }
 
   const categories = (categoriesResult.data ?? []) as {
+    id: string;
     name: string;
     sort_order: number;
   }[];
@@ -96,9 +100,12 @@ export async function syncStoreAislesToCategories(
   const updates = plan.flatMap((entry, index) => {
     const aisle = actualById.get(entry.id);
     if (!aisle) return [];
-    const patch: { name?: string; sort_order?: number } = {};
+    const patch: { name?: string; sort_order?: number; category_id?: string } = {};
     if (aisle.name !== entry.name) patch.name = entry.name;
     if (aisle.sort_order !== index) patch.sort_order = index;
+    if (entry.categoryId && aisle.category_id !== entry.categoryId) {
+      patch.category_id = entry.categoryId;
+    }
     return Object.keys(patch).length > 0 ? [{ id: aisle.id, patch }] : [];
   });
   if (updates.length === 0) return;
@@ -118,22 +125,3 @@ export async function syncStoreAislesToCategories(
   }
 }
 
-/**
- * Syncs every store that opted in via stores.follow_categories. Independent
- * stores (each with their own aisle numbers and contents) are never touched.
- */
-export async function syncFollowedStores(
-  supabase: SupabaseClient,
-  householdId: string,
-): Promise<void> {
-  const { data: stores, error } = await supabase
-    .from("stores")
-    .select("id")
-    .eq("household_id", householdId)
-    .eq("follow_categories", true);
-  if (error) throw new Error(error.message);
-
-  for (const store of (stores ?? []) as { id: string }[]) {
-    await syncStoreAislesToCategories(supabase, householdId, store.id);
-  }
-}

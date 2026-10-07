@@ -37,6 +37,7 @@ export interface CategoryRow {
   name: string;
   icon: string | null;
   sort_order: number;
+  seed_stores: boolean;
 }
 
 export interface ItemRow {
@@ -80,7 +81,6 @@ export interface StoreRow {
   household_id: string;
   name: string;
   sort_order: number;
-  follow_categories: boolean;
 }
 
 export interface StoreAisleRow {
@@ -89,6 +89,7 @@ export interface StoreAisleRow {
   store_id: string;
   name: string;
   sort_order: number;
+  category_id: string | null;
 }
 
 export interface HouseholdSettingsRow {

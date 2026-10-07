@@ -2,9 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireDal } from "@/lib/auth";
-import { categoryMatchKey } from "@/lib/kitchenowl";
-import { syncFollowedStores } from "@/lib/grocery";
-import type { CategoryRow, StoreAisleRow } from "@/lib/types";
+import type { CategoryRow } from "@/lib/types";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -62,9 +60,8 @@ export async function createCategory(
 }
 
 /**
- * Renames the category, follows it into every *following* store's aisle list
- * (key-safe: aisles still under the old label are updated before the sync),
- * then re-propagates labels and order. Independent stores are untouched.
+ * Renames the category. Store aisle lists are never touched — each store
+ * owns its own labels (seed/reset happen explicitly from the store).
  */
 export async function updateCategory(
   id: string,
@@ -92,67 +89,32 @@ export async function updateCategory(
       .eq("household_id", householdId);
     if (updateError) return { ok: false, error: friendly(updateError) };
 
-    // If the rename changed the match key, find the aisles still carrying
-    // the old label in following stores and rename them here — the sync
-    // below pairs by the new key and could no longer see them. One per
-    // store (prefer the exact old name); the sync catches the rest.
-    const oldKey = categoryMatchKey(category.name);
-    const newKey = categoryMatchKey(trimmed);
-    if (oldKey && newKey && oldKey !== newKey) {
-      const [followedResult, aislesResult] = await Promise.all([
-        supabase
-          .from("stores")
-          .select("id")
-          .eq("household_id", householdId)
-          .eq("follow_categories", true),
-        supabase
-          .from("store_aisles")
-          .select("*")
-          .eq("household_id", householdId),
-      ]);
-      if (followedResult.error) {
-        return { ok: false, error: followedResult.error.message };
-      }
-      if (aislesResult.error) return { ok: false, error: aislesResult.error.message };
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed",
+    };
+  }
+}
 
-      const followed = new Set(
-        ((followedResult.data ?? []) as { id: string }[]).map(
-          (store) => store.id,
-        ),
-      );
-      const byStore = new Map<string, StoreAisleRow[]>();
-      for (const aisle of (aislesResult.data ?? []) as StoreAisleRow[]) {
-        if (!followed.has(aisle.store_id)) continue;
-        const list = byStore.get(aisle.store_id) ?? [];
-        list.push(aisle);
-        byStore.set(aisle.store_id, list);
-      }
-      const renames: { id: string; name: string }[] = [];
-      for (const list of byStore.values()) {
-        const exact = list.find(
-          (aisle) => aisle.name.toLowerCase() === category.name.toLowerCase(),
-        );
-        const match =
-          exact ??
-          list.find((aisle) => categoryMatchKey(aisle.name) === oldKey);
-        if (match) renames.push({ id: match.id, name: trimmed });
-      }
-      const renameResults = await Promise.all(
-        renames.map((rename) =>
-          supabase
-            .from("store_aisles")
-            .update({ name: rename.name })
-            .eq("id", rename.id)
-            .eq("household_id", householdId)
-            .select("id"),
-        ),
-      );
-      for (const result of renameResults) {
-        if (result.error) return { ok: false, error: friendly(result.error) };
-      }
-    }
-
-    await syncFollowedStores(supabase, householdId);
+/**
+ * Toggles whether this category seeds store aisle lists. Seed, reset, and
+ * the grocery "needs an aisle" rescue only consider seed-enabled rows.
+ */
+export async function setCategorySeedStores(
+  id: string,
+  seedStores: boolean,
+): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const { error } = await supabase
+      .from("categories")
+      .update({ seed_stores: seedStores })
+      .eq("id", id)
+      .eq("household_id", householdId);
+    if (error) return { ok: false, error: friendly(error) };
 
     revalidatePath("/", "layout");
     return { ok: true, data: null };
@@ -228,9 +190,6 @@ export async function moveCategory(
       if (result.error) return { ok: false, error: result.error.message };
     }
 
-    // Following stores' aisle groups follow the new category order.
-    await syncFollowedStores(supabase, householdId);
-
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (error) {
@@ -242,9 +201,8 @@ export async function moveCategory(
 }
 
 /**
- * Drag-and-drop save: sets sort_order from the given id order, then syncs
- * following stores. Fails if the ids don't exactly cover the household's
- * categories.
+ * Drag-and-drop save: sets sort_order from the given id order. Fails if
+ * the ids don't exactly cover the household's categories.
  */
 export async function reorderCategories(ids: string[]): Promise<ActionResult> {
   try {
@@ -277,8 +235,6 @@ export async function reorderCategories(ids: string[]): Promise<ActionResult> {
     for (const result of results) {
       if (result.error) return { ok: false, error: result.error.message };
     }
-
-    await syncFollowedStores(supabase, householdId);
 
     revalidatePath("/", "layout");
     return { ok: true, data: null };

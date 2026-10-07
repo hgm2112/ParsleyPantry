@@ -24,7 +24,6 @@ import {
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
 import { categoryMatchKey } from "@/lib/kitchenowl";
-import { planStoreAisles } from "@/lib/aisle-plan";
 import type {
   CategoryRow,
   GroceryItemRow,
@@ -157,6 +156,16 @@ export function GroceryView({
     return map;
   }, [storeAisles]);
 
+  const aisleByCategoryId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const aisle of storeAisles) {
+      if (aisle.category_id && !map.has(aisle.category_id)) {
+        map.set(aisle.category_id, aisle.id);
+      }
+    }
+    return map;
+  }, [storeAisles]);
+
   const categoryNames = useMemo(() => {
     const map = new Map<string, string>();
     for (const category of categories) map.set(category.id, category.name);
@@ -179,6 +188,13 @@ export function GroceryView({
         }
       }
       const categoryId = item.category_id ?? item.item?.category_id ?? null;
+      if (categoryId) {
+        const linked = aisleByCategoryId.get(categoryId);
+        if (linked) {
+          map.set(item.id, linked);
+          continue;
+        }
+      }
       const categoryName = categoryId
         ? categoryNames.get(categoryId) ?? null
         : null;
@@ -188,27 +204,23 @@ export function GroceryView({
       }
     }
     return map;
-  }, [items, aisleByItem, rememberedByItem, categoryNames, aisleByKey]);
+  }, [items, aisleByItem, rememberedByItem, categoryNames, aisleByKey, aisleByCategoryId]);
 
+  // Categories that would seed here but have no aisle yet — linked or by
+  // name. Drives the "Use my categories as aisles" rescue button.
   const missingAisleCount = useMemo(() => {
-    if (!store?.follow_categories) return 0;
-    return categories.filter(
-      (category) => !aisleByKey.has(categoryMatchKey(category.name)),
-    ).length;
-  }, [store, categories, aisleByKey]);
-
-  // For stores that follow the categories: diff the list against what it
-  // should be — wrong labels, pairings, or order all count as drift.
-  // Independent stores (own aisle numbers/contents) never count.
-  const aisleSyncNeeded = useMemo(() => {
-    if (!store?.follow_categories) return false;
-    const plan = planStoreAisles(categories, storeAisles);
-    return plan.some(
-      (entry, index) =>
-        storeAisles[index].id !== entry.id ||
-        storeAisles[index].name !== entry.name,
+    const linked = new Set(
+      storeAisles
+        .map((aisle) => aisle.category_id)
+        .filter((id): id is string => id !== null),
     );
-  }, [store, categories, storeAisles]);
+    return categories.filter(
+      (category) =>
+        category.seed_stores &&
+        !linked.has(category.id) &&
+        !aisleByKey.has(categoryMatchKey(category.name)),
+    ).length;
+  }, [categories, storeAisles, aisleByKey]);
 
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -261,7 +273,7 @@ export function GroceryView({
           key: "__unassigned",
           title: "Needs an aisle",
           hint: "Tap an item to file it under an aisle",
-          adopt: missingAisleCount > 0 || aisleSyncNeeded,
+          adopt: missingAisleCount > 0,
           items: unassigned,
         });
       }
@@ -300,7 +312,7 @@ export function GroceryView({
     }
 
     return ordered.filter((group) => group.items.length > 0);
-  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount, aisleSyncNeeded]);
+  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount]);
 
   async function quickAdd(entry: CatalogEntry) {
     if (onListSet.has(entry.id)) {
@@ -364,7 +376,7 @@ export function GroceryView({
     toast.success(
       result.data.created > 0
         ? `Added ${result.data.created} aisles from your categories`
-        : "Store aisles are up to date with your categories",
+        : "Nothing to add — every seed category already has an aisle here",
     );
     router.refresh();
   }
@@ -540,21 +552,6 @@ export function GroceryView({
               create a store
             </Link>{" "}
             to arrange by a store&apos;s own aisles.
-          </p>
-        ) : null}
-        {mode === "aisle" &&
-        store &&
-        (aisleSyncNeeded || missingAisleCount > 0) ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Your store&apos;s aisles are behind your categories —{" "}
-            <button
-              type="button"
-              className="underline disabled:no-underline"
-              disabled={adoptBusy}
-              onClick={() => void adoptAisles()}
-            >
-              {adoptBusy ? "Updating…" : "update aisles now"}
-            </button>
           </p>
         ) : null}
       </div>

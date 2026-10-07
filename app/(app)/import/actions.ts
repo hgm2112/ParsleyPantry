@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { categoryMatchKey, parseCategoryLabel } from "@/lib/kitchenowl";
-import { syncFollowedStores } from "@/lib/grocery";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -346,17 +345,6 @@ export async function importKitchenOwl(
     }
     ingredientCount = ingredientRows.length;
     await insertChunked(supabase, "recipe_ingredients", ingredientRows, "id");
-
-    // Categories are the source of truth for opted-in stores: propagate
-    // fresh labels (emoji + aisle numbers) and order. Non-fatal — the import
-    // itself succeeded, and any later category action re-syncs aisles.
-    if (pendingCategories.length > 0 || categoriesRenamed > 0) {
-      try {
-        await syncFollowedStores(supabase, householdId);
-      } catch {
-        // The "Use my categories as aisles" button re-runs the sync later.
-      }
-    }
 
     revalidatePath("/", "layout");
 
