@@ -38,7 +38,7 @@ export default function ForgotPasswordPage() {
       <div className="space-y-4 text-center">
         <MailCheck className="mx-auto h-10 w-10 text-primary" />
         <div className="space-y-1">
-          <h1 className="text-lg font-bold">Check your email</h1>
+          <h1 className="text-lg font-extrabold">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             If an account exists for <strong>{email}</strong>, a reset link is
             on its way.
@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold">Reset password</h1>
+        <h1 className="text-lg font-extrabold">Reset password</h1>
         <p className="text-sm text-muted-foreground">
           We&apos;ll email you a link to set a new password.
         </p>

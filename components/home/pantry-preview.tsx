@@ -45,10 +45,10 @@ export function PantryPreview({
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Package className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold">Pantry</h2>
+        <h2 className="text-lg font-extrabold">Pantry</h2>
         <Link
           href="/inventory"
-          className="ml-auto text-sm font-medium text-primary hover:underline"
+          className="ml-auto text-sm font-semibold text-primary hover:underline"
         >
           View all →
         </Link>
@@ -69,7 +69,7 @@ export function PantryPreview({
           type="button"
           onClick={() => setActiveCategory(null)}
           className={cn(
-            "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+            "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
             activeCategory === null
               ? "border-primary bg-primary text-primary-foreground"
               : "bg-background text-muted-foreground hover:bg-accent",
@@ -89,7 +89,7 @@ export function PantryPreview({
                 )
               }
               className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
                 activeCategory === category.id
                   ? "border-primary bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
@@ -129,7 +129,7 @@ export function PantryPreview({
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                   </div>
-                  <p className="mt-2 truncate text-sm font-medium group-hover:text-primary">
+                  <p className="mt-2 truncate text-sm font-semibold group-hover:text-primary">
                     {row.item.name}
                   </p>
                   <p className="text-xs text-muted-foreground">

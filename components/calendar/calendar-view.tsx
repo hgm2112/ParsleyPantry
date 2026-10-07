@@ -91,7 +91,7 @@ export function CalendarView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <CalendarDays className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Calendar</h1>
+        <h1 className="text-2xl font-extrabold">Calendar</h1>
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -105,7 +105,7 @@ export function CalendarView({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-40 text-center font-bold">
+          <span className="min-w-40 text-center font-extrabold">
             {monthLabel(effectiveMonth)}
           </span>
           <button
@@ -120,7 +120,7 @@ export function CalendarView({
           </button>
           <Link
             href={`/calendar?month=${today.slice(0, 7)}`}
-            className="rounded-full border px-3 py-1.5 text-sm font-medium text-primary hover:bg-accent"
+            className="rounded-full border px-3 py-1.5 text-sm font-semibold text-primary hover:bg-accent"
           >
             Today
           </Link>
@@ -132,7 +132,7 @@ export function CalendarView({
           {WEEKDAYS.map((weekday) => (
             <div
               key={weekday}
-              className="pb-1 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground"
+              className="pb-1 text-center text-xs font-extrabold uppercase tracking-wide text-muted-foreground"
             >
               {weekday}
             </div>
@@ -155,9 +155,9 @@ export function CalendarView({
               >
                 <span
                   className={cn(
-                    "mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
+                    "mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
                     day.isToday &&
-                      "bg-primary font-bold text-primary-foreground",
+                      "bg-primary font-extrabold text-primary-foreground",
                   )}
                 >
                   {day.day}
@@ -168,7 +168,7 @@ export function CalendarView({
                     <span
                       key={`${meal.week_start}-${meal.day_index}`}
                       className={cn(
-                        "flex items-center gap-1 truncate rounded-md bg-gradient-to-r px-1.5 py-0.5 text-[11px] font-medium text-foreground",
+                        "flex items-center gap-1 truncate rounded-md bg-gradient-to-r px-1.5 py-0.5 text-[11px] font-semibold text-foreground",
                         tileGradient(meal.recipe?.name ?? ""),
                       )}
                       title={meal.recipe?.name}

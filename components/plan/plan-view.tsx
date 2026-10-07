@@ -70,7 +70,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-bold">Meal plan</h1>
+          <h1 className="text-lg font-extrabold">Meal plan</h1>
           <p className="text-xs text-muted-foreground">
             {weekTitle(weekStart)}
           </p>
@@ -126,10 +126,10 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                 onClick={() => setOpenIndex(day.index)}
               >
                 <span className="flex w-12 shrink-0 flex-col items-center rounded-lg border py-1">
-                  <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                  <span className="text-[10px] font-semibold uppercase text-muted-foreground">
                     {label.weekday}
                   </span>
-                  <span className="text-sm font-bold tabular-nums leading-tight">
+                  <span className="text-sm font-extrabold tabular-nums leading-tight">
                     {label.dayOfMonth}
                   </span>
                 </span>
@@ -147,7 +147,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                 <span className="min-w-0 flex-1">
                   {recipe ? (
                     <>
-                      <span className="block truncate text-sm font-medium">
+                      <span className="block truncate text-sm font-semibold">
                         {recipe.name}
                       </span>
                       {recipe.time > 0 ? (

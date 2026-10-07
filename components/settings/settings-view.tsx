@@ -48,7 +48,7 @@ function Section({
   return (
     <section className="space-y-3 rounded-xl border p-4">
       <div>
-        <h2 className="text-sm font-bold">{title}</h2>
+        <h2 className="text-sm font-extrabold">{title}</h2>
         {description ? (
           <p className="text-xs text-muted-foreground">{description}</p>
         ) : null}
@@ -305,7 +305,7 @@ export function SettingsView({
             return (
               <li key={member.user_id} className="flex items-center gap-3 px-3 py-2.5">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
+                  <span className="block truncate text-sm font-semibold">
                     {name}
                     {isSelf ? (
                       <span className="ml-1.5 text-xs text-muted-foreground">

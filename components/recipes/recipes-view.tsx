@@ -44,7 +44,7 @@ export function RecipesView({
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
           <BookOpen className="h-6 w-6 text-muted-foreground" />
-          <p className="text-sm font-medium">
+          <p className="text-sm font-semibold">
             {recipes.length === 0 ? "No recipes yet" : "Nothing matches"}
           </p>
           {recipes.length === 0 ? (
@@ -73,7 +73,7 @@ export function RecipesView({
                   >
                     {foodEmoji(recipe.name, recipe.tags)}
                   </span>
-                  <span className="line-clamp-2 px-4 text-sm font-bold">
+                  <span className="line-clamp-2 px-4 text-sm font-extrabold">
                     {recipe.name}
                   </span>
                   <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-4 text-xs text-muted-foreground">

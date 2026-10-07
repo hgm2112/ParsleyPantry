@@ -18,7 +18,7 @@ export function ExpiryChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
         bucket === "expired" && "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
         bucket === "urgent" &&
           "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",

@@ -72,7 +72,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-lg font-bold">Settings</h1>
+        <h1 className="text-lg font-extrabold">Settings</h1>
         <p className="text-xs text-muted-foreground">
           Household, preferences, and data.
         </p>

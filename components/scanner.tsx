@@ -250,7 +250,7 @@ export function Scanner({
       {status === "denied" || status === "nocamera" || status === "error" ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center text-white">
           <CameraOff className="h-8 w-8 text-white/70" />
-          <p className="text-sm font-medium">
+          <p className="text-sm font-semibold">
             {status === "denied"
               ? "Camera access is blocked"
               : status === "nocamera"

@@ -97,7 +97,7 @@ export function ScanButton({
       onClick={onClick}
       className={
         className ??
-        "inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium hover:bg-accent"
+        "inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-semibold hover:bg-accent"
       }
     >
       <ScanBarcode className="h-4 w-4" />

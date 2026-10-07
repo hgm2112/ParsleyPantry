@@ -234,7 +234,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-lg font-bold">I just bought these</h1>
+            <h1 className="text-lg font-extrabold">I just bought these</h1>
             <p className="text-xs text-muted-foreground">
               Continuous scanner · keeps rolling between items
             </p>
@@ -253,7 +253,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
               type="button"
               onClick={() => setLocation(entry.value)}
               className={cn(
-                "rounded-md border px-2 py-1.5 text-sm font-medium transition-colors",
+                "rounded-md border px-2 py-1.5 text-sm font-semibold transition-colors",
                 location === entry.value
                   ? "border-primary bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
@@ -296,7 +296,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
         />
         {flash ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-lg">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
               <CheckCircle2 className="h-4 w-4" /> {flash} added
             </span>
           </div>
@@ -305,7 +305,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
 
       <section className="rounded-xl border bg-background">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <h2 className="text-sm font-medium">This trip</h2>
+          <h2 className="text-sm font-semibold">This trip</h2>
           {session.length > 0 ? (
             <Button
               variant="ghost"
@@ -326,13 +326,13 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
             {session.map((entry) => (
               <li key={entry.key} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{entry.name}</p>
+                  <p className="truncate text-sm font-semibold">{entry.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {LOCATIONS.find((l) => l.value === entry.location)?.label}
                     {entry.expirationDate ? ` · exp ${entry.expirationDate}` : ""}
                   </p>
                 </div>
-                <span className="text-sm font-bold tabular-nums">
+                <span className="text-sm font-extrabold tabular-nums">
                   +{entry.added}
                 </span>
                 <Button
@@ -500,7 +500,7 @@ function UnknownItemSheet({
               >
                 −
               </Button>
-              <span className="flex-1 text-center text-lg font-bold tabular-nums">
+              <span className="flex-1 text-center text-lg font-extrabold tabular-nums">
                 {quantity}
               </span>
               <Button
@@ -528,7 +528,7 @@ function UnknownItemSheet({
             {suggestion ? (
               <button
                 type="button"
-                className="text-xs font-medium text-primary"
+                className="text-xs font-semibold text-primary"
                 onClick={() => {
                   setExpiryTouched(true);
                   setManualExpiry(addDays(suggestion.days));

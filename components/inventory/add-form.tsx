@@ -226,7 +226,7 @@ export function AddForm({
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-lg font-bold">Add to inventory</h1>
+            <h1 className="text-lg font-extrabold">Add to inventory</h1>
             <p className="text-xs text-muted-foreground">
               Full control — quantity, expiry, and location.
             </p>
@@ -370,7 +370,7 @@ export function AddForm({
                 type="button"
                 onClick={() => setLocation(entry.value)}
                 className={cn(
-                  "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                  "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
                   location === entry.value
                     ? "border-primary bg-primary text-primary-foreground"
                     : "bg-background text-muted-foreground hover:bg-accent",
@@ -397,7 +397,7 @@ export function AddForm({
             {suggestion ? (
               <button
                 type="button"
-                className="rounded-full border border-primary px-2 py-0.5 font-medium text-primary"
+                className="rounded-full border border-primary px-2 py-0.5 font-semibold text-primary"
                 onClick={() => {
                   setExpiryTouched(true);
                   setExpirationDate(addDays(suggestion.days));
@@ -476,7 +476,7 @@ export function AddForm({
         </div>
 
         <details className="rounded-lg border px-3 py-2 text-sm">
-          <summary className="cursor-pointer font-medium">
+          <summary className="cursor-pointer font-semibold">
             Low-stock options
           </summary>
           <div className="mt-3 space-y-3">

@@ -254,7 +254,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
 
       <section className="space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold">Ingredients</h2>
+          <h2 className="text-sm font-extrabold">Ingredients</h2>
           <span className="text-xs text-muted-foreground">
             {rows.filter((row) => row.name.trim()).length} listed
           </span>

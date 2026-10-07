@@ -51,7 +51,7 @@ function SignupForm() {
       <div className="space-y-4 text-center">
         <MailCheck className="mx-auto h-10 w-10 text-primary" />
         <div className="space-y-1">
-          <h1 className="text-lg font-bold">Check your email</h1>
+          <h1 className="text-lg font-extrabold">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to <strong>{email}</strong>. Click it
             to finish setting up your household.
@@ -71,7 +71,7 @@ function SignupForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold">Create your pantry</h1>
+        <h1 className="text-lg font-extrabold">Create your pantry</h1>
         <p className="text-sm text-muted-foreground">
           You&apos;ll get a household to share with family.
         </p>
@@ -120,7 +120,7 @@ function SignupForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-foreground underline">
+        <Link href="/login" className="font-semibold text-foreground underline">
           Sign in
         </Link>
       </p>

@@ -130,14 +130,14 @@ export function InventoryDetail({
             <ArrowLeft />
           </Button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold">
+            <h1 className="truncate text-lg font-extrabold">
               {entry.item.name}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <LocationBadge location={entry.location} />
               <ExpiryChip date={entry.expiration_date} />
               {low ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   Running low
                 </span>
               ) : null}
@@ -175,7 +175,7 @@ export function InventoryDetail({
             >
               −
             </Button>
-            <span className="w-12 text-center text-xl font-bold tabular-nums">
+            <span className="w-12 text-center text-xl font-extrabold tabular-nums">
               {entry.quantity % 1 === 0 ? entry.quantity : entry.quantity.toFixed(1)}
             </span>
             <Button
@@ -198,7 +198,7 @@ export function InventoryDetail({
                 type="button"
                 onClick={() => void patch({ location: location.value })}
                 className={cn(
-                  "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                  "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
                   entry.location === location.value
                     ? "border-primary bg-primary text-primary-foreground"
                     : "bg-background text-muted-foreground hover:bg-accent",

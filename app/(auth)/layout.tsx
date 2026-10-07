@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="flex max-w-sm flex-col items-center gap-3 text-center">
         <ParsleyMark className="h-16 w-20" />
-        <p className="text-sm font-medium text-foreground">{TAGLINE}</p>
+        <p className="text-sm font-semibold text-foreground">{TAGLINE}</p>
         <p className="text-xs text-muted-foreground">
           One pantry for the whole household — scan, track, and shop from
           anywhere.

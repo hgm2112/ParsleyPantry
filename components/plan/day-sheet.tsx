@@ -130,7 +130,7 @@ export function DaySheet({ weekStart, day, recipes, onDone }: Props) {
         <div className="space-y-3 px-4">
           {currentRecipe ? (
             <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-              <span className="min-w-0 truncate text-sm font-medium">
+              <span className="min-w-0 truncate text-sm font-semibold">
                 {currentRecipe.name}
               </span>
               <Button

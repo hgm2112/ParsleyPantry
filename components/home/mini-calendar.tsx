@@ -65,10 +65,10 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-lg font-bold">Calendar</h2>
+        <h2 className="text-lg font-extrabold">Calendar</h2>
         <Link
           href="/calendar"
-          className="ml-auto text-sm font-medium text-primary hover:underline"
+          className="ml-auto text-sm font-semibold text-primary hover:underline"
         >
           View full calendar →
         </Link>
@@ -83,7 +83,7 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-bold">
+        <span className="text-sm font-extrabold">
           {monthLabel(cursor.year, cursor.month)}
         </span>
         <button
@@ -100,7 +100,7 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
         {WEEKDAYS.map((weekday) => (
           <span
             key={weekday}
-            className="py-1 text-[10px] font-bold uppercase text-muted-foreground"
+            className="py-1 text-[10px] font-extrabold uppercase text-muted-foreground"
           >
             {weekday.slice(0, 1)}
           </span>
@@ -112,7 +112,7 @@ export function MiniCalendar({ meals }: { meals: HomeMeal[] }) {
             className={cn(
               "relative mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors",
               day.inMonth ? "text-foreground" : "text-muted-foreground/50",
-              day.isToday && "bg-primary font-bold text-primary-foreground",
+              day.isToday && "bg-primary font-extrabold text-primary-foreground",
               !day.isToday && "hover:bg-accent",
             )}
           >

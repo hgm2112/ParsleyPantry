@@ -40,7 +40,7 @@ function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold">Sign in</h1>
+        <h1 className="text-lg font-extrabold">Sign in</h1>
         <p className="text-sm text-muted-foreground">
           Welcome back to your pantry.
         </p>
@@ -85,7 +85,7 @@ function LoginForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         New here?{" "}
-        <Link href="/signup" className="font-medium text-foreground underline">
+        <Link href="/signup" className="font-semibold text-foreground underline">
           Create an account
         </Link>
       </p>

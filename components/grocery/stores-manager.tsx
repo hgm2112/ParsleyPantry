@@ -90,7 +90,7 @@ export function StoresManager({
       {stores.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center">
           <Store className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-          <p className="text-sm font-medium">No stores yet</p>
+          <p className="text-sm font-semibold">No stores yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Create your main store (Meijer, Kroger…) and give it an aisle list.
             The grocery list will sort by those aisles.
@@ -107,11 +107,11 @@ export function StoresManager({
               <li key={store.id} className="flex items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">
+                    <span className="truncate text-sm font-semibold">
                       {store.name}
                     </span>
                     {active ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         Active
                       </span>
                     ) : null}

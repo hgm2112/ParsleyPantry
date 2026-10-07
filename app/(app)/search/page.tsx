@@ -42,8 +42,8 @@ function SectionHeader({
   return (
     <div className="flex items-center gap-2 pt-2">
       <Icon className="h-5 w-5 text-primary" />
-      <h2 className="text-lg font-bold">{title}</h2>
-      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      <h2 className="text-lg font-extrabold">{title}</h2>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
         {count}
       </span>
     </div>
@@ -54,7 +54,7 @@ function EmptySearch({ query }: { query: string }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed px-6 py-16 text-center">
       <SearchIcon className="h-8 w-8 text-muted-foreground" />
-      <p className="text-sm font-medium">
+      <p className="text-sm font-semibold">
         {query ? `Nothing matches “${query}”` : "Type to search"}
       </p>
       <p className="max-w-md text-xs text-muted-foreground">
@@ -160,7 +160,7 @@ async function SearchContent({ query }: { query: string }) {
                     {row.item.icon ?? foodEmoji(row.item.name)}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
+                    <span className="block truncate text-sm font-semibold">
                       {row.item.name}
                     </span>
                     <span className="block text-xs text-muted-foreground">
@@ -193,7 +193,7 @@ async function SearchContent({ query }: { query: string }) {
                   <span className="min-w-0">
                     <span
                       className={cn(
-                        "block truncate text-sm font-medium",
+                        "block truncate text-sm font-semibold",
                         row.checked && "text-muted-foreground line-through",
                       )}
                     >
@@ -231,7 +231,7 @@ async function SearchContent({ query }: { query: string }) {
                     {foodEmoji(recipe.name, recipe.tags)}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
+                    <span className="block truncate text-sm font-semibold">
                       {recipe.name}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
@@ -273,7 +273,7 @@ async function SearchContent({ query }: { query: string }) {
                     {item.icon ?? foodEmoji(item.name)}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
+                    <span className="block truncate text-sm font-semibold">
                       {item.name}
                     </span>
                     <span className="block text-xs text-muted-foreground">

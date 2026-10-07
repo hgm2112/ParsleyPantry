@@ -130,7 +130,7 @@ function SidebarNav({ pathname }: { pathname: string }) {
             key={href}
             href={href}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-extralight transition-colors",
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-normal transition-colors",
               isActive(pathname, href)
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -143,7 +143,7 @@ function SidebarNav({ pathname }: { pathname: string }) {
       </nav>
       <div className="flex flex-col items-center gap-2 border-t px-4 py-5">
         <ParsleyMark className="h-16 w-20" />
-        <p className="text-center text-xs font-extralight italic text-muted-foreground">
+        <p className="text-center text-xs font-normal italic text-muted-foreground">
           {TAGLINE}
         </p>
       </div>
@@ -187,7 +187,7 @@ function DesktopHeader({ name }: { name: string | null }) {
           <Link
             href="/settings"
             aria-label="Settings"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-extrabold text-primary-foreground"
           >
             {(name ?? "p").slice(0, 1).toUpperCase()}
           </Link>
@@ -209,7 +209,7 @@ function MobileNav({ pathname }: { pathname: string }) {
             key={href}
             href={href}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+              "flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition-colors",
               isActive(pathname, href)
                 ? "text-primary"
                 : "text-muted-foreground",

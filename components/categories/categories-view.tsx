@@ -136,7 +136,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
 
       {categories.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center">
-          <p className="text-sm font-medium">No categories yet</p>
+          <p className="text-sm font-semibold">No categories yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Categories group your grocery list, inventory filters, and store
             aisles.
@@ -175,7 +175,7 @@ export function CategoriesView({ categories }: { categories: CategoryRow[] }) {
                   />
                 </form>
               ) : (
-                <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
                   <span
                     className={cn(
                       "size-2.5 shrink-0 rounded-full",

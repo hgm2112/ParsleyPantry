@@ -210,7 +210,7 @@ export function AisleEditor({
               setStoreDirty(true);
             }}
             onBlur={() => void saveStoreName()}
-            className="h-8 max-w-56 font-medium"
+            className="h-8 max-w-56 font-semibold"
             aria-label="Store name"
           />
           {storeDirty ? (
@@ -242,7 +242,7 @@ export function AisleEditor({
 
       <div className="space-y-2 rounded-xl border px-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-sm font-medium">From your categories</p>
+          <p className="text-sm font-semibold">From your categories</p>
           <p className="text-xs text-muted-foreground">
             Add the seed aisles this store is missing, or reset the whole
             list to match. What you change here stays until you reset it —{" "}
@@ -287,7 +287,7 @@ export function AisleEditor({
 
       {aisles.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center">
-          <p className="text-sm font-medium">No aisles yet</p>
+          <p className="text-sm font-semibold">No aisles yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             List the aisles in the order you walk past them — produce, dairy,
             cans, frozen…
@@ -326,7 +326,7 @@ export function AisleEditor({
                   />
                 </form>
               ) : (
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                   {aisle.name}
                 </span>
               )}

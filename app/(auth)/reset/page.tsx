@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold">Choose a new password</h1>
+        <h1 className="text-lg font-extrabold">Choose a new password</h1>
         <p className="text-sm text-muted-foreground">
           Your household data stays exactly where it is.
         </p>

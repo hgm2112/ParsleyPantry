@@ -130,7 +130,7 @@ export function InventoryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-bold">Pantry</h1>
+            <h1 className="text-lg font-extrabold">Pantry</h1>
             <p className="text-xs text-muted-foreground">
               {rows.length} tracked
               {lowCount > 0 ? (
@@ -175,7 +175,7 @@ export function InventoryView({
               type="button"
               onClick={() => setTab(entry.value)}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
                 tab === entry.value
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background text-muted-foreground hover:bg-accent",
@@ -191,7 +191,7 @@ export function InventoryView({
             type="button"
             onClick={() => setUseSoon((value) => !value)}
             className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
               useSoon
                 ? "border-orange-600 bg-orange-600 text-white"
                 : "border-border bg-background text-muted-foreground hover:bg-accent",
@@ -203,7 +203,7 @@ export function InventoryView({
             type="button"
             onClick={() => setLowOnly((value) => !value)}
             className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
               lowOnly
                 ? "border-amber-600 bg-amber-600 text-white"
                 : "border-border bg-background text-muted-foreground hover:bg-accent",
@@ -276,14 +276,14 @@ function EmptyState({
       </div>
       {hasRows ? (
         <>
-          <p className="text-sm font-medium">Nothing matches those filters</p>
+          <p className="text-sm font-semibold">Nothing matches those filters</p>
           <p className="text-xs text-muted-foreground">
             Try a different tab or clear the search.
           </p>
         </>
       ) : (
         <>
-          <p className="text-sm font-medium">Your pantry is empty</p>
+          <p className="text-sm font-semibold">Your pantry is empty</p>
           <p className="text-xs text-muted-foreground max-w-xs">
             Scan a barcode or add items manually to start tracking what you
             have.
@@ -380,7 +380,7 @@ function InventoryRow({
             <span className="flex items-center gap-1.5">
               <span
                 className={cn(
-                  "truncate text-sm font-medium",
+                  "truncate text-sm font-semibold",
                   quantity <= 0 && "text-muted-foreground line-through",
                 )}
               >
@@ -399,11 +399,11 @@ function InventoryRow({
               ) : null}
               <ExpiryChip date={entry.expiration_date} />
               {quantity <= 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
                   Out
                 </span>
               ) : low ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   <TriangleAlert className="h-3 w-3" /> Low
                 </span>
               ) : null}
@@ -412,7 +412,7 @@ function InventoryRow({
         </Link>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className="w-10 text-right text-sm font-bold tabular-nums">
+          <span className="w-10 text-right text-sm font-extrabold tabular-nums">
             {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
           </span>
           <Button

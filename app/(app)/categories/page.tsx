@@ -49,7 +49,7 @@ export default function CategoriesPage() {
           <ArrowLeft />
         </Button>
         <div>
-          <h1 className="text-lg font-bold">Categories</h1>
+          <h1 className="text-lg font-extrabold">Categories</h1>
           <p className="text-xs text-muted-foreground">
             Order drives grocery groups. Drag the ⠿ handle (or use ↑↓) to
             reorder; the switch picks which categories seed store aisles.

@@ -112,10 +112,10 @@ export function ShoppingWidget({
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <ShoppingCart className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold">Shopping List</h2>
+        <h2 className="text-lg font-extrabold">Shopping List</h2>
         <Link
           href="/grocery"
-          className="ml-auto text-sm font-medium text-primary hover:underline"
+          className="ml-auto text-sm font-semibold text-primary hover:underline"
         >
           Open →
         </Link>
@@ -134,7 +134,7 @@ export function ShoppingWidget({
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
+            <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
               {checkedCount} of {total} · {percent}%
             </span>
           </div>
@@ -150,7 +150,7 @@ export function ShoppingWidget({
                     tint.header,
                   )}
                 >
-                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-bold">
+                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-extrabold">
                     <span>{group.title}</span>
                     <span className="opacity-70">
                       {group.items.filter((item) => !item.checked).length} left

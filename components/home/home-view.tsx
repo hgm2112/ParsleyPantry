@@ -25,7 +25,7 @@ function PromoCard() {
       <div className="flex items-start gap-3">
         <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div>
-          <h2 className="text-sm font-bold">Meal planning made simple</h2>
+          <h2 className="text-sm font-extrabold">Meal planning made simple</h2>
           <p className="mt-1 text-sm text-muted-foreground">{TAGLINE}</p>
         </div>
       </div>

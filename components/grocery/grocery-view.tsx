@@ -307,7 +307,7 @@ export function GroceryView({
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-bold">Shopping list</h1>
+            <h1 className="text-lg font-extrabold">Shopping list</h1>
             <p className="text-xs text-muted-foreground">
               {totalLeft} to buy
               {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
@@ -338,7 +338,7 @@ export function GroceryView({
               }}
             />
           </div>
-          <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
+          <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
             {totalChecked} of {items.length} ·{" "}
             {items.length === 0
               ? 0
@@ -373,7 +373,7 @@ export function GroceryView({
               disabled={!store}
               onClick={() => void changeMode("aisle")}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium disabled:opacity-40",
+                "px-3 py-1.5 text-sm font-semibold disabled:opacity-40",
                 mode === "aisle"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
@@ -385,7 +385,7 @@ export function GroceryView({
               type="button"
               onClick={() => void changeMode("category")}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium",
+                "px-3 py-1.5 text-sm font-semibold",
                 mode === "category"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-accent",
@@ -464,7 +464,7 @@ export function GroceryView({
                       </span>
                     ) : null}
                     {onListSet.has(entry.id) ? (
-                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         on list
                       </span>
                     ) : null}
@@ -488,7 +488,7 @@ export function GroceryView({
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-          <p className="text-sm font-medium">Nothing on the list</p>
+          <p className="text-sm font-semibold">Nothing on the list</p>
           <p className="text-xs text-muted-foreground max-w-xs">
             Add items manually, pull them from inventory, or push a recipe&apos;s
             ingredients.
@@ -514,7 +514,7 @@ export function GroceryView({
                 className={cn("overflow-hidden rounded-xl border", tint.header)}
               >
                 <div className="flex items-baseline justify-between px-3 py-2">
-                  <h2 className="text-sm font-bold">{group.title}</h2>
+                  <h2 className="text-sm font-extrabold">{group.title}</h2>
                   <span className="text-xs opacity-70">
                     {group.items.filter((item) => !item.checked).length} left
                   </span>
@@ -552,7 +552,7 @@ export function GroceryView({
                       >
                         <span
                           className={cn(
-                            "block truncate text-sm font-medium",
+                            "block truncate text-sm font-semibold",
                             item.checked && "text-muted-foreground line-through",
                           )}
                         >

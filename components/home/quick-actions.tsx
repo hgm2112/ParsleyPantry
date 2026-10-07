@@ -40,15 +40,15 @@ const ACTIONS = [
 
 export function QuickActions() {
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-bold">Quick Actions</h2>
-      <div className="grid grid-cols-2 gap-2.5">
+    <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
+      <h2 className="mb-3 text-lg font-extrabold">Quick Actions</h2>
+      <div className="grid flex-1 grid-cols-2 gap-2.5 auto-rows-fr">
         {ACTIONS.map(({ href, label, icon: Icon, className }) => (
           <Link
             key={href}
             href={href}
             className={cn(
-              "flex flex-col items-start gap-2 rounded-xl border p-3 text-sm font-medium transition-shadow hover:shadow-sm",
+              "flex flex-col items-start justify-center gap-2 rounded-xl border p-3 text-sm font-semibold transition-shadow hover:shadow-sm",
               className,
             )}
           >

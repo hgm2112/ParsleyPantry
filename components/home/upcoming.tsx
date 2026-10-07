@@ -63,10 +63,10 @@ export function Upcoming({
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <CalendarClock className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold">Upcoming</h2>
+        <h2 className="text-lg font-extrabold">Upcoming</h2>
         <Link
           href="/calendar"
-          className="ml-auto text-sm font-medium text-primary hover:underline"
+          className="ml-auto text-sm font-semibold text-primary hover:underline"
         >
           View calendar →
         </Link>
@@ -75,7 +75,7 @@ export function Upcoming({
       <div className="space-y-3">
         {entries.meals.map((entry) => (
           <div key={entry.label}>
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
               {entry.label}
             </p>
             <Link
@@ -90,7 +90,7 @@ export function Upcoming({
 
         {entries.expiring.length > 0 ? (
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
               Expiring soon
             </p>
             <ul className="mt-0.5 space-y-0.5">

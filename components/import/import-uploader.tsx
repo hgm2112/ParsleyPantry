@@ -106,7 +106,7 @@ export function ImportUploader() {
     <div className="space-y-4">
       <div className="rounded-xl border border-dashed px-6 py-10 text-center">
         <FileJson className="mx-auto mb-3 h-8 w-8 text-primary" />
-        <p className="text-sm font-medium">KitchenOwl export (.json)</p>
+        <p className="text-sm font-semibold">KitchenOwl export (.json)</p>
         <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
           Brings over your item catalog, categories, and recipes. Existing
           entries are skipped, so it is safe to run twice. Quantities and
@@ -145,19 +145,19 @@ export function ImportUploader() {
         <div className="space-y-3 rounded-xl border p-4">
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-xl font-bold tabular-nums">
+              <p className="text-xl font-extrabold tabular-nums">
                 {parsed.items.length}
               </p>
               <p className="text-xs text-muted-foreground">Items</p>
             </div>
             <div>
-              <p className="text-xl font-bold tabular-nums">
+              <p className="text-xl font-extrabold tabular-nums">
                 {parsed.recipes.length}
               </p>
               <p className="text-xs text-muted-foreground">Recipes</p>
             </div>
             <div>
-              <p className="text-xl font-bold tabular-nums">
+              <p className="text-xl font-extrabold tabular-nums">
                 {categoryPreview.length}
               </p>
               <p className="text-xs text-muted-foreground">Categories</p>
@@ -197,7 +197,7 @@ export function ImportUploader() {
 
       {summary ? (
         <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+          <div className="flex items-center gap-2 text-sm font-semibold text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Import finished
           </div>

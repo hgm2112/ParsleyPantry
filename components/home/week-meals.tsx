@@ -61,7 +61,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Utensils className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold">This Week&apos;s Meals</h2>
+        <h2 className="text-lg font-extrabold">This Week&apos;s Meals</h2>
         <div className="mx-auto flex items-center gap-1">
           <button
             type="button"
@@ -71,7 +71,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-36 text-center text-sm font-medium text-muted-foreground">
+          <span className="min-w-36 text-center text-sm font-semibold text-muted-foreground">
             {weekTitle(weekStart)}
           </span>
           <button
@@ -102,7 +102,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
               className="group rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
             >
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-bold">{label.weekday}</span>
+                <span className="text-sm font-extrabold">{label.weekday}</span>
                 <span className="text-xs text-muted-foreground">
                   {label.month} {label.dayOfMonth}
                 </span>
@@ -118,10 +118,10 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
                   >
                     <span aria-hidden>{foodEmoji(recipe.name, recipe.tags)}</span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug group-hover:text-primary">
+                  <p className="mt-2 line-clamp-2 text-center text-sm font-semibold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
                     {recipe.time > 0 ? (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
@@ -131,7 +131,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
                     {type ? (
                       <span
                         className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
                           TYPE_CHIP[type] ?? "bg-muted text-muted-foreground",
                         )}
                       >
@@ -143,7 +143,7 @@ export function WeekMeals({ meals }: { meals: HomeMeal[] }) {
               ) : (
                 <div className="mt-2 flex h-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:text-primary">
                   <Plus className="h-4 w-4" />
-                  <span className="text-xs font-medium">Plan</span>
+                  <span className="text-xs font-semibold">Plan</span>
                 </div>
               )}
             </Link>

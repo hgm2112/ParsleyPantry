@@ -182,7 +182,7 @@ export function AddGrocerySheet({
                     className="flex items-center gap-2 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p className="truncate text-sm font-semibold">
                         {entry.item.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -215,7 +215,7 @@ export function AddGrocerySheet({
                     className="flex items-center gap-2 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p className="truncate text-sm font-semibold">
                         {recipe.name}
                       </p>
                       <p className="text-xs text-muted-foreground">

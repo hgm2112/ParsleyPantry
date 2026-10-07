@@ -102,7 +102,7 @@ export function ConsumeDialog({
             >
               −
             </Button>
-            <div className="w-20 text-center text-2xl font-bold tabular-nums">
+            <div className="w-20 text-center text-2xl font-extrabold tabular-nums">
               {amount}
             </div>
             <Button
