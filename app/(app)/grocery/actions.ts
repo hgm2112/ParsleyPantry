@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
-import { categoryMatchKey, parseCategoryLabel } from "@/lib/kitchenowl";
+import { categoryMatchKey } from "@/lib/kitchenowl";
+import { syncStoreAislesToCategories } from "@/lib/grocery";
 import type {
   GroceryViewMode,
   StoreAisleRow,
@@ -284,8 +285,10 @@ export async function setItemStoreAisle(
 }
 
 /**
- * Creates aisles the store is missing for your household categories
- * (numbered aisles first), so category-matched filing can place items.
+ * Creates aisles the store is missing for your household categories (in
+ * category order), then syncs every store's aisle list from the categories:
+ * paired aisles are renamed to the category's current label and reordered to
+ * match — so seeded aisles pick up emoji + aisle numbers too.
  */
 export async function adoptCategoryAisles(
   storeId: string,
@@ -324,20 +327,11 @@ export async function adoptCategoryAisles(
       sort_order: number;
     }[];
 
-    const ordered = rows
-      .map((row) => ({ ...row, number: parseCategoryLabel(row.name).number }))
-      .sort(
-        (a, b) =>
-          (a.number ?? Number.MAX_SAFE_INTEGER) -
-            (b.number ?? Number.MAX_SAFE_INTEGER) ||
-          a.sort_order - b.sort_order,
-      );
-
     let nextSort = existing.reduce(
       (max, aisle) => Math.max(max, aisle.sort_order),
       -1,
     ) + 1;
-    const pending = ordered
+    const pending = rows
       .filter((row) => {
         const key = categoryMatchKey(row.name);
         if (!key || taken.has(key)) return false;
@@ -355,6 +349,8 @@ export async function adoptCategoryAisles(
       const { error } = await supabase.from("store_aisles").insert(pending);
       if (error) return { ok: false, error: error.message };
     }
+
+    await syncStoreAislesToCategories(supabase, householdId);
 
     revalidatePath("/grocery");
     revalidatePath("/grocery/stores");

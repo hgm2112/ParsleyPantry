@@ -196,6 +196,21 @@ export function GroceryView({
     ).length;
   }, [store, categories, aisleByKey]);
 
+  // Paired aisles whose label drifted from the category (e.g. aisles seeded
+  // before the import learned to restore emoji + aisle numbers).
+  const aisleSyncNeeded = useMemo(() => {
+    if (!store) return false;
+    const aisleNames = new Map<string, string>();
+    for (const aisle of storeAisles) {
+      const key = categoryMatchKey(aisle.name);
+      if (key && !aisleNames.has(key)) aisleNames.set(key, aisle.name);
+    }
+    return categories.some((category) => {
+      const aisleName = aisleNames.get(categoryMatchKey(category.name));
+      return aisleName !== undefined && aisleName !== category.name;
+    });
+  }, [store, storeAisles, categories]);
+
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of inventory) {
@@ -247,7 +262,7 @@ export function GroceryView({
           key: "__unassigned",
           title: "Needs an aisle",
           hint: "Tap an item to file it under an aisle",
-          adopt: missingAisleCount > 0,
+          adopt: missingAisleCount > 0 || aisleSyncNeeded,
           items: unassigned,
         });
       }
@@ -286,7 +301,7 @@ export function GroceryView({
     }
 
     return ordered.filter((group) => group.items.length > 0);
-  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount]);
+  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount, aisleSyncNeeded]);
 
   async function quickAdd(entry: CatalogEntry) {
     if (onListSet.has(entry.id)) {
@@ -350,7 +365,7 @@ export function GroceryView({
     toast.success(
       result.data.created > 0
         ? `Added ${result.data.created} aisles from your categories`
-        : "Your store already has all those aisles",
+        : "Store aisles are up to date with your categories",
     );
     router.refresh();
   }
@@ -521,11 +536,24 @@ export function GroceryView({
 
         {mode === "aisle" && !store ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Showing your categories —{" "}
+            Showing your categories—{" "}
             <Link href="/grocery/stores" className="underline">
               create a store
             </Link>{" "}
             to arrange by a store&apos;s own aisles.
+          </p>
+        ) : null}
+        {mode === "aisle" && store && aisleSyncNeeded ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Your store&apos;s aisles are behind your categories—{" "}
+            <button
+              type="button"
+              className="underline disabled:no-underline"
+              disabled={adoptBusy}
+              onClick={() => void adoptAisles()}
+            >
+              {adoptBusy ? "Updating…" : "update aisles now"}
+            </button>
           </p>
         ) : null}
       </div>

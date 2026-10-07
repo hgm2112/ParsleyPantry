@@ -362,9 +362,14 @@ export function SettingsView({
         title="Data"
         description="Coming from KitchenOwl? Bring your stuff over."
       >
-        <Button variant="outline" render={<Link href="/import" />}>
-          Import from KitchenOwl
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" render={<Link href="/categories" />}>
+            Manage categories
+          </Button>
+          <Button variant="outline" render={<Link href="/import" />}>
+            Import from KitchenOwl
+          </Button>
+        </div>
       </Section>
 
       <Section title="Account">
