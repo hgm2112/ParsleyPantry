@@ -8,8 +8,8 @@ import {
   ShoppingWidget,
   type ShoppingPreviewItem,
 } from "@/components/home/shopping-widget";
-import { QuickActions } from "@/components/home/quick-actions";
-import { Upcoming } from "@/components/home/upcoming";
+import { SmartActions } from "@/components/home/smart-actions";
+import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
 import type {
   CategoryRow,
@@ -62,7 +62,7 @@ export function HomeView({
       </div>
 
       <div className="lg:col-start-3 lg:row-start-1">
-        <QuickActions />
+        <SmartActions pantry={pantry} grocery={grocery} meals={meals} />
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
@@ -82,7 +82,7 @@ export function HomeView({
       </div>
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
-        <Upcoming meals={meals} pantry={pantry} />
+        <PantryInsights rows={pantry} />
         <MiniCalendar meals={meals} />
         <PromoCard />
       </div>

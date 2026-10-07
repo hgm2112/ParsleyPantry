@@ -9,6 +9,8 @@ import type { RecipeRow } from "@/lib/types";
 
 export const metadata = { title: "Recipes" };
 
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
 function RecipesSkeleton() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -19,7 +21,15 @@ function RecipesSkeleton() {
   );
 }
 
-async function RecipesContent() {
+async function RecipesContent({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const rawItems = typeof params.items === "string" ? params.items : "";
+  const onlyItemIds = rawItems
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .slice(0, 40);
+
   const { supabase, householdId } = await requireDal();
 
   const [recipesResult, ingredientsResult] = await Promise.all([
@@ -30,28 +40,37 @@ async function RecipesContent() {
       .order("name", { ascending: true }),
     supabase
       .from("recipe_ingredients")
-      .select("recipe_id, optional")
+      .select("recipe_id, optional, item_id")
       .eq("household_id", householdId),
   ]);
 
   const recipes = (recipesResult.data ?? []) as RecipeRow[];
-  const counts = new Map<string, number>();
+  const counts: Record<string, number> = {};
+  const itemIdsByRecipe: Record<string, string[]> = {};
   for (const row of (ingredientsResult.data ?? []) as {
     recipe_id: string;
     optional: boolean;
+    item_id: string | null;
   }[]) {
-    counts.set(row.recipe_id, (counts.get(row.recipe_id) ?? 0) + 1);
+    counts[row.recipe_id] = (counts[row.recipe_id] ?? 0) + 1;
+    if (row.item_id) {
+      const list = itemIdsByRecipe[row.recipe_id] ?? [];
+      list.push(row.item_id);
+      itemIdsByRecipe[row.recipe_id] = list;
+    }
   }
 
   return (
     <RecipesView
       recipes={recipes}
-      ingredientCounts={Object.fromEntries(counts)}
+      ingredientCounts={counts}
+      itemIdsByRecipe={itemIdsByRecipe}
+      onlyItemIds={onlyItemIds}
     />
   );
 }
 
-export default function RecipesPage() {
+export default function RecipesPage({ searchParams }: PageProps<"/recipes">) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -66,7 +85,7 @@ export default function RecipesPage() {
         </Button>
       </div>
       <Suspense fallback={<RecipesSkeleton />}>
-        <RecipesContent />
+        <RecipesContent searchParams={searchParams} />
       </Suspense>
     </div>
   );

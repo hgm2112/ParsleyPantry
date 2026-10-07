@@ -11,24 +11,47 @@ import type { RecipeRow } from "@/lib/types";
 export function RecipesView({
   recipes,
   ingredientCounts,
+  itemIdsByRecipe,
+  onlyItemIds,
 }: {
   recipes: RecipeRow[];
   ingredientCounts: Record<string, number>;
+  itemIdsByRecipe?: Record<string, string[]>;
+  onlyItemIds?: string[];
 }) {
   const [query, setQuery] = useState("");
 
+  const itemFilter = onlyItemIds ?? [];
   const filtered = useMemo(() => {
+    let list = recipes;
+    if (onlyItemIds && onlyItemIds.length > 0) {
+      const wanted = new Set(onlyItemIds);
+      list = list.filter((recipe) =>
+        (itemIdsByRecipe?.[recipe.id] ?? []).some((itemId) => wanted.has(itemId)),
+      );
+    }
     const needle = query.trim().toLowerCase();
-    if (!needle) return recipes;
-    return recipes.filter(
+    if (!needle) return list;
+    return list.filter(
       (recipe) =>
         recipe.name.toLowerCase().includes(needle) ||
         recipe.tags.some((tag) => tag.toLowerCase().includes(needle)),
     );
-  }, [recipes, query]);
+  }, [recipes, query, onlyItemIds, itemIdsByRecipe]);
 
   return (
     <div className="space-y-3">
+      {itemFilter.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="font-semibold">
+            Showing recipes that use your expiring foods.
+          </span>
+          <Link href="/recipes" className="font-semibold text-primary hover:underline">
+            Show all →
+          </Link>
+        </div>
+      ) : null}
+
       {recipes.length > 6 ? (
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -45,13 +68,21 @@ export function RecipesView({
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
           <BookOpen className="h-6 w-6 text-muted-foreground" />
           <p className="text-sm font-semibold">
-            {recipes.length === 0 ? "No recipes yet" : "Nothing matches"}
+            {recipes.length === 0
+              ? "No recipes yet"
+              : itemFilter.length > 0
+                ? "None of your recipes use those items yet"
+                : "Nothing matches"}
           </p>
           {recipes.length === 0 ? (
             <p className="max-w-sm text-xs text-muted-foreground">
               Import from KitchenOwl (Settings → Import) or create one from
               scratch.
             </p>
+          ) : itemFilter.length > 0 ? (
+            <Link href="/recipes" className="text-sm font-semibold text-primary hover:underline">
+              Show all recipes →
+            </Link>
           ) : null}
         </div>
       ) : (
