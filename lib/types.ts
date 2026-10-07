@@ -108,6 +108,7 @@ export interface GroceryItemRow {
   unit: string | null;
   category_id: string | null;
   checked: boolean;
+  sale_only: boolean;
   source: GrocerySource;
   created_by: string | null;
 }

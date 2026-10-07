@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { Loader2, Minus, Plus, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -67,6 +68,7 @@ export function ItemSheet({
   const [quantity, setQuantity] = useState(item.quantity);
   const [unit, setUnit] = useState(item.unit ?? "");
   const [categoryId, setCategoryId] = useState(item.category_id ?? "__none");
+  const [saleOnly, setSaleOnly] = useState(item.sale_only);
   const [busy, setBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -79,6 +81,7 @@ export function ItemSheet({
       quantity,
       unit: unit.trim() || null,
       categoryId: categoryId === "__none" ? null : categoryId,
+      saleOnly,
     });
     setBusy(false);
     if (!result.ok) {
@@ -90,6 +93,7 @@ export function ItemSheet({
       quantity,
       unit: unit.trim() || null,
       category_id: categoryId === "__none" ? null : categoryId,
+      sale_only: saleOnly,
     });
     toast.success("Saved");
     onOpenChange(false);
@@ -219,6 +223,18 @@ export function ItemSheet({
               </SelectContent>
             </Select>
           </div>
+
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5">
+            <Checkbox
+              checked={saleOnly}
+              onCheckedChange={(value) => setSaleOnly(value === true)}
+              aria-label="Only buy if on sale"
+            />
+            <span className="flex items-center gap-1.5 text-sm font-semibold">
+              <Tag className="h-3.5 w-3.5 text-amber-600" />
+              Only buy if on sale
+            </span>
+          </label>
 
           {store && storeAisles(store.id).length > 0 ? (
             <div className="space-y-2">

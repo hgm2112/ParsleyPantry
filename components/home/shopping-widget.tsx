@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Plus, ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { tintFor } from "@/lib/tints";
@@ -33,6 +33,7 @@ export type ShoppingPreviewItem = {
   quantity: number;
   unit: string | null;
   checked: boolean;
+  sale_only: boolean;
   category_id: string | null;
   source: GrocerySource;
   item: { id: string; category_id: string | null } | null;
@@ -125,6 +126,7 @@ export function ShoppingWidget({
         quantity: item.quantity,
         unit: item.unit,
         category_id: item.category_id,
+        sale_only: item.sale_only,
         source: item.source,
       })),
     );
@@ -226,6 +228,12 @@ export function ShoppingWidget({
                           >
                             {item.name}
                           </span>
+                          {item.sale_only ? (
+                            <Tag
+                              className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                              aria-label="Only buy if on sale"
+                            />
+                          ) : null}
                           <span className="shrink-0 text-xs text-muted-foreground">
                             {item.quantity}
                             {item.unit ? ` ${item.unit}` : ""}

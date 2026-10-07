@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ListChecks, Loader2, Pencil, Plus, Search, Settings2 } from "lucide-react";
+import { ListChecks, Loader2, Pencil, Plus, Search, Settings2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -300,6 +300,7 @@ export function GroceryView({
         quantity: item.quantity,
         unit: item.unit,
         category_id: item.category_id,
+        sale_only: item.sale_only,
         source: item.source,
       })),
     );
@@ -592,20 +593,32 @@ export function GroceryView({
                         className="min-w-0 flex-1 text-left"
                         onClick={() => setEditing(item)}
                       >
-                        <span
-                          className={cn(
-                            "block truncate text-sm font-semibold",
-                            item.checked && "text-muted-foreground line-through",
-                          )}
-                        >
-                          {item.name}
+                        <span className="flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "truncate text-sm font-semibold",
+                              item.checked && "text-muted-foreground line-through",
+                            )}
+                          >
+                            {item.name}
+                          </span>
+                          {item.sale_only ? (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                              <Tag className="h-2.5 w-2.5" />
+                              Sale only
+                            </span>
+                          ) : null}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {item.quantity}
-                          {item.unit ? ` ${item.unit}` : ""}
-                          {item.source !== "manual" ? ` · from ${item.source}` : ""}
-                        </span>
+                        {item.source !== "manual" ? (
+                          <span className="text-xs text-muted-foreground">
+                            from {item.source}
+                          </span>
+                        ) : null}
                       </button>
+                      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                        {item.quantity}
+                        {item.unit ? ` ${item.unit}` : ""}
+                      </span>
                       <Button
                         variant="ghost"
                         size="icon-sm"

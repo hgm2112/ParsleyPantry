@@ -27,6 +27,7 @@ const addSchema = z.object({
   categoryId: uuid.nullish(),
   quantity: z.number().min(0).max(9999).default(1),
   unit: z.string().trim().max(32).nullish(),
+  saleOnly: z.boolean().default(false),
   source: z
     .enum(["manual", "low_stock", "consume", "recipe", "planner"])
     .default("manual"),
@@ -70,6 +71,7 @@ export async function addGroceryItem(
         quantity: input.quantity,
         unit: input.unit ?? null,
         category_id: input.categoryId ?? null,
+        sale_only: input.saleOnly,
         source: input.source,
         created_by: user.id,
       })
@@ -97,6 +99,7 @@ const updateSchema = z.object({
   unit: z.string().trim().max(32).nullish(),
   categoryId: uuid.nullish(),
   checked: z.boolean().optional(),
+  saleOnly: z.boolean().optional(),
 });
 
 export type UpdateGroceryInput = z.input<typeof updateSchema>;
@@ -116,6 +119,7 @@ export async function updateGroceryItem(
     if (input.unit !== undefined) patch.unit = input.unit;
     if (input.categoryId !== undefined) patch.category_id = input.categoryId;
     if (input.checked !== undefined) patch.checked = input.checked;
+    if (input.saleOnly !== undefined) patch.sale_only = input.saleOnly;
 
     if (Object.keys(patch).length === 0) return { ok: true, data: null };
 
@@ -183,6 +187,7 @@ const restoreSchema = z
       quantity: z.number().min(0).max(9999),
       unit: z.string().trim().max(32).nullish(),
       category_id: uuid.nullish(),
+      sale_only: z.boolean(),
       source: z.enum(["manual", "low_stock", "consume", "recipe", "planner"]),
     }),
   )
@@ -210,6 +215,7 @@ export async function restoreGroceryItems(
         unit: item.unit ?? null,
         category_id: item.category_id ?? null,
         checked: true,
+        sale_only: item.sale_only,
         source: item.source,
         created_by: user.id,
       })),

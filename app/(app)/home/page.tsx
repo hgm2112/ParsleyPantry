@@ -59,7 +59,7 @@ async function HomeContent() {
       .order("sort_order", { ascending: true }),
     supabase
       .from("grocery_items")
-      .select("id, item_id, name, quantity, unit, checked, category_id, source, item:items(id, category_id)")
+      .select("id, item_id, name, quantity, unit, checked, sale_only, category_id, source, item:items(id, category_id)")
       .eq("household_id", householdId)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true }),
