@@ -376,6 +376,7 @@ export async function consumeInventory(
 
 const patchSchema = z.object({
   inventoryId: z.string().uuid(),
+  itemName: z.string().trim().min(1).max(160).optional(),
   quantity: z.number().min(0).max(9999).optional(),
   unit: z.string().trim().max(32).nullish(),
   location: locationSchema.optional(),
@@ -486,12 +487,36 @@ export async function updateInventory(
 
     if (
       input.lowThreshold !== undefined ||
-      input.autoRestock !== undefined
+      input.autoRestock !== undefined ||
+      input.itemName !== undefined
     ) {
       const itemPatch: Record<string, unknown> = {};
       if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
-      await supabase.from("items").update(itemPatch).eq("id", current.item_id);
+      if (input.itemName !== undefined) itemPatch.name = input.itemName;
+      const { error: itemError } = await supabase
+        .from("items")
+        .update(itemPatch)
+        .eq("id", current.item_id);
+      if (itemError) {
+        if (itemError.code === "23505") {
+          return {
+            ok: false,
+            error: `An item named "${input.itemName}" already exists`,
+          };
+        }
+        return { ok: false, error: itemError.message };
+      }
+      if (input.itemName !== undefined) {
+        // Grocery rows keep their own copy of the name.
+        await supabase
+          .from("grocery_items")
+          .update({ name: input.itemName })
+          .eq("household_id", householdId)
+          .eq("item_id", current.item_id);
+        revalidatePath("/");
+        revalidatePath("/grocery");
+      }
     }
 
     const updated = await loadInventory(supabase, householdId, input.inventoryId);

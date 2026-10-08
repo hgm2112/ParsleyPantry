@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -49,6 +49,10 @@ export function InventoryDetail({
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(initial.item.name);
+  const nameBusyRef = useRef(false);
+  const nameCancelRef = useRef(false);
 
   const low = isLowStock(entry, entry.item);
 
@@ -76,6 +80,31 @@ export function InventoryDetail({
     });
     setSaveBusy(false);
     toast[ok ? "success" : "error"](ok ? "Saved" : "Could not save");
+  }
+
+  async function commitName() {
+    if (nameBusyRef.current || nameCancelRef.current) {
+      nameCancelRef.current = false;
+      return;
+    }
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === entry.item.name) {
+      setNameDraft(entry.item.name);
+      setEditingName(false);
+      return;
+    }
+    nameBusyRef.current = true;
+    const result = await updateInventory({
+      inventoryId: entry.id,
+      itemName: trimmed,
+    });
+    nameBusyRef.current = false;
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setEntry(result.data.inventory as InventoryEntry);
+    setEditingName(false);
   }
 
   async function toggleAutoRestock(checked: boolean) {
@@ -115,10 +144,46 @@ export function InventoryDetail({
           >
             <ArrowLeft />
           </Button>
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-extrabold">
-              {entry.item.name}
-            </h1>
+          <div className="min-w-0 flex-1">
+            {editingName ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void commitName();
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={nameDraft}
+                  aria-label="Item name"
+                  className="h-8 text-lg font-extrabold"
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  onBlur={() => void commitName()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      nameCancelRef.current = true;
+                      setNameDraft(entry.item.name);
+                      setEditingName(false);
+                    }
+                  }}
+                />
+              </form>
+            ) : (
+              <h1 className="truncate">
+                <button
+                  type="button"
+                  className="block w-full max-w-full truncate cursor-text text-lg font-extrabold hover:text-primary"
+                  onClick={() => {
+                    setNameDraft(entry.item.name);
+                    nameCancelRef.current = false;
+                    setEditingName(true);
+                  }}
+                >
+                  {entry.item.name}
+                </button>
+              </h1>
+            )}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <LocationBadge location={entry.location} />
               <ExpiryChip date={entry.expiration_date} />

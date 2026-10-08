@@ -366,13 +366,13 @@ function InventoryRow({
 
   return (
     <li className="rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
-      <div className="flex items-start gap-2.5">
-        <Link
-          href={`/inventory/${entry.id}`}
-          prefetch
-          className="flex min-w-0 flex-1 flex-col gap-1.5"
-        >
-          <span className="flex items-center gap-1.5">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <Link
+            href={`/inventory/${entry.id}`}
+            prefetch
+            className="flex min-w-0 flex-1 items-center gap-1.5"
+          >
             <span
               className={cn(
                 "truncate text-sm font-semibold",
@@ -384,53 +384,29 @@ function InventoryRow({
             {low ? (
               <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
             ) : null}
-          </span>
-          <span className="flex flex-wrap items-center gap-1.5">
-            {unitText ? (
-              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
-                {unitText}
-              </span>
-            ) : null}
-            <ExpiryChip date={entry.expiration_date} className="uppercase" />
-            <LocationBadge location={entry.location} className="uppercase" />
-            {onHold > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
-                {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
-              </span>
-            ) : null}
-            {quantity <= 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
-                Out
-              </span>
-            ) : low ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                <TriangleAlert className="h-3 w-3" /> Low
-              </span>
-            ) : null}
-          </span>
-        </Link>
+          </Link>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label={`Add one ${entry.item.name}`}
-            onClick={quickAdd}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-          <span className="min-w-8 text-center text-sm font-extrabold tabular-nums">
-            {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label={`Use one ${entry.item.name}`}
-            disabled={quantity <= 0}
-            onClick={quickUse}
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label={`Add one ${entry.item.name}`}
+              onClick={quickAdd}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            <span className="min-w-8 text-center text-sm font-extrabold tabular-nums">
+              {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
+            </span>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label={`Use one ${entry.item.name}`}
+              disabled={quantity <= 0}
+              onClick={quickUse}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -485,8 +461,33 @@ function InventoryRow({
               <Trash2 /> Remove from inventory
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu>
         </div>
+        </div>
+
+        <Link
+          href={`/inventory/${entry.id}`}
+          prefetch
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          {unitText ? (
+            <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
+              {unitText}
+            </span>
+          ) : null}
+          <ExpiryChip date={entry.expiration_date} className="uppercase" />
+          <LocationBadge location={entry.location} className="uppercase" />
+          {onHold > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+              {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
+            </span>
+          ) : null}
+          {quantity <= 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
+              Out
+            </span>
+          ) : null}
+        </Link>
       </div>
 
       <ConfirmDialog
