@@ -3,7 +3,7 @@ import { requireDal } from "@/lib/auth";
 import { InventoryView } from "@/components/inventory/inventory-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { stockPoolKey } from "@/lib/stock";
-import type { CategoryRow, InventoryEntry, StockHoldRow } from "@/lib/types";
+import type { InventoryEntry, StockHoldRow } from "@/lib/types";
 
 export const metadata = { title: "Pantry" };
 
@@ -31,24 +31,29 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [inventoryResult, categoriesResult, holdsResult] = await Promise.all([
+  const [inventoryResult, holdsResult] = await Promise.all([
     supabase
       .from("inventory")
       .select("*, item:items!inner(*)")
       .eq("household_id", householdId),
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
     supabase
       .from("stock_holds")
       .select("item_id, quantity, unit")
       .eq("household_id", householdId),
   ]);
 
-  const rows = (inventoryResult.data ?? []) as unknown as InventoryEntry[];
-  const categories = (categoriesResult.data ?? []) as CategoryRow[];
+  const rows = ((inventoryResult.data ?? []) as unknown as InventoryEntry[])
+    .sort((a, b) => {
+      if (a.expiration_date && b.expiration_date) {
+        const byDate = a.expiration_date.localeCompare(b.expiration_date);
+        if (byDate !== 0) return byDate;
+      } else if (a.expiration_date) {
+        return -1;
+      } else if (b.expiration_date) {
+        return 1;
+      }
+      return a.item.name.localeCompare(b.item.name);
+    });
   const holdsByItem: Record<string, number> = {};
   for (const hold of (holdsResult.data ?? []) as Pick<
     StockHoldRow,
@@ -59,7 +64,7 @@ async function InventoryContent() {
   }
 
   return (
-    <InventoryView rows={rows} categories={categories} holdsByItem={holdsByItem} />
+    <InventoryView rows={rows} holdsByItem={holdsByItem} />
   );
 }
 

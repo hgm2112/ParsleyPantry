@@ -36,10 +36,9 @@ import {
   updateInventory,
 } from "@/app/(app)/inventory/actions";
 import { expiryBucket } from "@/lib/expiry";
-import { isLowStock, stockPoolKey } from "@/lib/stock";
-import { foodEmoji, splitLeadingEmoji, tileGradient } from "@/lib/tiles";
+import { displayQtyUnit, isLowStock, stockPoolKey } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
+import type { InventoryEntry, Location } from "@/lib/types";
 
 type Tab = "all" | Location;
 
@@ -52,11 +51,9 @@ const TABS: { value: Tab; label: string }[] = [
 
 export function InventoryView({
   rows,
-  categories,
   holdsByItem,
 }: {
   rows: InventoryEntry[];
-  categories: CategoryRow[];
   holdsByItem: Record<string, number>;
 }) {
   const router = useRouter();
@@ -227,12 +224,6 @@ export function InventoryView({
             <InventoryRow
               key={row.id}
               entry={row}
-              categoryName={
-                row.item.category_id
-                  ? (categories.find((entry) => entry.id === row.item.category_id)
-                      ?.name ?? null)
-                  : null
-              }
               onHold={
                 holdsByItem[stockPoolKey(row.item_id, row.unit)] ?? 0
               }
@@ -309,12 +300,10 @@ function EmptyState({
 
 function InventoryRow({
   entry,
-  categoryName,
   onHold,
   onConsume,
 }: {
   entry: InventoryEntry;
-  categoryName: string | null;
   onHold: number;
   onConsume: (mode: "partial" | "last") => void;
 }) {
@@ -322,8 +311,7 @@ function InventoryRow({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const low = isLowStock(entry, entry.item);
   const quantity = entry.quantity;
-  const [nameEmoji, cleanName] = splitLeadingEmoji(entry.item.name);
-  const tileEmoji = entry.item.icon ?? nameEmoji ?? foodEmoji(entry.item.name);
+  const { unitText } = displayQtyUnit(entry.quantity, entry.unit);
 
   async function quickUse() {
     const name = entry.item.name;
@@ -359,6 +347,14 @@ function InventoryRow({
     }
   }
 
+  async function quickAdd() {
+    const result = await updateInventory({
+      inventoryId: entry.id,
+      quantity: quantity + 1,
+    });
+    if (!result.ok) toast.error(result.error);
+  }
+
   async function toggleLow() {
     const result = await updateInventory({
       inventoryId: entry.id,
@@ -374,59 +370,56 @@ function InventoryRow({
         <Link
           href={`/inventory/${entry.id}`}
           prefetch
-          className="flex min-w-0 flex-1 items-start gap-2.5"
+          className="flex min-w-0 flex-1 flex-col gap-1.5"
         >
-          <span
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
-              tileGradient(entry.item.name),
-            )}
-            aria-hidden
-          >
-            {tileEmoji}
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "truncate text-sm font-semibold",
+                quantity <= 0 && "text-muted-foreground line-through",
+              )}
+            >
+              {entry.item.name}
+            </span>
+            {low ? (
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+            ) : null}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "truncate text-sm font-semibold",
-                  quantity <= 0 && "text-muted-foreground line-through",
-                )}
-              >
-                {cleanName}
+          <span className="flex flex-wrap items-center gap-1.5">
+            {unitText ? (
+              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
+                {unitText}
               </span>
-              {low ? (
-                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-              ) : null}
-            </span>
-            <span className="mt-1 flex flex-wrap items-center gap-1.5">
-              <LocationBadge location={entry.location} />
-              {categoryName ? (
-                <span className="inline-flex max-w-40 items-center truncate rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-                  {categoryName}
-                </span>
-              ) : null}
-              <ExpiryChip date={entry.expiration_date} />
-              {onHold > 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
-                  {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
-                </span>
-              ) : null}
-              {quantity <= 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
-                  Out
-                </span>
-              ) : low ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                  <TriangleAlert className="h-3 w-3" /> Low
-                </span>
-              ) : null}
-            </span>
+            ) : null}
+            <ExpiryChip date={entry.expiration_date} className="uppercase" />
+            <LocationBadge location={entry.location} className="uppercase" />
+            {onHold > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+                {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
+              </span>
+            ) : null}
+            {quantity <= 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
+                Out
+              </span>
+            ) : low ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <TriangleAlert className="h-3 w-3" /> Low
+              </span>
+            ) : null}
           </span>
         </Link>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className="w-10 text-right text-sm font-extrabold tabular-nums">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={`Add one ${entry.item.name}`}
+            onClick={quickAdd}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+          <span className="min-w-8 text-center text-sm font-extrabold tabular-nums">
             {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
           </span>
           <Button
