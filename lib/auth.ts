@@ -1,5 +1,6 @@
 import "server-only";
 import type { User } from "@supabase/supabase-js";
+import { io } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileRow } from "@/lib/types";
@@ -17,6 +18,7 @@ export type Dal = {
  * Returns null when signed out (callers decide whether to redirect).
  */
 export async function getDal(): Promise<Dal | null> {
+  await io();
   const supabase = await createClient();
 
   const {
