@@ -58,7 +58,7 @@ export function AddForm({
   const [name, setName] = useState("");
   const [matches, setMatches] = useState<ItemRow[]>([]);
   const [quantity, setQuantity] = useState(1);
-  const [unit, setUnit] = useState("");
+  const [unit, setUnit] = useState("oz");
   const [location, setLocation] = useState<Location>(defaultLocation);
   const [expirationDate, setExpirationDate] = useState("");
   const [expiryTouched, setExpiryTouched] = useState(false);
@@ -103,7 +103,7 @@ export function AddForm({
     setName(item.name);
     setMatches([]);
     setBarcode(item.barcode ?? barcode);
-    setUnit(item.unit ?? "");
+    setUnit(item.unit ?? "oz");
     setCategoryId(item.category_id ?? "");
     setLowThreshold(item.low_threshold != null ? String(item.low_threshold) : "");
     setAutoRestock(item.auto_restock);

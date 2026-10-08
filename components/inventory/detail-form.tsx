@@ -15,13 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -34,7 +27,7 @@ import {
 import { addDays } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
+import type { InventoryEntry, Location } from "@/lib/types";
 
 const LOCATIONS: { value: Location; label: string }[] = [
   { value: "pantry", label: "Pantry" },
@@ -44,20 +37,15 @@ const LOCATIONS: { value: Location; label: string }[] = [
 
 export function InventoryDetail({
   entry: initial,
-  categories,
 }: {
   entry: InventoryEntry;
-  categories: CategoryRow[];
 }) {
   const router = useRouter();
   const [entry, setEntry] = useState<InventoryEntry>(initial);
-  const [unit, setUnit] = useState(initial.unit ?? "");
-  const [source, setSource] = useState(initial.source ?? "");
-  const [notes, setNotes] = useState(initial.notes ?? "");
+  const [unit, setUnit] = useState(initial.unit ?? "oz");
   const [lowThreshold, setLowThreshold] = useState(
     initial.item.low_threshold != null ? String(initial.item.low_threshold) : "",
   );
-  const [categoryId, setCategoryId] = useState(initial.item.category_id ?? "");
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
@@ -83,8 +71,6 @@ export function InventoryDetail({
     setSaveBusy(true);
     const ok = await patch({
       unit: unit.trim() || null,
-      source: source.trim() || null,
-      notes: notes.trim() || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
       autoRestock: entry.item.auto_restock,
     });
@@ -232,63 +218,13 @@ export function InventoryDetail({
       </section>
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="unit">Unit</Label>
-            <Input
-              id="unit"
-              value={unit}
-              onChange={(event) => setUnit(event.target.value)}
-              placeholder="ea, lb…"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="source">Source</Label>
-            <Input
-              id="source"
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
-              placeholder="Meijer…"
-            />
-          </div>
-        </div>
-
         <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
-          <Select
-            value={categoryId || "__none"}
-            items={[
-              { value: "__none", label: "None" },
-              ...categories.map((category) => ({
-                value: category.id,
-                label: category.name,
-              })),
-            ]}
-            onValueChange={(value) => {
-              setCategoryId(!value || value === "__none" ? "" : value);
-            }}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="None" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">None</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="notes">Notes</Label>
+          <Label htmlFor="unit">Unit</Label>
           <Input
-            id="notes"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Where it lives…"
+            id="unit"
+            value={unit}
+            onChange={(event) => setUnit(event.target.value)}
+            placeholder="oz"
           />
         </div>
 

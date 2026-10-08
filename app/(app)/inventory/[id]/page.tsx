@@ -4,7 +4,6 @@ import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InventoryDetail } from "@/components/inventory/detail-form";
 import type { InventoryEntry } from "@/lib/types";
-import type { CategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Item" };
 
@@ -21,26 +20,17 @@ function DetailSkeleton() {
 async function DetailContent({ inventoryId }: { inventoryId: string }) {
   const { supabase, householdId } = await requireDal();
 
-  const [entryResult, categoriesResult] = await Promise.all([
-    supabase
-      .from("inventory")
-      .select("*, item:items!inner(*)")
-      .eq("household_id", householdId)
-      .eq("id", inventoryId)
-      .maybeSingle(),
-    supabase
-      .from("categories")
-      .select("id, household_id, name, icon, sort_order")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const { data } = await supabase
+    .from("inventory")
+    .select("*, item:items!inner(*)")
+    .eq("household_id", householdId)
+    .eq("id", inventoryId)
+    .maybeSingle();
 
-  const entry = entryResult.data as unknown as InventoryEntry | null;
+  const entry = data as unknown as InventoryEntry | null;
   if (!entry) notFound();
 
-  const categories = (categoriesResult.data ?? []) as CategoryRow[];
-
-  return <InventoryDetail entry={entry} categories={categories} />;
+  return <InventoryDetail entry={entry} />;
 }
 
 export default function InventoryDetailPage({
