@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
-import { parseQuantityText } from "@/lib/stock";
+import { parseQuantityText, toImperialText } from "@/lib/stock";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -84,7 +84,7 @@ export async function createRecipe(
           recipe_id: recipe.id as string,
           item_id: itemByName.get(ingredient.name.toLowerCase()) ?? null,
           name: ingredient.name,
-          quantity_text: ingredient.quantity_text,
+          quantity_text: toImperialText(ingredient.quantity_text),
           optional: ingredient.optional,
           sort_order: index,
         })),
@@ -145,7 +145,7 @@ export async function updateRecipe(
           recipe_id: recipeId,
           item_id: itemByName.get(ingredient.name.toLowerCase()) ?? null,
           name: ingredient.name,
-          quantity_text: ingredient.quantity_text,
+          quantity_text: toImperialText(ingredient.quantity_text),
           optional: ingredient.optional,
           sort_order: index,
         })),

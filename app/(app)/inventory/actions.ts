@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { lookupOffProduct, type OffProduct } from "@/lib/off";
 import { ensureGroceryItem } from "@/lib/grocery";
-import { earliest, isLowStock } from "@/lib/stock";
+import { earliest, imperialFactor, isLowStock, toImperialStock } from "@/lib/stock";
 import type {
   InventoryRow,
   InventoryWithItem,
@@ -142,6 +142,15 @@ export async function addToInventory(
     const input = parsed.data;
     const { supabase, householdId, user } = await requireDal();
 
+    const imperial = toImperialStock(input.quantity, input.unit ?? null);
+    const quantity = imperial.quantity;
+    const unit = imperial.unit;
+    const thresholdFactor = imperialFactor(input.unit ?? null);
+    const lowThreshold =
+      input.lowThreshold != null && thresholdFactor != null
+        ? Math.round(input.lowThreshold * thresholdFactor * 10) / 10
+        : (input.lowThreshold ?? null);
+
     let item: ItemRow | null = null;
     let createdItem = false;
 
@@ -172,9 +181,9 @@ export async function addToInventory(
           category_id: input.categoryId ?? null,
           default_location: input.location,
           expiration_days: input.expirationDays ?? null,
-          low_threshold: input.lowThreshold ?? null,
+          low_threshold: lowThreshold,
           auto_restock: input.autoRestock ?? false,
-          unit: input.unit ?? null,
+          unit,
           created_by: user.id,
         })
         .select("*")
@@ -197,7 +206,7 @@ export async function addToInventory(
       input.categoryId != null
     ) {
       const patch: Record<string, unknown> = {};
-      if (input.lowThreshold != null) patch.low_threshold = input.lowThreshold;
+      if (lowThreshold != null) patch.low_threshold = lowThreshold;
       if (input.expirationDays != null) patch.expiration_days = input.expirationDays;
       if (input.autoRestock != null) patch.auto_restock = input.autoRestock;
       if (input.categoryId != null) patch.category_id = input.categoryId;
@@ -217,13 +226,13 @@ export async function addToInventory(
     let inventoryId: string;
 
     if (existing) {
-      const mergedQuantity = existing.quantity + input.quantity;
+      const mergedQuantity = existing.quantity + quantity;
       const { data: updated, error: updateError } = await supabase
         .from("inventory")
         .update({
           quantity: mergedQuantity,
           expiration_date: earliest(existing.expiration_date, input.expirationDate),
-          unit: input.unit ?? existing.unit,
+          unit: unit ?? existing.unit,
           source: input.source ?? existing.source,
           notes: input.notes ?? existing.notes,
           added_by: user.id,
@@ -242,8 +251,8 @@ export async function addToInventory(
           household_id: householdId,
           item_id: item.id,
           location: input.location,
-          quantity: input.quantity,
-          unit: input.unit ?? null,
+          quantity,
+          unit,
           expiration_date: input.expirationDate,
           source: input.source ?? null,
           notes: input.notes ?? null,
@@ -396,6 +405,19 @@ export async function updateInventory(
     const current = await loadInventory(supabase, householdId, input.inventoryId);
     if (!current) return { ok: false, error: "Item not found in inventory" };
 
+    let quantity = input.quantity;
+    let unit = input.unit;
+    let lowThreshold = input.lowThreshold;
+    if (unit !== undefined) {
+      const imperial = toImperialStock(quantity ?? current.quantity, unit ?? null);
+      quantity = imperial.quantity;
+      unit = imperial.unit;
+      const factor = imperialFactor(input.unit ?? null);
+      if (factor != null && lowThreshold != null) {
+        lowThreshold = Math.round(lowThreshold * factor * 10) / 10;
+      }
+    }
+
     // Moving locations may collide with an existing row for the target.
     if (input.location && input.location !== current.location) {
       const { data: targetRows } = await supabase
@@ -407,7 +429,7 @@ export async function updateInventory(
         .limit(1);
 
       const target = ((targetRows ?? [])[0] as InventoryRow | undefined) ?? null;
-      const nextQuantity = input.quantity ?? current.quantity + (target?.quantity ?? 0);
+      const nextQuantity = quantity ?? current.quantity + (target?.quantity ?? 0);
 
       if (target) {
         await supabase.from("inventory").delete().eq("id", current.id);
@@ -416,7 +438,7 @@ export async function updateInventory(
           .update({
             quantity: nextQuantity,
             expiration_date: earliest(target.expiration_date, current.expiration_date),
-            unit: input.unit ?? target.unit,
+            unit: unit ?? target.unit,
             source: input.source ?? target.source,
             notes: input.notes ?? target.notes,
             is_low: input.isLow ?? target.is_low,
@@ -434,8 +456,8 @@ export async function updateInventory(
         .from("inventory")
         .update({
           location: input.location,
-          quantity: input.quantity ?? current.quantity,
-          unit: input.unit ?? undefined,
+          quantity: quantity ?? current.quantity,
+          unit: unit ?? undefined,
           expiration_date:
             input.expirationDate === undefined ? undefined : input.expirationDate,
           source: input.source ?? undefined,
@@ -446,8 +468,8 @@ export async function updateInventory(
       if (moveError) return { ok: false, error: moveError.message };
     } else {
       const patch: Record<string, unknown> = {};
-      if (input.quantity !== undefined) patch.quantity = input.quantity;
-      if (input.unit !== undefined) patch.unit = input.unit;
+      if (quantity !== undefined) patch.quantity = quantity;
+      if (unit !== undefined) patch.unit = unit;
       if (input.expirationDate !== undefined) patch.expiration_date = input.expirationDate;
       if (input.source !== undefined) patch.source = input.source;
       if (input.notes !== undefined) patch.notes = input.notes;
@@ -467,7 +489,7 @@ export async function updateInventory(
       input.autoRestock !== undefined
     ) {
       const itemPatch: Record<string, unknown> = {};
-      if (input.lowThreshold !== undefined) itemPatch.low_threshold = input.lowThreshold;
+      if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
       await supabase.from("items").update(itemPatch).eq("id", current.item_id);
     }
