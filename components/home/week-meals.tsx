@@ -92,7 +92,7 @@ export function WeekMeals({
               type="button"
               onClick={() => setOpenDate(iso)}
               className={cn(
-                "group rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+                "group flex h-36 flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
                 recipe
                   ? cn(tint.header, "hover:border-primary/50")
                   : "border-dashed bg-background",
@@ -100,21 +100,18 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-baseline gap-1.5">
                     <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="flex items-center gap-1 text-xs opacity-70">
-                      {meal?.made_at ? (
-                        <Check className="h-3.5 w-3.5" aria-label="Made" />
-                      ) : null}
+                    <span className="text-xs opacity-70">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
 
                   <span
                     className={cn(
-                      "mx-auto mt-2 flex size-9 items-center justify-center rounded-full",
+                      "relative mx-auto mt-2 flex size-9 items-center justify-center rounded-full",
                       tint.dot,
                     )}
                     aria-hidden
@@ -125,14 +122,19 @@ export function WeekMeals({
                       width={792}
                       height={720}
                       unoptimized
-                      className="h-5 w-5 select-none brightness-0 invert"
+                      className="h-6 w-6 select-none brightness-0 invert"
                     />
+                    {meal?.made_at ? (
+                      <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-2.5 w-2.5" aria-label="Made" />
+                      </span>
+                    ) : null}
                   </span>
                   <p className="mt-2 line-clamp-2 min-h-8 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
                   {recipe.time > 0 ? (
-                    <span className="mt-1 flex items-center justify-center gap-1 text-[11px] opacity-70">
+                    <span className="mt-1 flex items-center justify-center gap-1 text-[9px] opacity-70">
                       <Clock className="h-3 w-3" />
                       {recipe.time} min
                     </span>
@@ -140,7 +142,7 @@ export function WeekMeals({
                 </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-baseline gap-1.5">
                     <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
@@ -148,7 +150,7 @@ export function WeekMeals({
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
-                  <div className="mt-2 flex min-h-24 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors group-hover:text-primary">
+                  <div className="mt-2 flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors group-hover:text-primary">
                     <Plus className="h-4 w-4" />
                     <span className="text-xs font-semibold">Plan a meal</span>
                   </div>
