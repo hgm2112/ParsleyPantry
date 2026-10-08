@@ -51,6 +51,15 @@ export function WeekMeals({
     router.refresh();
   }
 
+  function stopAndMark(event: {
+    stopPropagation: () => void;
+    preventDefault: () => void;
+  }) {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!madeBusy) void quickMarkMade();
+  }
+
   // Rolling 7-day window that always leads with today.
   const start = useMemo(() => addDays(today, offset * 7), [today, offset]);
   const dates = useMemo(
@@ -114,7 +123,7 @@ export function WeekMeals({
               type="button"
               onClick={() => setOpenDate(iso)}
               className={cn(
-                "group relative flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+                "group flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
                 recipe
                   ? cn(tint.header, "hover:border-primary/50")
                   : "border-dashed bg-background",
@@ -122,33 +131,6 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
-                  {iso === today && !meal?.made_at ? (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Mark today's dinner as made"
-                      aria-disabled={madeBusy}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        if (!madeBusy) void quickMarkMade();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.stopPropagation();
-                          event.preventDefault();
-                          if (!madeBusy) void quickMarkMade();
-                        }
-                      }}
-                      className="absolute right-1.5 top-1.5 z-10 rounded-full p-1 text-muted-foreground transition-colors hover:bg-white/70 hover:text-primary"
-                    >
-                      {madeBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ChefHat className="h-4 w-4" />
-                      )}
-                    </span>
-                  ) : null}
                   <div className="flex flex-col items-center">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-sm font-extrabold uppercase">
@@ -159,27 +141,51 @@ export function WeekMeals({
                       </span>
                     </div>
 
-                    <span
-                      className={cn(
-                        "relative mt-2 flex size-12 items-center justify-center rounded-full",
-                        tint.dot,
-                      )}
-                      aria-hidden
-                    >
-                      <Image
-                        src="/knifefork2.svg"
-                        alt=""
-                        width={792}
-                        height={720}
-                        unoptimized
-                        className="h-9 w-auto select-none brightness-0 invert"
-                      />
-                      {meal?.made_at ? (
-                        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="h-2.5 w-2.5" aria-label="Made" />
-                        </span>
-                      ) : null}
-                    </span>
+                    {iso === today && !meal?.made_at ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Mark today's dinner as made"
+                        aria-disabled={madeBusy}
+                        onClick={stopAndMark}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            stopAndMark(event);
+                          }
+                        }}
+                        className={cn(
+                          "relative mt-2 flex size-12 cursor-pointer items-center justify-center rounded-full transition-shadow hover:ring-2 hover:ring-white/80",
+                          tint.dot,
+                        )}
+                      >
+                        {madeBusy ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-white" />
+                        ) : (
+                          <ChefHat className="h-7 w-7 text-white" />
+                        )}
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "relative mt-2 flex size-12 items-center justify-center rounded-full",
+                          tint.dot,
+                        )}
+                        aria-hidden
+                      >
+                        {meal?.made_at ? (
+                          <Check className="h-7 w-7 text-white" aria-label="Made" />
+                        ) : (
+                          <Image
+                            src="/knifefork2.svg"
+                            alt=""
+                            width={792}
+                            height={720}
+                            unoptimized
+                            className="h-9 w-auto select-none brightness-0 invert"
+                          />
+                        )}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 line-clamp-4 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
