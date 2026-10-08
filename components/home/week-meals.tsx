@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -12,30 +13,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
 import { addDays, dateLabel, dayIndexOf, mondayOf, weekTitle } from "@/lib/plan";
-import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { tintFor } from "@/lib/tints";
 import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
-
-const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "dessert"];
-
-function mealType(tags: string[]): string | null {
-  for (const tag of tags) {
-    const lowered = tag.toLowerCase();
-    if (MEAL_TYPES.includes(lowered)) {
-      return lowered[0].toUpperCase() + lowered.slice(1);
-    }
-  }
-  return null;
-}
-
-const TYPE_CHIP: Record<string, string> = {
-  Breakfast: "bg-amber-100 text-amber-800",
-  Lunch: "bg-emerald-100 text-emerald-800",
-  Dinner: "bg-violet-100 text-violet-800",
-  Snack: "bg-sky-100 text-sky-800",
-  Dessert: "bg-rose-100 text-rose-800",
-};
 
 export function WeekMeals({
   meals,
@@ -71,7 +52,7 @@ export function WeekMeals({
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Utensils className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-extrabold">This Week&apos;s Meals</h2>
+        <h2 className="text-lg font-extrabold">This Week&apos;s Dinners</h2>
         <div className="mx-auto flex items-center gap-1">
           <button
             type="button"
@@ -103,7 +84,7 @@ export function WeekMeals({
           const label = dateLabel(iso);
           const meal = byDate.get(iso) ?? null;
           const recipe = meal?.recipe ?? null;
-          const type = recipe ? mealType(recipe.tags) : null;
+          const tint = tintFor(recipe?.name ?? "");
 
           return (
             <button
@@ -111,56 +92,64 @@ export function WeekMeals({
               type="button"
               onClick={() => setOpenDate(iso)}
               className={cn(
-                "group rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/50 hover:shadow-sm",
-                iso === today && "border-primary bg-primary/5",
+                "group rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+                recipe
+                  ? cn(tint.header, "hover:border-primary/50")
+                  : "border-dashed bg-background",
               )}
             >
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-extrabold">{label.weekday}</span>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  {meal?.made_at ? (
-                    <Check className="h-3.5 w-3.5 text-primary" aria-label="Made" />
-                  ) : null}
-                  {label.month} {label.dayOfMonth}
-                </span>
-              </div>
-
               {recipe ? (
                 <>
-                  <div
-                    className={cn(
-                      "mt-2 flex h-20 items-center justify-center rounded-lg bg-gradient-to-br text-4xl",
-                      tileGradient(recipe.name),
-                    )}
-                  >
-                    <span aria-hidden>{foodEmoji(recipe.name, recipe.tags)}</span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-extrabold uppercase">
+                      {label.weekday}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs opacity-70">
+                      {meal?.made_at ? (
+                        <Check className="h-3.5 w-3.5" aria-label="Made" />
+                      ) : null}
+                      {label.month} {label.dayOfMonth}
+                    </span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-center text-sm font-semibold leading-snug group-hover:text-primary">
+
+                  <span
+                    className={cn(
+                      "mt-2 flex size-9 items-center justify-center rounded-full",
+                      tint.dot,
+                    )}
+                    aria-hidden
+                  >
+                    <Image
+                      src="/knifefork.svg"
+                      alt=""
+                      width={720}
+                      height={720}
+                      unoptimized
+                      className="h-4 w-4 select-none brightness-0 invert"
+                    />
+                  </span>
+                  <p className="mt-2 line-clamp-2 min-h-10 text-sm font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
-                  <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
-                    {recipe.time > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {recipe.time} min
-                      </span>
-                    ) : null}
-                    {type ? (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                          TYPE_CHIP[type] ?? "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {type}
-                      </span>
-                    ) : null}
-                  </div>
+                  {recipe.time > 0 ? (
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs opacity-70">
+                      <Clock className="h-3 w-3" />
+                      {recipe.time} min
+                    </span>
+                  ) : null}
                 </>
               ) : (
-                <div className="mt-2 flex h-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:text-primary">
-                  <Plus className="h-4 w-4" />
-                  <span className="text-xs font-semibold">Plan</span>
+                <div className="flex h-full min-h-28 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors group-hover:text-primary">
+                  <div className="flex items-baseline justify-between self-stretch">
+                    <span className="text-sm font-extrabold uppercase text-foreground">
+                      {label.weekday}
+                    </span>
+                    <span className="text-xs">
+                      {label.month} {label.dayOfMonth}
+                    </span>
+                  </div>
+                  <Plus className="mt-4 h-4 w-4" />
+                  <span className="text-xs font-semibold">Plan a meal</span>
                 </div>
               )}
             </button>
