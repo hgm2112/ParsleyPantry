@@ -1,6 +1,8 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
+import { io } from "next/cache";
 import { daysUntil } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import type { InventoryEntry } from "@/lib/types";
@@ -8,6 +10,7 @@ import type { InventoryEntry } from "@/lib/types";
 const EXPIRING_DAYS = 5;
 
 export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
+  use(io());
   let fresh = 0;
   let low = 0;
   let expiring = 0;

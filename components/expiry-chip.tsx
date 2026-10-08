@@ -1,3 +1,7 @@
+"use client";
+
+import { use } from "react";
+import { io } from "next/cache";
 import { cn } from "@/lib/utils";
 import { expiryBucket, formatExpiry } from "@/lib/expiry";
 
@@ -8,6 +12,7 @@ export function ExpiryChip({
   date: string | null;
   className?: string;
 }) {
+  use(io());
   const bucket = expiryBucket(date);
   if (!bucket && !date) {
     return (

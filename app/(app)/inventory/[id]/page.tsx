@@ -20,7 +20,7 @@ function DetailSkeleton() {
 async function DetailContent({ inventoryId }: { inventoryId: string }) {
   const { supabase, householdId } = await requireDal();
 
-  const [data, subsResult] = await Promise.all([
+  const [entryResult, subsResult] = await Promise.all([
     supabase
       .from("inventory")
       .select("*, item:items!inner(*)")
@@ -34,8 +34,8 @@ async function DetailContent({ inventoryId }: { inventoryId: string }) {
       .order("sort_order", { ascending: true }),
   ]);
 
-  const entry = data as unknown as InventoryEntry | null;
-  if (!entry) notFound();
+  const entry = entryResult.data as InventoryEntry | null;
+  if (!entry || !entry.item) notFound();
 
   return (
     <InventoryDetail

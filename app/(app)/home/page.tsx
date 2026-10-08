@@ -21,14 +21,14 @@ function HomeSkeleton() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Skeleton className="hidden rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block h-[26rem]" />
       <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
-      <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-2 h-56" />
-      <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-2 h-96" />
-      <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-2 h-96" />
-      <div className="space-y-4 lg:col-start-3 lg:row-start-3">
+      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+        <Skeleton className="h-56 rounded-2xl" />
         <Skeleton className="h-48 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />
         <Skeleton className="h-28 rounded-2xl" />
       </div>
+      <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-2 h-96" />
+      <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-2 h-96" />
     </div>
   );
 }

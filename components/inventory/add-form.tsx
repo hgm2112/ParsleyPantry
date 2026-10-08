@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, use } from "react";
+import { io } from "next/cache";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -54,6 +55,7 @@ export function AddForm({
   defaultLocation,
   initialBarcode,
 }: Props) {
+  use(io());
   const router = useRouter();
   const [barcode, setBarcode] = useState(initialBarcode ?? "");
   const [selectedItem, setSelectedItem] = useState<ItemRow | null>(null);

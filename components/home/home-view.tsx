@@ -73,8 +73,11 @@ export function HomeView({
         <SmartActions pantry={pantry} grocery={grocery} meals={meals} recipes={recipes} />
       </div>
 
-      <div className="lg:col-start-3 lg:row-start-2">
+      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
         <SnackWidget rows={pantry} subcategories={subcategories} />
+        <PantryInsights rows={pantry} />
+        <MiniCalendar meals={meals} recipes={recipes} />
+        <PromoCard />
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
@@ -91,12 +94,6 @@ export function HomeView({
           rememberedAisles={rememberedAisles}
           settings={settings}
         />
-      </div>
-
-      <div className="space-y-4 lg:col-start-3 lg:row-start-3">
-        <PantryInsights rows={pantry} />
-        <MiniCalendar meals={meals} recipes={recipes} />
-        <PromoCard />
       </div>
     </div>
   );

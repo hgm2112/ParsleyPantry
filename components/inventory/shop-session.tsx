@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
+import { io } from "next/cache";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -421,6 +422,7 @@ function UnknownItemSheet({
     expirationDate: string | null,
   ) => void;
 }) {
+  use(io());
   const [name, setName] = useState(off?.name ?? "");
   const [quantity, setQuantity] = useState(1);
   const [expiryTouched, setExpiryTouched] = useState(false);

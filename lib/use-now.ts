@@ -1,11 +1,13 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { use, useSyncExternalStore } from "react";
+import { io } from "next/cache";
 
 /**
- * Wall-clock reads for client components. The server snapshot is computed at
- * request time (these routes are dynamic), so hydration always matches the
- * server HTML and the client value wins right after.
+ * Wall-clock reads for client components. `use(io())` keeps the read out of
+ * the prerendered shell; on real requests and in the browser `io()` resolves
+ * immediately, so the snapshot is computed at request time and hydration
+ * always matches the server HTML.
  */
 const subscribe = () => () => {};
 
@@ -21,10 +23,12 @@ const getHour = () => new Date().getHours();
 
 /** Local date (YYYY-MM-DD) of "today", stable through hydration. */
 export function useToday(): string {
+  use(io());
   return useSyncExternalStore(subscribe, getDateKey, getDateKey);
 }
 
 /** Local hour of day (0–23), stable through hydration. */
 export function useHour(): number {
+  use(io());
   return useSyncExternalStore(subscribe, getHour, getHour);
 }
