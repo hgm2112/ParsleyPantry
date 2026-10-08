@@ -23,14 +23,26 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (activeLocation && row.location !== activeLocation) return false;
-      if (!needle) return true;
-      return row.item.name.toLowerCase().includes(needle);
-    });
+    return rows
+      .filter((row) => {
+        if (activeLocation && row.location !== activeLocation) return false;
+        if (!needle) return true;
+        return row.item.name.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => {
+        if (a.expiration_date && b.expiration_date) {
+          const byDate = a.expiration_date.localeCompare(b.expiration_date);
+          if (byDate !== 0) return byDate;
+        } else if (a.expiration_date) {
+          return -1;
+        } else if (b.expiration_date) {
+          return 1;
+        }
+        return a.item.name.localeCompare(b.item.name);
+      });
   }, [rows, query, activeLocation]);
 
-  const visible = filtered.slice(0, 8);
+  const visible = filtered.slice(0, 7);
 
   return (
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
