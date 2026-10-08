@@ -93,11 +93,11 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
                     {row.item.name}
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold uppercase text-blue-800">
                       QTY: {qtyText}
                     </span>
                     {unitText ? (
-                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
                         {unitText}
                       </span>
                     ) : null}

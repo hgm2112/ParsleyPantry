@@ -26,6 +26,7 @@ export function stockPoolKey(itemId: string, unit: string | null): string {
 
 const WEIGHT_TO_IMPERIAL: Record<string, { unit: string; factor: number }> = {
   g: { unit: "oz", factor: 1 / 28.3495 },
+  gr: { unit: "oz", factor: 1 / 28.3495 },
   gram: { unit: "oz", factor: 1 / 28.3495 },
   grams: { unit: "oz", factor: 1 / 28.3495 },
   kg: { unit: "lb", factor: 2.20462 },
