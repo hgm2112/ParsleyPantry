@@ -114,43 +114,45 @@ export function WeekMeals({
 
                   <span
                     className={cn(
-                      "mt-2 flex size-9 items-center justify-center rounded-full",
+                      "mx-auto mt-2 flex size-9 items-center justify-center rounded-full",
                       tint.dot,
                     )}
                     aria-hidden
                   >
                     <Image
-                      src="/knifefork.svg"
+                      src="/knifefork2.svg"
                       alt=""
-                      width={720}
+                      width={792}
                       height={720}
                       unoptimized
                       className="h-4 w-4 select-none brightness-0 invert"
                     />
                   </span>
-                  <p className="mt-2 line-clamp-2 min-h-10 text-sm font-extrabold leading-snug group-hover:text-primary">
+                  <p className="mt-2 line-clamp-2 min-h-8 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
                   {recipe.time > 0 ? (
-                    <span className="mt-1 inline-flex items-center gap-1 text-xs opacity-70">
+                    <span className="mt-1 flex items-center justify-center gap-1 text-xs opacity-70">
                       <Clock className="h-3 w-3" />
                       {recipe.time} min
                     </span>
                   ) : null}
                 </>
               ) : (
-                <div className="flex h-full min-h-28 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors group-hover:text-primary">
-                  <div className="flex items-baseline justify-between self-stretch">
-                    <span className="text-sm font-extrabold uppercase text-foreground">
+                <>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="text-xs">
+                    <span className="text-xs text-muted-foreground">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
-                  <Plus className="mt-4 h-4 w-4" />
-                  <span className="text-xs font-semibold">Plan a meal</span>
-                </div>
+                  <div className="mt-2 flex min-h-24 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors group-hover:text-primary">
+                    <Plus className="h-4 w-4" />
+                    <span className="text-xs font-semibold">Plan a meal</span>
+                  </div>
+                </>
               )}
             </button>
           );
