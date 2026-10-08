@@ -100,7 +100,7 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
@@ -125,14 +125,14 @@ export function WeekMeals({
                       width={792}
                       height={720}
                       unoptimized
-                      className="h-4 w-4 select-none brightness-0 invert"
+                      className="h-5 w-5 select-none brightness-0 invert"
                     />
                   </span>
                   <p className="mt-2 line-clamp-2 min-h-8 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
                   {recipe.time > 0 ? (
-                    <span className="mt-1 flex items-center justify-center gap-1 text-xs opacity-70">
+                    <span className="mt-1 flex items-center justify-center gap-1 text-[11px] opacity-70">
                       <Clock className="h-3 w-3" />
                       {recipe.time} min
                     </span>
@@ -140,7 +140,7 @@ export function WeekMeals({
                 </>
               ) : (
                 <>
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
