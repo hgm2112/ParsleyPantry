@@ -408,3 +408,51 @@ export async function markMealMade(
     };
   }
 }
+
+/**
+ * Reads the day's reserved holds so the confirm dialog can show exactly what
+ * markMealMade will take from the pantry (empty list = nothing reserved).
+ */
+export async function previewMealMade(
+  input: z.input<typeof dayKeySchema>,
+): Promise<
+  ActionResult<{ items: { name: string; quantity: number; unit: string | null }[] }>
+> {
+  try {
+    const parsed = dayKeySchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid day" };
+    const { supabase, householdId } = await requireDal();
+
+    const { data, error } = await supabase
+      .from("stock_holds")
+      .select("quantity, unit, item:items(name)")
+      .eq("household_id", householdId)
+      .eq("week_start", parsed.data.weekStart)
+      .eq("day_index", parsed.data.dayIndex)
+      .order("created_at", { ascending: true });
+    if (error) return { ok: false, error: error.message };
+
+    const items = (
+      (data ?? []) as unknown as {
+        quantity: number;
+        unit: string | null;
+        item: { name: string } | null;
+      }[]
+    )
+      .filter((row) => row.item !== null)
+      .map((row) => ({
+        name: (row.item as { name: string }).name,
+        quantity: row.quantity,
+        unit: row.unit,
+      }));
+    return { ok: true, data: { items } };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not load the pantry impact",
+    };
+  }
+}

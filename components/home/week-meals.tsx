@@ -2,25 +2,22 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Check,
   ChefHat,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Loader2,
   Plus,
   Utensils,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
 import { addDays, dateLabel, dayIndexOf, mondayOf, weekTitle } from "@/lib/plan";
 import { tintFor } from "@/lib/tints";
-import { markMealMade } from "@/app/(app)/plan/actions";
 import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
+import { MadeConfirmDialog } from "@/components/plan/made-confirm";
 import type { HomeMeal } from "@/lib/types";
 
 export function WeekMeals({
@@ -31,25 +28,9 @@ export function WeekMeals({
   recipes: RecipeOption[];
 }) {
   const today = useToday();
-  const router = useRouter();
   const [offset, setOffset] = useState(0);
   const [openDate, setOpenDate] = useState<string | null>(null);
-  const [madeBusy, setMadeBusy] = useState(false);
-
-  async function quickMarkMade() {
-    setMadeBusy(true);
-    const result = await markMealMade({
-      weekStart: mondayOf(new Date(`${today}T00:00:00Z`)),
-      dayIndex: dayIndexOf(today),
-    });
-    setMadeBusy(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Marked as made — pantry updated");
-    router.refresh();
-  }
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function stopAndMark(event: {
     stopPropagation: () => void;
@@ -57,7 +38,7 @@ export function WeekMeals({
   }) {
     event.stopPropagation();
     event.preventDefault();
-    if (!madeBusy) void quickMarkMade();
+    setConfirmOpen(true);
   }
 
   // Rolling 7-day window that always leads with today.
@@ -146,7 +127,6 @@ export function WeekMeals({
                         role="button"
                         tabIndex={0}
                         aria-label="Mark today's dinner as made"
-                        aria-disabled={madeBusy}
                         onClick={stopAndMark}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
@@ -158,11 +138,7 @@ export function WeekMeals({
                           tint.dot,
                         )}
                       >
-                        {madeBusy ? (
-                          <Loader2 className="h-6 w-6 animate-spin text-white" />
-                        ) : (
-                          <ChefHat className="h-7 w-7 text-white" />
-                        )}
+                        <ChefHat className="h-7 w-7 text-white" />
                       </span>
                     ) : (
                       <span
@@ -227,6 +203,14 @@ export function WeekMeals({
           onDone={() => setOpenDate(null)}
         />
       ) : null}
+
+      <MadeConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
+        dayIndex={dayIndexOf(today)}
+        recipeName={byDate.get(today)?.recipe?.name ?? null}
+      />
     </section>
   );
 }
