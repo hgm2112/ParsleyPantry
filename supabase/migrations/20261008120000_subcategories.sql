@@ -15,5 +15,7 @@ alter table public.items
 
 create index if not exists items_subcategory_idx on public.items (subcategory_id);
 
+alter table public.subcategories enable row level security;
+
 create policy "member subcategories" on public.subcategories
   for all using (public.is_member(household_id)) with check (public.is_member(household_id));
