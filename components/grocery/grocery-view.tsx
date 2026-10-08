@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ListChecks, Loader2, Pencil, Plus, Search, Settings2, Tag } from "lucide-react";
+import { ListChecks, Loader2, Pencil, Plus, Search, Store, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +156,11 @@ export function GroceryView({
     return active.length > 0 ? active : stores;
   }, [stores, selectedIds]);
 
+  const hasAisleCapableStore = useMemo(
+    () => sectionStores.some((s) => s.use_aisles),
+    [sectionStores],
+  );
+
   const itemStoreMap = useMemo(() => buildItemStores(itemStores), [itemStores]);
 
   const visibleItems = useMemo(
@@ -169,11 +174,15 @@ export function GroceryView({
   );
 
   // Would-seed categories without an aisle yet, per store. Drives each
-  // store's "Use my categories as aisles" rescue button.
+  // store's "Use my categories as aisles" rescue button. Non-aisle stores
+  // get 0 so the adopt hint never appears for them.
   const missingByStore = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of stores) {
-      map.set(entry.id, missingAislesForStore(entry.id, aisles, categories));
+      map.set(
+        entry.id,
+        entry.use_aisles ? missingAislesForStore(entry.id, aisles, categories) : 0,
+      );
     }
     return map;
   }, [stores, aisles, categories]);
@@ -437,7 +446,7 @@ export function GroceryView({
             <div className="flex overflow-hidden rounded-md border">
               <button
                 type="button"
-                disabled={stores.length === 0}
+                disabled={stores.length === 0 || !hasAisleCapableStore}
                 onClick={() => void changeMode("aisle")}
                 className={cn(
                   "px-2 py-1 text-xs font-semibold disabled:opacity-40",
@@ -466,13 +475,8 @@ export function GroceryView({
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus /> Add
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              render={<Link href="/grocery/stores" />}
-              aria-label="Manage stores and aisles"
-            >
-              <Settings2 />
+            <Button size="sm" render={<Link href="/grocery/stores" />}>
+              <Store /> Stores
             </Button>
           </div>
         </div>

@@ -8,10 +8,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   createStore,
   deleteStore,
   setGrocerySettings,
+  updateStore,
 } from "@/app/(app)/grocery/actions";
 import type { HouseholdSettingsRow, StoreRow } from "@/lib/types";
 
@@ -52,7 +54,7 @@ export function StoresManager({
       toast.error(result.error);
       return;
     }
-    toast.success(`${trimmed} created — add its aisles next`);
+    toast.success(`${trimmed} created`);
     setName("");
     router.push(`/grocery/stores/${result.data.store.id}`);
     router.refresh();
@@ -82,6 +84,18 @@ export function StoresManager({
         ? `${store.name} hidden from the list`
         : `Showing ${store.name}`,
     );
+    router.refresh();
+  }
+
+  /** Sets a store's use_aisles flag (for use with on/off switch). */
+  async function setUseAisles(store: StoreRow, useAisles: boolean) {
+    if (useAisles === store.use_aisles) return;
+    const result = await updateStore(store.id, { useAisles });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(useAisles ? `${store.name} aisles enabled` : `${store.name} aisles disabled`);
     router.refresh();
   }
 
@@ -116,17 +130,17 @@ export function StoresManager({
           <Store className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
           <p className="text-sm font-semibold">No stores yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Create your main store (Meijer, Kroger…) and give it an aisle list.
-            The grocery list will sort by those aisles.
+            Create stores and choose whether each one uses aisles or a flat list.
           </p>
         </div>
       ) : (
         <ul className="divide-y rounded-xl border bg-background">
-          {stores.map((store) => {
+{stores.map((store) => {
             const aisleCount = aisles.filter(
               (aisle) => aisle.store_id === store.id,
             ).length;
             const visible = inView.has(store.id);
+            const useAisles = store.use_aisles;
             return (
               <li key={store.id} className="flex items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -141,7 +155,7 @@ export function StoresManager({
                     ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {aisleCount} aisle{aisleCount === 1 ? "" : "s"}
+                    {useAisles ? `${aisleCount} aisle${aisleCount === 1 ? "" : "s"}` : "No aisles"}
                   </p>
                 </div>
 
@@ -152,6 +166,12 @@ export function StoresManager({
                 >
                   {visible ? "Hide" : "Show"}
                 </Button>
+                <Switch
+                  checked={useAisles}
+                  onCheckedChange={(checked) => void setUseAisles(store, checked)}
+                  size="sm"
+                  aria-label={`Toggle aisles for ${store.name}`}
+                />
                 <Button
                   variant="ghost"
                   size="icon-sm"
