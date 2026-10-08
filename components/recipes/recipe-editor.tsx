@@ -12,18 +12,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
-  addRecipeToGrocery,
   createRecipe,
   deleteRecipe,
   updateRecipe,
 } from "@/app/(app)/recipes/actions";
 import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
+import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 type IngredientDraft = {
   name: string;
   quantity_text: string;
   optional: boolean;
+  on_shopping_list: boolean;
 };
 
 type Props = {
@@ -47,10 +48,11 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
       name: ingredient.name,
       quantity_text: ingredient.quantity_text,
       optional: ingredient.optional,
+      on_shopping_list: ingredient.on_shopping_list,
     })),
   );
   const [busy, setBusy] = useState(false);
-  const [groceryBusy, setGroceryBusy] = useState(false);
+  const [groceryOpen, setGroceryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function updateRow(index: number, patch: Partial<IngredientDraft>) {
@@ -79,6 +81,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
           name: row.name.trim(),
           quantity_text: row.quantity_text.trim(),
           optional: row.optional,
+          on_shopping_list: row.on_shopping_list,
         })),
     };
   }
@@ -127,23 +130,6 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
     router.refresh();
   }
 
-  async function sendToGrocery() {
-    if (!recipe) return;
-    setGroceryBusy(true);
-    const result = await addRecipeToGrocery(recipe.id);
-    setGroceryBusy(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    const { added, skipped } = result.data;
-    toast.success(
-      added === 0 && skipped > 0
-        ? "All of it is already on the list"
-        : `${added} ingredient${added === 1 ? "" : "s"} added to the list${skipped ? ` · ${skipped} already there` : ""}`,
-    );
-  }
-
   return (
     <form onSubmit={save} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -162,10 +148,9 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void sendToGrocery()}
-              disabled={groceryBusy}
+              onClick={() => setGroceryOpen(true)}
             >
-              {groceryBusy ? <Loader2 className="animate-spin" /> : <ShoppingCart />}
+              <ShoppingCart />
               To grocery list
             </Button>
           ) : null}
@@ -291,9 +276,13 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
               >
                 <Checkbox
                   checked={row.optional}
-                  onCheckedChange={(checked) =>
-                    updateRow(index, { optional: checked === true })
-                  }
+                  onCheckedChange={(checked) => {
+                    const optional = checked === true;
+                    updateRow(index, {
+                      optional,
+                      on_shopping_list: !optional,
+                    });
+                  }}
                   aria-label={`Ingredient ${index + 1} optional`}
                 />
                 <span className="hidden sm:inline">opt</span>
@@ -321,7 +310,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
           onClick={() =>
             setRows((current) => [
               ...current,
-              { name: "", quantity_text: "", optional: false },
+              { name: "", quantity_text: "", optional: false, on_shopping_list: true },
             ])
           }
         >
@@ -357,6 +346,16 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
         destructive
         onConfirm={remove}
       />
+
+      {groceryOpen && recipe ? (
+        <ToGrocerySheet
+          onOpenChange={(open) => {
+            if (!open) setGroceryOpen(false);
+          }}
+          recipeId={recipe.id}
+          ingredients={ingredients}
+        />
+      ) : null}
     </form>
   );
 }

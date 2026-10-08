@@ -21,6 +21,7 @@ type RecipeWithIngredients = RecipeRow & {
     name: string;
     quantity_text: string;
     optional: boolean;
+    on_shopping_list: boolean;
   }[];
 };
 
@@ -97,7 +98,7 @@ async function GroceryContent() {
     supabase
       .from("recipes")
       .select(
-        "id, household_id, name, description, prep_time, cook_time, time, yields, source, tags, recipe_ingredients(id, item_id, name, quantity_text, optional)",
+        "id, household_id, name, description, prep_time, cook_time, time, yields, source, tags, recipe_ingredients(id, item_id, name, quantity_text, optional, on_shopping_list)",
       )
       .eq("household_id", householdId)
       .order("name", { ascending: true }),

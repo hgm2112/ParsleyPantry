@@ -180,7 +180,7 @@ export async function planWeekToGrocery(
     const recipeIds = Array.from(new Set(planDays.map((day) => day.recipe_id)));
     const { data: ingredientRows } = await supabase
       .from("recipe_ingredients")
-      .select("name, item_id, quantity_text, optional, recipe_id")
+      .select("name, item_id, quantity_text, on_shopping_list, recipe_id")
       .eq("household_id", householdId)
       .in("recipe_id", recipeIds);
 
@@ -192,10 +192,10 @@ export async function planWeekToGrocery(
       name: string;
       item_id: string | null;
       quantity_text: string;
-      optional: boolean;
+      on_shopping_list: boolean;
       recipe_id: string;
     }[]) {
-      if (row.optional) continue;
+      if (!row.on_shopping_list) continue;
       const list = ingredientsByRecipe.get(row.recipe_id) ?? [];
       list.push(row);
       ingredientsByRecipe.set(row.recipe_id, list);

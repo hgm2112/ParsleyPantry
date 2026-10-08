@@ -90,7 +90,7 @@ export function AddGrocerySheet({
   async function addFromRecipe(recipe: GroceryRecipe) {
     setRecipeBusy(recipe.id);
     const inputs: AddGroceryInput[] = recipe.recipe_ingredients
-      .filter((ingredient) => !ingredient.optional)
+      .filter((ingredient) => ingredient.on_shopping_list)
       .map((ingredient) => {
         const parsed = parseQuantityText(ingredient.quantity_text);
         return {

@@ -142,6 +142,7 @@ export interface RecipeIngredientRow {
   name: string;
   quantity_text: string;
   optional: boolean;
+  on_shopping_list: boolean;
   sort_order: number;
 }
 

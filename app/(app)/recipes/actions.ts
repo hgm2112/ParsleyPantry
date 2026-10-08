@@ -14,6 +14,7 @@ const ingredientSchema = z.object({
   name: z.string().trim().min(1).max(160),
   quantity_text: z.string().max(120).default(""),
   optional: z.boolean().default(false),
+  on_shopping_list: z.boolean().default(true),
 });
 
 const recipeFormSchema = z.object({
@@ -86,6 +87,7 @@ export async function createRecipe(
           name: ingredient.name,
           quantity_text: toImperialText(ingredient.quantity_text),
           optional: ingredient.optional,
+          on_shopping_list: ingredient.on_shopping_list,
           sort_order: index,
         })),
       );
@@ -147,6 +149,7 @@ export async function updateRecipe(
           name: ingredient.name,
           quantity_text: toImperialText(ingredient.quantity_text),
           optional: ingredient.optional,
+          on_shopping_list: ingredient.on_shopping_list,
           sort_order: index,
         })),
       );
@@ -185,8 +188,18 @@ export async function deleteRecipe(recipeId: string): Promise<ActionResult> {
 
 export async function addRecipeToGrocery(
   recipeId: string,
+  ingredientIds: string[],
 ): Promise<ActionResult<{ added: number; skipped: number }>> {
   try {
+    const selectedParsed = z.array(z.string().uuid()).max(100).safeParse(ingredientIds);
+    if (!selectedParsed.success) {
+      return { ok: false, error: "Check the selected ingredients" };
+    }
+    const selected = new Set(selectedParsed.data);
+    if (selected.size === 0) {
+      return { ok: false, error: "Select at least one ingredient" };
+    }
+
     const { supabase, householdId } = await requireDal();
 
     const { data: recipe } = await supabase
@@ -197,31 +210,61 @@ export async function addRecipeToGrocery(
       .maybeSingle();
     if (!recipe) return { ok: false, error: "Recipe not found" };
 
-    const { data: ingredients } = await supabase
+    const { data: ingredients, error: fetchError } = await supabase
       .from("recipe_ingredients")
       .select("*")
+      .eq("household_id", householdId)
       .eq("recipe_id", recipeId)
       .order("sort_order", { ascending: true });
+    if (fetchError) return { ok: false, error: fetchError.message };
 
-    const inputs = ((ingredients ?? []) as { name: string; item_id: string | null; quantity_text: string; optional: boolean }[])
-      .filter((ingredient) => !ingredient.optional)
-      .map((ingredient) => {
-        const parsed = parseQuantityText(ingredient.quantity_text);
-        return {
-          itemId: ingredient.item_id,
-          name: ingredient.name,
-          quantity: parsed.quantity,
-          unit: parsed.unit,
-          source: "recipe" as const,
-        };
-      });
-
-    if (inputs.length === 0) {
-      return { ok: false, error: "This recipe has no ingredients yet" };
+    const rows = (ingredients ?? []) as {
+      id: string;
+      name: string;
+      item_id: string | null;
+      quantity_text: string;
+    }[];
+    const picked = rows.filter((row) => selected.has(row.id));
+    if (picked.length === 0) {
+      return { ok: false, error: "Select at least one ingredient" };
     }
+
+    // Remember the selection: picked rows on the list, the rest off it.
+    const enableIds = picked.map((row) => row.id);
+    const disableIds = rows
+      .filter((row) => !selected.has(row.id))
+      .map((row) => row.id);
+    if (enableIds.length > 0) {
+      const { error } = await supabase
+        .from("recipe_ingredients")
+        .update({ on_shopping_list: true })
+        .eq("household_id", householdId)
+        .in("id", enableIds);
+      if (error) return { ok: false, error: error.message };
+    }
+    if (disableIds.length > 0) {
+      const { error } = await supabase
+        .from("recipe_ingredients")
+        .update({ on_shopping_list: false })
+        .eq("household_id", householdId)
+        .in("id", disableIds);
+      if (error) return { ok: false, error: error.message };
+    }
+
+    const inputs = picked.map((ingredient) => {
+      const parsed = parseQuantityText(ingredient.quantity_text);
+      return {
+        itemId: ingredient.item_id,
+        name: ingredient.name,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        source: "recipe" as const,
+      };
+    });
 
     const result = await addManyGroceryItems(inputs);
     if (!result.ok) return result;
+    revalidatePath(`/recipes/${recipeId}`);
     return { ok: true, data: result.data };
   } catch (error) {
     return {

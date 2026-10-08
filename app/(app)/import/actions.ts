@@ -340,6 +340,7 @@ export async function importKitchenOwl(
           name,
           quantity_text: toImperialText(ingredient.description ?? ""),
           optional: ingredient.optional === true,
+          on_shopping_list: ingredient.optional !== true,
           sort_order: index,
         });
       });
