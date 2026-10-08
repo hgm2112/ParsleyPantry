@@ -5,15 +5,26 @@ import Link from "next/link";
 import { io } from "next/cache";
 import { daysUntil } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
-import type { InventoryEntry } from "@/lib/types";
+import type { InventoryEntry, SubcategoryRow } from "@/lib/types";
 
 const EXPIRING_DAYS = 5;
 
-export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
+export function PantryInsights({
+  rows,
+  subcategories,
+}: {
+  rows: InventoryEntry[];
+  subcategories: SubcategoryRow[];
+}) {
   use(io());
+  const subNames = new Map(
+    subcategories.map((entry) => [entry.id, entry.name.toLowerCase()]),
+  );
   let fresh = 0;
   let low = 0;
   let expiring = 0;
+  let snacks = 0;
+  let candy = 0;
 
   for (const row of rows) {
     const days = daysUntil(row.expiration_date);
@@ -24,6 +35,9 @@ export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
     } else {
       fresh += 1;
     }
+    const subName = subNames.get(row.item.subcategory_id ?? "");
+    if (subName?.includes("snack")) snacks += 1;
+    if (subName?.includes("candy")) candy += 1;
   }
 
   const stats: { emoji: string; label: string; count: number }[] = [
@@ -31,6 +45,8 @@ export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
     { emoji: "🟢", label: "Fresh", count: fresh },
     { emoji: "🟡", label: "Running Low", count: low },
     { emoji: "🔴", label: "Expiring", count: expiring },
+    { emoji: "🍿", label: "Snacks", count: snacks },
+    { emoji: "🍬", label: "Candy", count: candy },
   ];
 
   return (

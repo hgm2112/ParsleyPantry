@@ -75,7 +75,7 @@ export function HomeView({
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
         <SnackWidget rows={pantry} subcategories={subcategories} />
-        <PantryInsights rows={pantry} />
+        <PantryInsights rows={pantry} subcategories={subcategories} />
         <MiniCalendar meals={meals} recipes={recipes} />
         <PromoCard />
       </div>
