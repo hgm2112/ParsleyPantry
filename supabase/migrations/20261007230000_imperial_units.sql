@@ -4,11 +4,11 @@
 
 -- inventory --------------------------------------------------------------
 update public.inventory
-set quantity = round(quantity * 0.03527396, 1), unit = 'oz'
+set quantity = round((quantity * 0.03527396)::numeric, 1), unit = 'oz'
 where lower(btrim(unit)) in ('g', 'gr', 'gram', 'grams');
 
 update public.inventory
-set quantity = round(quantity * 2.20462, 1), unit = 'lb'
+set quantity = round((quantity * 2.20462)::numeric, 1), unit = 'lb'
 where lower(btrim(unit)) = 'kg';
 
 update public.inventory
@@ -28,12 +28,12 @@ where lower(unit) ~ '^\s*[0-9]+(\.[0-9]+)?\s*kg\s*\.?$';
 -- items (low_threshold travels with its unit) ------------------------------
 update public.items
 set unit = 'oz',
-    low_threshold = round(low_threshold * 0.03527396, 1)
+    low_threshold = round((low_threshold * 0.03527396)::numeric, 1)
 where lower(btrim(unit)) in ('g', 'gr', 'gram', 'grams');
 
 update public.items
 set unit = 'lb',
-    low_threshold = round(low_threshold * 2.20462, 1)
+    low_threshold = round((low_threshold * 2.20462)::numeric, 1)
 where lower(btrim(unit)) = 'kg';
 
 update public.items
@@ -67,11 +67,11 @@ where lower(quantity_text) ~ '^\s*[0-9]+(\.[0-9]+)?\s*kg\s*\.?$';
 
 -- stock holds ---------------------------------------------------------------
 update public.stock_holds
-set quantity = round(quantity * 0.03527396, 1), unit = 'oz'
+set quantity = round((quantity * 0.03527396)::numeric, 1), unit = 'oz'
 where lower(btrim(unit)) in ('g', 'gr', 'gram', 'grams');
 
 update public.stock_holds
-set quantity = round(quantity * 2.20462, 1), unit = 'lb'
+set quantity = round((quantity * 2.20462)::numeric, 1), unit = 'lb'
 where lower(btrim(unit)) = 'kg';
 
 update public.stock_holds
@@ -90,11 +90,11 @@ where lower(unit) ~ '^\s*[0-9]+(\.[0-9]+)?\s*kg\s*\.?$';
 
 -- grocery items -------------------------------------------------------------
 update public.grocery_items
-set quantity = round(quantity * 0.03527396, 1), unit = 'oz'
+set quantity = round((quantity * 0.03527396)::numeric, 1), unit = 'oz'
 where lower(btrim(unit)) in ('g', 'gr', 'gram', 'grams');
 
 update public.grocery_items
-set quantity = round(quantity * 2.20462, 1), unit = 'lb'
+set quantity = round((quantity * 2.20462)::numeric, 1), unit = 'lb'
 where lower(btrim(unit)) = 'kg';
 
 update public.grocery_items
