@@ -5,13 +5,17 @@ import { cn } from "@/lib/utils";
 
 export const TAGLINE = "Shop once. Cook easy. Eat well.";
 
-/** Wordmark-only display face (AndBasR "Andy" handwriting, public domain). */
-const andy = localFont({
-  src: "../fonts/andbasr.ttf",
+/** Wordmark/slogan display face (user-provided FONTE). */
+const brand = localFont({
+  src: "../fonts/FONTE___.ttf",
   weight: "400",
   display: "swap",
-  variable: "--font-andy",
+  variable: "--font-brand",
+  adjustFontFallback: false,
 });
+
+/** Brand display-font class for the wordmark and slogan. */
+export const brandClassName = brand.className;
 
 /**
  * Parsley illustration (user-provided artwork). Rendered unoptimized so the
@@ -73,7 +77,7 @@ export function Wordmark({
       className={cn("flex items-center gap-2 font-extrabold", className)}
     >
       <ParsleyMark className={cn("h-8.75 w-10", markClassName)} />
-      <span className={cn(andy.className, "text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap")}>
+      <span className={cn(brand.className, "text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap")}>
         ParsleyPantry
       </span>
     </Link>

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHour } from "@/lib/use-now";
-import { LogoMark, TAGLINE, Wordmark } from "@/components/brand";
+import { LogoMark, TAGLINE, Wordmark, brandClassName } from "@/components/brand";
 
 const sidebarItems = [
   { href: "/home", label: "Home", icon: House },
@@ -142,7 +142,7 @@ function SidebarNav({ pathname }: { pathname: string }) {
       <div className="flex flex-col items-center gap-2 border-t px-4 py-5">
         <LogoMark className="h-24 w-auto" />
         <p className="text-center text-xs font-normal italic text-muted-foreground">
-          {TAGLINE}
+          <span className={brandClassName}>{TAGLINE}</span>
         </p>
       </div>
     </aside>

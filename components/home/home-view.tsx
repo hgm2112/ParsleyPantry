@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { ParsleyMark, TAGLINE } from "@/components/brand";
+import { ParsleyMark, TAGLINE, brandClassName } from "@/components/brand";
 import { WeekMeals } from "@/components/home/week-meals";
 import { PantryPreview } from "@/components/home/pantry-preview";
 import {
@@ -30,7 +30,9 @@ function PromoCard() {
         <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div>
           <h2 className="text-sm font-extrabold">Meal planning made simple</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{TAGLINE}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span className={brandClassName}>{TAGLINE}</span>
+          </p>
         </div>
       </div>
       <ParsleyMark className="pointer-events-none absolute -right-3 -bottom-3 h-20 w-24 opacity-30" />
