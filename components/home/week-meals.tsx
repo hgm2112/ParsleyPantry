@@ -49,7 +49,7 @@ export function WeekMeals({
   const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
 
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm">
+    <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Utensils className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-extrabold">This Week&apos;s Dinners</h2>
@@ -79,7 +79,7 @@ export function WeekMeals({
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid flex-1 auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {dates.map((iso) => {
           const label = dateLabel(iso);
           const meal = byDate.get(iso) ?? null;
@@ -92,7 +92,7 @@ export function WeekMeals({
               type="button"
               onClick={() => setOpenDate(iso)}
               className={cn(
-                "group flex h-36 flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+                "group flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
                 recipe
                   ? cn(tint.header, "hover:border-primary/50")
                   : "border-dashed bg-background",
@@ -101,10 +101,10 @@ export function WeekMeals({
               {recipe ? (
                 <>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-sm font-extrabold uppercase">
+                    <span className="text-base font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="text-xs opacity-70">
+                    <span className="text-sm opacity-70">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
@@ -122,7 +122,7 @@ export function WeekMeals({
                       width={792}
                       height={720}
                       unoptimized
-                      className="h-6 w-6 select-none brightness-0 invert"
+                      className="h-7 w-7 select-none brightness-0 invert"
                     />
                     {meal?.made_at ? (
                       <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -130,11 +130,11 @@ export function WeekMeals({
                       </span>
                     ) : null}
                   </span>
-                  <p className="mt-2 line-clamp-2 min-h-8 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
+                  <p className="mt-2 line-clamp-3 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
                   {recipe.time > 0 ? (
-                    <span className="mt-1 flex items-center justify-center gap-1 text-[9px] opacity-70">
+                    <span className="mt-auto flex items-center justify-center gap-1 pt-1 text-[9px] opacity-70">
                       <Clock className="h-3 w-3" />
                       {recipe.time} min
                     </span>
@@ -143,10 +143,10 @@ export function WeekMeals({
               ) : (
                 <>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-sm font-extrabold uppercase">
+                    <span className="text-base font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
