@@ -32,8 +32,38 @@ const WEIGHT_TO_IMPERIAL: Record<string, { unit: string; factor: number }> = {
   kg: { unit: "lb", factor: 2.20462 },
 };
 
-function trimDecimal(value: number): string {
+export function trimDecimal(value: number): string {
   return value % 1 === 0 ? String(value) : value.toFixed(1);
+}
+
+const WEIGHT_TO_OZ: Record<string, number> = {
+  oz: 1,
+  ounce: 1,
+  ounces: 1,
+  lb: 16,
+  lbs: 16,
+  pound: 16,
+  pounds: 16,
+};
+
+export function toOunces(quantity: number, unit: string | null): number | null {
+  if (!unit) return null;
+  let u = unit.trim().toLowerCase().replace(/\.$/, "").trim();
+  u = u.replace(/^[\d\.\s]+/, "").trim();
+  const tokens = u.split(/[\s\/]+/);
+  u = tokens[tokens.length - 1] || u;
+  const f = WEIGHT_TO_OZ[u];
+  return f != null ? quantity * f : null;
+}
+
+export function fromOunces(ounces: number, targetUnit: string | null): number | null {
+  if (!targetUnit) return null;
+  let u = targetUnit.trim().toLowerCase().replace(/\.$/, "").trim();
+  u = u.replace(/^[\d\.\s]+/, "").trim();
+  const tokens = u.split(/[\s\/]+/);
+  u = tokens[tokens.length - 1] || u;
+  const f = WEIGHT_TO_OZ[u];
+  return f != null ? ounces / f : null;
 }
 
 /**
@@ -123,9 +153,44 @@ export function parseQuantityText(text: string): {
   quantity: number;
   unit: string | null;
 } {
-  const match = text.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-  if (!match) return { quantity: 1, unit: text.trim() || null };
-  const quantity = Number(match[1]);
+  const trimmed = text.trim();
+  if (!trimmed) return { quantity: 1, unit: null };
+
+  const match = trimmed.match(/^([\d\s\/\-\.]+)\s*(.*)$/);
+  if (!match) return { quantity: 1, unit: trimmed || null };
+
+  const numStr = match[1].trim();
   const unit = match[2]?.trim() || null;
+
+  let quantity = 1;
+
+  // mixed number: "1 1/2", "1-1/2", "1 1/2"
+  const mixed = numStr.match(/^(\d+)[ \s\-]+(\d+)\/(\d+)$/);
+  if (mixed) {
+    quantity = parseInt(mixed[1], 10) + parseInt(mixed[2], 10) / parseInt(mixed[3], 10);
+  } else {
+    // simple fraction "3/4"
+    const frac = numStr.match(/^(\d+)\/(\d+)$/);
+    if (frac) {
+      quantity = parseInt(frac[1], 10) / parseInt(frac[2], 10);
+    } else {
+      // decimal / int
+      quantity = parseFloat(numStr) || 1;
+    }
+  }
+
   return { quantity: quantity || 1, unit };
+}
+
+export function splitNameAndQuantity(full: string): { name: string; quantity: string } {
+  const trimmed = full.trim();
+  const match = trimmed.match(/^(.*?)\s+([\d\/][\d\/\.\s]*(?:[a-zA-Z]+)?)$/i);
+  if (match) {
+    const potentialQty = match[2];
+    const p = parseQuantityText(potentialQty);
+    if (p.quantity > 0 && p.unit) {
+      return { name: match[1].trim(), quantity: potentialQty };
+    }
+  }
+  return { name: trimmed, quantity: "" };
 }

@@ -19,7 +19,7 @@ import {
 } from "@/app/(app)/recipes/actions";
 import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
 import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
-import { parseQuantityText } from "@/lib/stock";
+import { parseQuantityText, splitNameAndQuantity, toOunces, trimDecimal } from "@/lib/stock";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 type IngredientDraft = {
@@ -34,10 +34,11 @@ type Props = {
   recipe: RecipeRow | null;
   ingredients: RecipeIngredientRow[];
   stockByItem?: Record<string, number>;
+  stockUnitByItem?: Record<string, string | null>;
   nameToItemId?: Record<string, string>;
 };
 
-export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId }: Props) {
+export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem, nameToItemId }: Props) {
   const router = useRouter();
   const isEdit = recipe !== null;
 
@@ -141,8 +142,11 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId }:
     const missingIds = ingredients
       .filter((ingredient) => {
         if (!ingredient.item_id) return false;
-        const needed = parseQuantityText(ingredient.quantity_text).quantity;
-        const have = stockByItem[ingredient.item_id] || 0;
+        const p = parseQuantityText(ingredient.quantity_text);
+        const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
+        const haveRaw = stockByItem[ingredient.item_id] || 0;
+        const haveUnit = stockUnitByItem?.[ingredient.item_id] ?? null;
+        const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
         return have < needed;
       })
       .map((ingredient) => ingredient.id);
@@ -299,8 +303,11 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId }:
                   const effId = nameToItemId?.[key] ?? row.item_id ?? null;
                   if (effId) {
                     total += 1;
-                    const needed = parseQuantityText(row.quantity_text).quantity;
-                    const have = stockByItem[effId] || 0;
+                    const p = parseQuantityText(row.quantity_text);
+                    const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
+                    const haveRaw = stockByItem[effId] || 0;
+                    const haveUnit = stockUnitByItem?.[effId] ?? null;
+                    const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
                     if (have >= needed) covered += 1;
                   }
                 }
@@ -336,18 +343,24 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId }:
                 aria-label={`Ingredient ${index + 1} amount`}
               />
               {stockByItem ? (() => {
-                const key = row.name.trim().toLowerCase();
+                const { name: cleanName } = splitNameAndQuantity(row.name);
+                const key = cleanName.trim().toLowerCase();
                 const effId = nameToItemId?.[key] ?? row.item_id ?? null;
                 if (effId) {
-                  const needed = parseQuantityText(row.quantity_text).quantity;
-                  const have = stockByItem[effId] || 0;
+                  const p = parseQuantityText(row.quantity_text);
+                  const neededRaw = p.quantity;
+                  const needed = toOunces(neededRaw, p.unit) ?? neededRaw;
+                  const haveRaw = stockByItem[effId] || 0;
+                  const haveUnit = stockUnitByItem?.[effId] ?? null;
+                  const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
                   const sufficient = have >= needed;
+                  const displayHave = trimDecimal(haveRaw);
                   return (
                     <span
                       className={`text-xs ${sufficient ? "text-emerald-600" : "text-muted-foreground"}`}
-                      title={sufficient ? `Have ${have}` : `Have ${have} (need ${needed})`}
+                      title={sufficient ? `Have ${haveRaw}` : `Have ${haveRaw} (need ${row.quantity_text})`}
                     >
-                      {sufficient ? "✓ " : ""}{have}
+                      {sufficient ? "✓ " : ""}{displayHave}
                     </span>
                   );
                 }

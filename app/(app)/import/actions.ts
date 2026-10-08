@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { categoryMatchKey, parseCategoryLabel } from "@/lib/kitchenowl";
-import { toImperialText } from "@/lib/stock";
+import { splitNameAndQuantity, toImperialText } from "@/lib/stock";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -331,14 +331,17 @@ export async function importKitchenOwl(
       const recipeId = recipeIdByKey.get(owlRecipe.name.trim().toLowerCase());
       if (!recipeId) continue;
       (owlRecipe.items ?? []).forEach((ingredient, index) => {
-        const name = ingredient.name.trim();
+        const { name: cleanName, quantity: extractedQty } = splitNameAndQuantity(ingredient.name);
+        const name = cleanName || ingredient.name.trim();
         if (!name) return;
+        let desc = ingredient.description ?? "";
+        if (extractedQty && !desc) desc = extractedQty;
         ingredientRows.push({
           household_id: householdId,
           recipe_id: recipeId,
           item_id: itemByKey.get(name.toLowerCase())?.id ?? null,
           name,
-          quantity_text: toImperialText(ingredient.description ?? ""),
+          quantity_text: toImperialText(desc),
           optional: ingredient.optional === true,
           on_shopping_list: ingredient.optional !== true,
           sort_order: index,

@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Clock, Search, Users } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import type { RecipeRow } from "@/lib/types";
 
@@ -88,62 +88,62 @@ export function RecipesView({
           ) : null}
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="overflow-hidden rounded-xl border">
+          <div className="grid grid-cols-[minmax(0,1fr)_60px_50px_60px_70px] bg-muted/50 px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b">
+            <div>Recipes</div>
+            <div className="text-center">Time</div>
+            <div className="text-center">Size</div>
+            <div className="text-center">Ingredients</div>
+            <div className="text-center">Have?</div>
+          </div>
           {filtered.map((recipe) => {
             const count = ingredientCounts[recipe.id] ?? 0;
+            const ps = pantryStatus?.[recipe.id];
+            const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
+            const grad = tileGradient(recipe.name);
             return (
-              <li key={recipe.id}>
-                <Link
-                  href={`/recipes/${recipe.id}`}
-                  className="flex h-full flex-col gap-2 overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:border-primary/50 hover:bg-accent/40"
-                >
-                  <span
+              <Link
+                key={recipe.id}
+                href={`/recipes/${recipe.id}`}
+                className="block border-b border-border last:border-b-0 hover:ring-2 hover:ring-inset hover:ring-foreground/20 transition-all"
+              >
+                <div className="grid grid-cols-[minmax(0,1fr)_60px_50px_60px_70px] items-center px-3 py-1.5 text-sm">
+                  <div
                     className={cn(
-                      "flex h-20 shrink-0 items-center justify-center bg-gradient-to-br text-3xl",
-                      tileGradient(recipe.name),
+                      "flex items-center gap-2 min-w-0 -ml-3 pl-3 relative",
                     )}
-                    aria-hidden
                   >
-                    {foodEmoji(recipe.name, recipe.tags)}
-                  </span>
-                  <span className="line-clamp-2 px-4 text-sm font-extrabold">
-                    {recipe.name}
-                  </span>
-                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-4 text-xs text-muted-foreground">
-                    {recipe.time > 0 ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />
-                        {recipe.time}m
+                    <div
+                      className={cn(
+                        "absolute inset-0 bg-gradient-to-r pointer-events-none",
+                        grad.split(" ")[0],
+                        "to-transparent opacity-50",
+                      )}
+                    />
+                    <span className="font-semibold truncate">{recipe.name}</span>
+                    {recipe.tags.length > 0 && (
+                      <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
+                        {recipe.tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className="rounded-full border-2 bg-card px-1.5 py-0.5 border-border">
+                            {tag}
+                          </span>
+                        ))}
                       </span>
-                    ) : null}
-                    {recipe.yields > 1 ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" />
-                        {recipe.yields}
-                      </span>
-                    ) : null}
-                    <span>{count} ingredients</span>
-                    {pantryStatus?.[recipe.id] && pantryStatus[recipe.id].total > 0 ? (
-                      <span>✓ {pantryStatus[recipe.id].covered}/{pantryStatus[recipe.id].total}</span>
-                    ) : null}
+                    )}
                   </div>
-                  {recipe.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 px-4 pb-4">
-                      {recipe.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </Link>
-              </li>
+                  <div className="text-center tabular-nums text-muted-foreground">
+                    {recipe.time > 0 ? `${recipe.time}m` : ""}
+                  </div>
+                  <div className="text-center tabular-nums">
+                    {recipe.yields > 1 ? recipe.yields : ""}
+                  </div>
+                  <div className="text-center tabular-nums text-muted-foreground">{count}</div>
+                  <div className="text-center tabular-nums font-medium">{have}</div>
+                </div>
+              </Link>
             );
           })}
-        </ul>
+        </div>
       )}
     </div>
   );

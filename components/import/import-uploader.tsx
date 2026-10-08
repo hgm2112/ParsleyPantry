@@ -168,14 +168,14 @@ export function ImportUploader() {
             {categoryPreview.slice(0, 12).map((category) => (
               <span
                 key={category.name}
-                className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                className="rounded-full border-2 px-2 py-0.5 text-xs text-muted-foreground"
               >
                 {category.icon ? `${category.icon} ` : ""}
                 {category.name}
               </span>
             ))}
             {categoryPreview.length > 12 ? (
-              <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+              <span className="rounded-full border-2 px-2 py-0.5 text-xs text-muted-foreground">
                 +{categoryPreview.length - 12} more
               </span>
             ) : null}

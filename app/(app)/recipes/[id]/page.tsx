@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeEditor } from "@/components/recipes/recipe-editor";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
+
 export const metadata = { title: "Recipe" };
 
 function RecipeSkeleton() {
@@ -35,7 +36,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
       .order("sort_order", { ascending: true }),
     supabase
       .from("inventory")
-      .select("item_id, quantity")
+      .select("item_id, quantity, unit")
       .eq("household_id", householdId),
     supabase
       .from("items")
@@ -48,10 +49,16 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
 
   const ingredients = (ingredientsResult.data ?? []) as RecipeIngredientRow[];
 
-  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number }[];
+  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
   const stockByItem: Record<string, number> = {};
+  const stockUnitByItem: Record<string, string | null> = {};
   for (const row of inventoryData) {
     stockByItem[row.item_id] = (stockByItem[row.item_id] ?? 0) + row.quantity;
+    if (stockUnitByItem[row.item_id] == null) {
+      stockUnitByItem[row.item_id] = row.unit;
+    } else if (stockUnitByItem[row.item_id] !== row.unit) {
+      stockUnitByItem[row.item_id] = null;
+    }
   }
 
   const itemsData = (itemsResult.data ?? []) as { id: string; name: string }[];
@@ -67,6 +74,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
         recipe={recipe}
         ingredients={ingredients}
         stockByItem={stockByItem}
+        stockUnitByItem={stockUnitByItem}
         nameToItemId={nameToItemId}
       />
     </div>

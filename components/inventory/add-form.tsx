@@ -415,7 +415,7 @@ export function AddForm({
             ) : null}
             <button
               type="button"
-              className="rounded-full border px-2 py-0.5 text-muted-foreground"
+              className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
               onClick={() => {
                 setExpiryTouched(true);
                 setExpirationDate("");
@@ -425,7 +425,7 @@ export function AddForm({
             </button>
             <button
               type="button"
-              className="rounded-full border px-2 py-0.5 text-muted-foreground"
+              className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
               onClick={() => {
                 setExpiryTouched(true);
                 setExpirationDate(addDays(7));

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
-import { parseQuantityText, stockPoolKey } from "@/lib/stock";
+import { fromOunces, parseQuantityText, stockPoolKey, toOunces } from "@/lib/stock";
 import { addDays, isIsoDate } from "@/lib/plan";
 
 export type ActionResult<T = null> =
@@ -221,8 +221,11 @@ export async function planWeekToGrocery(
       quantity: number;
       unit: string | null;
     }[]) {
-      const key = stockPoolKey(row.item_id, row.unit);
-      stock.set(key, (stock.get(key) ?? 0) + row.quantity);
+      const oz = toOunces(row.quantity, row.unit);
+      const q = oz != null ? oz : row.quantity;
+      const u = oz != null ? "oz" : row.unit;
+      const key = stockPoolKey(row.item_id, u);
+      stock.set(key, (stock.get(key) ?? 0) + q);
     }
     const held = new Map<string, number>();
     for (const row of (holdsResult.data ?? []) as {
@@ -232,8 +235,11 @@ export async function planWeekToGrocery(
       week_start: string;
     }[]) {
       if (row.week_start === weekStart) continue; // being recomputed below
-      const key = stockPoolKey(row.item_id, row.unit);
-      held.set(key, (held.get(key) ?? 0) + row.quantity);
+      const oz = toOunces(row.quantity, row.unit);
+      const q = oz != null ? oz : row.quantity;
+      const u = oz != null ? "oz" : row.unit;
+      const key = stockPoolKey(row.item_id, u);
+      held.set(key, (held.get(key) ?? 0) + q);
     }
 
     // Recompute this week's holds from scratch.
@@ -274,14 +280,18 @@ export async function planWeekToGrocery(
           });
           continue;
         }
-        const key = stockPoolKey(ingredient.item_id, parsed.unit);
+        const oz = toOunces(parsed.quantity, parsed.unit);
+        const q = oz != null ? oz : parsed.quantity;
+        const u = oz != null ? "oz" : parsed.unit;
+        const key = stockPoolKey(ingredient.item_id, u);
         const available = (stock.get(key) ?? 0) - (held.get(key) ?? 0);
-        const reserve = Math.max(0, Math.min(available, parsed.quantity));
+        const reserve = Math.max(0, Math.min(available, q));
         if (reserve > 0) {
+          const holdQty = oz != null ? (fromOunces(reserve, parsed.unit) ?? reserve) : reserve;
           newHolds.push({
             household_id: householdId,
             item_id: ingredient.item_id,
-            quantity: reserve,
+            quantity: holdQty,
             unit: parsed.unit,
             week_start: weekStart,
             day_index: day.day_index,
@@ -289,12 +299,13 @@ export async function planWeekToGrocery(
           held.set(key, (held.get(key) ?? 0) + reserve);
           reserved += 1;
         }
-        const shortfall = parsed.quantity - reserve;
+        const shortfall = q - reserve;
         if (shortfall > 0) {
+          const shortQty = oz != null ? (fromOunces(shortfall, parsed.unit) ?? shortfall) : shortfall;
           groceryInputs.push({
             itemId: ingredient.item_id,
             name: ingredient.name,
-            quantity: shortfall,
+            quantity: shortQty,
             unit: parsed.unit,
             source: "planner",
           });
