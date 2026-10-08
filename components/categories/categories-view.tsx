@@ -24,11 +24,19 @@ import {
 } from "@/components/sortable";
 import {
   createCategory,
+  createSubcategory,
   deleteCategory,
+  deleteSubcategory,
   reorderCategories,
   updateCategory,
+  updateSubcategory,
 } from "@/app/(app)/categories/actions";
-import type { CategoryRow, StoreAisleRow, StoreRow } from "@/lib/types";
+import type {
+  CategoryRow,
+  StoreAisleRow,
+  StoreRow,
+  SubcategoryRow,
+} from "@/lib/types";
 import { tintFor } from "@/lib/tints";
 import { cn } from "@/lib/utils";
 
@@ -46,10 +54,12 @@ function mergedOrder(all: CategoryRow[], visibleIds: string[]): string[] {
 
 export function CategoriesView({
   categories,
+  subcategories,
   stores,
   aisles,
 }: {
   categories: CategoryRow[];
+  subcategories: SubcategoryRow[];
   stores: StoreRow[];
   aisles: StoreAisleRow[];
 }) {
@@ -60,6 +70,11 @@ export function CategoriesView({
   const [editingName, setEditingName] = useState("");
   const [deleting, setDeleting] = useState<CategoryRow | null>(null);
   const [openStoreId, setOpenStoreId] = useState<string | null>(null);
+  const [newSubName, setNewSubName] = useState("");
+  const [subBusy, setSubBusy] = useState(false);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editingSubName, setEditingSubName] = useState("");
+  const [deletingSub, setDeletingSub] = useState<SubcategoryRow | null>(null);
 
   const visible = useMemo(
     () => categories.filter((category) => !category.seed_stores),
@@ -144,6 +159,49 @@ export function CategoriesView({
     toast.success("Category removed");
     setDeleting(null);
     reorder.reset();
+    router.refresh();
+  }
+
+  async function submitSub(event: React.FormEvent) {
+    event.preventDefault();
+    const trimmed = newSubName.trim();
+    if (!trimmed) return;
+    setSubBusy(true);
+    const result = await createSubcategory(trimmed);
+    setSubBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setNewSubName("");
+    toast.success(`${trimmed} added`);
+    router.refresh();
+  }
+
+  async function saveSubName(subcategory: SubcategoryRow) {
+    const trimmed = editingSubName.trim();
+    if (!trimmed || trimmed === subcategory.name) {
+      setEditingSubId(null);
+      return;
+    }
+    const result = await updateSubcategory(subcategory.id, { name: trimmed });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setEditingSubId(null);
+    router.refresh();
+  }
+
+  async function removeSub() {
+    if (!deletingSub) return;
+    const result = await deleteSubcategory(deletingSub.id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Sub-category removed");
+    setDeletingSub(null);
     router.refresh();
   }
 
@@ -321,6 +379,86 @@ export function CategoriesView({
         )}
       </section>
 
+      <section className="space-y-2">
+        <h2 className="text-sm font-extrabold">Sub-categories</h2>
+        <p className="text-xs text-muted-foreground">
+          Classify items like snacks or candy. Items whose sub-category
+          contains &ldquo;snack&rdquo; show up in the homepage Snacks widget.
+        </p>
+        <form onSubmit={submitSub} className="flex gap-2">
+          <Input
+            value={newSubName}
+            onChange={(event) => setNewSubName(event.target.value)}
+            placeholder="Add a sub-category (e.g. Candy)"
+          />
+          <Button type="submit" disabled={subBusy}>
+            {subBusy ? <Loader2 className="animate-spin" /> : <Plus />}
+            Add
+          </Button>
+        </form>
+
+        {subcategories.length === 0 ? (
+          <div className="rounded-xl border border-dashed px-6 py-10 text-center">
+            <p className="text-sm font-semibold">No sub-categories yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add Snacks, Candy, and friends to classify what&apos;s in your
+              pantry.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y rounded-xl border bg-background">
+            {subcategories.map((subcategory) => (
+              <li key={subcategory.id} className="flex items-center gap-2 px-3 py-2">
+                {editingSubId === subcategory.id ? (
+                  <form
+                    className="min-w-0 flex-1"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveSubName(subcategory);
+                    }}
+                  >
+                    <Input
+                      value={editingSubName}
+                      onChange={(event) => setEditingSubName(event.target.value)}
+                      autoFocus
+                      className="h-8"
+                      onBlur={() => void saveSubName(subcategory)}
+                      aria-label={`Rename ${subcategory.name}`}
+                    />
+                  </form>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    {subcategory.name}
+                  </span>
+                )}
+                <div className="flex shrink-0 items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      setEditingSubId(subcategory.id);
+                      setEditingSubName(subcategory.name);
+                    }}
+                    aria-label={`Rename ${subcategory.name}`}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive"
+                    onClick={() => setDeletingSub(subcategory)}
+                    aria-label={`Delete ${subcategory.name}`}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
@@ -329,6 +467,16 @@ export function CategoriesView({
         confirmLabel="Delete category"
         destructive
         onConfirm={remove}
+      />
+
+      <ConfirmDialog
+        open={deletingSub !== null}
+        onOpenChange={(open) => !open && setDeletingSub(null)}
+        title={`Delete ${deletingSub?.name ?? "sub-category"}?`}
+        description="Items keep existing without a sub-category."
+        confirmLabel="Delete sub-category"
+        destructive
+        onConfirm={removeSub}
       />
     </div>
   );

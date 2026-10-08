@@ -5,7 +5,12 @@ import { requireDal } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CategoriesView } from "@/components/categories/categories-view";
-import type { CategoryRow, StoreAisleRow, StoreRow } from "@/lib/types";
+import type {
+  CategoryRow,
+  StoreAisleRow,
+  StoreRow,
+  SubcategoryRow,
+} from "@/lib/types";
 
 export const metadata = { title: "Categories" };
 
@@ -23,27 +28,34 @@ function CategoriesSkeleton() {
 async function CategoriesContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [categoriesResult, storesResult, aislesResult] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("stores")
-      .select("*")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("store_aisles")
-      .select("*")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [categoriesResult, storesResult, aislesResult, subsResult] =
+    await Promise.all([
+      supabase
+        .from("categories")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("stores")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("store_aisles")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("subcategories")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+    ]);
 
   return (
     <CategoriesView
       categories={(categoriesResult.data ?? []) as CategoryRow[]}
+      subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       stores={(storesResult.data ?? []) as StoreRow[]}
       aisles={(aislesResult.data ?? []) as StoreAisleRow[]}
     />

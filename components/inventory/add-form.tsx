@@ -30,7 +30,7 @@ import {
   resolveBarcode,
   searchCatalog,
 } from "@/app/(app)/inventory/actions";
-import type { CategoryRow, ItemRow, Location } from "@/lib/types";
+import type { CategoryRow, ItemRow, Location, SubcategoryRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LOCATIONS: { value: Location; label: string }[] = [
@@ -43,12 +43,14 @@ const SOURCES = ["Meijer", "Kroger", "Amazon", "Costco", "Trader Joe's", "Aldi"]
 
 type Props = {
   categories: CategoryRow[];
+  subcategories: SubcategoryRow[];
   defaultLocation: Location;
   initialBarcode: string | null;
 };
 
 export function AddForm({
   categories,
+  subcategories,
   defaultLocation,
   initialBarcode,
 }: Props) {
@@ -63,6 +65,7 @@ export function AddForm({
   const [expirationDate, setExpirationDate] = useState("");
   const [expiryTouched, setExpiryTouched] = useState(false);
   const [categoryId, setCategoryId] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
   const [lowThreshold, setLowThreshold] = useState("");
@@ -105,6 +108,7 @@ export function AddForm({
     setBarcode(item.barcode ?? barcode);
     setUnit(item.unit ?? "oz");
     setCategoryId(item.category_id ?? "");
+    setSubcategoryId(item.subcategory_id ?? "");
     setLowThreshold(item.low_threshold != null ? String(item.low_threshold) : "");
     setAutoRestock(item.auto_restock);
     setLocation(item.default_location);
@@ -178,6 +182,7 @@ export function AddForm({
       name: trimmedName || (selectedItem?.name ?? ""),
       barcode: barcode.trim() || null,
       categoryId: categoryId || null,
+      subcategoryId: subcategoryId || null,
       location,
       quantity,
       unit: unit.trim() || null,
@@ -473,6 +478,35 @@ export function AddForm({
               ))}
             </datalist>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Sub-category</Label>
+          <Select
+            value={subcategoryId || "__none"}
+            items={[
+              { value: "__none", label: "None" },
+              ...subcategories.map((subcategory) => ({
+                value: subcategory.id,
+                label: subcategory.name,
+              })),
+            ]}
+            onValueChange={(value) =>
+              setSubcategoryId(value && value !== "__none" ? value : "")
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">None</SelectItem>
+              {subcategories.map((subcategory) => (
+                <SelectItem key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <details className="rounded-lg border px-3 py-2 text-sm">

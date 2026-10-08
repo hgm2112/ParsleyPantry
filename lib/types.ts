@@ -40,11 +40,19 @@ export interface CategoryRow {
   seed_stores: boolean;
 }
 
+export interface SubcategoryRow {
+  id: string;
+  household_id: string;
+  name: string;
+  sort_order: number;
+}
+
 export interface ItemRow {
   id: string;
   household_id: string;
   name: string;
   category_id: string | null;
+  subcategory_id: string | null;
   icon: string | null;
   barcode: string | null;
   default_location: Location;

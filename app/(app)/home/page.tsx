@@ -11,6 +11,7 @@ import type {
   RecipeRow,
   StoreAisleRow,
   StoreRow,
+  SubcategoryRow,
 } from "@/lib/types";
 
 export const metadata = { title: "Home" };
@@ -20,9 +21,10 @@ function HomeSkeleton() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Skeleton className="hidden rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block h-[26rem]" />
       <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
+      <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-2 h-56" />
       <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-2 h-96" />
       <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-2 h-96" />
-      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+      <div className="space-y-4 lg:col-start-3 lg:row-start-3">
         <Skeleton className="h-48 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />
         <Skeleton className="h-28 rounded-2xl" />
@@ -45,6 +47,7 @@ async function HomeContent() {
     rememberedResult,
     settingsResult,
     recipesResult,
+    subsResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -94,6 +97,11 @@ async function HomeContent() {
       .select("id, name, time, tags")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
+    supabase
+      .from("subcategories")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
@@ -123,6 +131,7 @@ async function HomeContent() {
       meals={meals}
       pantry={pantry}
       categories={categories}
+      subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       grocery={grocery}
       stores={stores}
       aisles={aisles}

@@ -24,10 +24,10 @@ export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
   }
 
   const stats: { emoji: string; label: string; count: number }[] = [
-    { emoji: "🫙", label: "items", count: rows.length },
-    { emoji: "🟢", label: "fresh", count: fresh },
-    { emoji: "🟡", label: "running low", count: low },
-    { emoji: "🔴", label: "expiring", count: expiring },
+    { emoji: "🫙", label: "Items", count: rows.length },
+    { emoji: "🟢", label: "Fresh", count: fresh },
+    { emoji: "🟡", label: "Running Low", count: low },
+    { emoji: "🔴", label: "Expiring", count: expiring },
   ];
 
   return (
@@ -41,22 +41,18 @@ export function PantryInsights({ rows }: { rows: InventoryEntry[] }) {
           View pantry →
         </Link>
       </div>
-      <ul className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         {stats.map((stat) => (
-          <li
+          <span
             key={stat.label}
-            className="flex items-center gap-2.5 rounded-xl border bg-background px-3 py-2"
+            className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-semibold"
           >
-            <span className="text-lg" aria-hidden>
-              {stat.emoji}
-            </span>
-            <span className="text-sm font-semibold">{stat.label}</span>
-            <span className="ml-auto text-sm font-extrabold tabular-nums">
-              {stat.count}
-            </span>
-          </li>
+            <span aria-hidden>{stat.emoji}</span>
+            {stat.label}
+            <span className="font-extrabold tabular-nums">{stat.count}</span>
+          </span>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }

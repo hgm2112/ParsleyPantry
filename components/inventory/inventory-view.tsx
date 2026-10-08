@@ -35,10 +35,10 @@ import {
   resolveBarcode,
   updateInventory,
 } from "@/app/(app)/inventory/actions";
-import { expiryBucket } from "@/lib/expiry";
+import { compareByExpiry, expiryBucket } from "@/lib/expiry";
 import { displayQtyUnit, isLowStock, stockPoolKey } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { InventoryEntry, Location } from "@/lib/types";
+import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
 
 type Tab = "all" | Location;
 
@@ -51,9 +51,11 @@ const TABS: { value: Tab; label: string }[] = [
 
 export function InventoryView({
   rows,
+  subcategories,
   holdsByItem,
 }: {
   rows: InventoryEntry[];
+  subcategories: SubcategoryRow[];
   holdsByItem: Record<string, number>;
 }) {
   const router = useRouter();
@@ -61,6 +63,7 @@ export function InventoryView({
   const [query, setQuery] = useState("");
   const [useSoon, setUseSoon] = useState(false);
   const [lowOnly, setLowOnly] = useState(false);
+  const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [consumeTarget, setConsumeTarget] = useState<{
     entry: InventoryEntry;
@@ -82,6 +85,7 @@ export function InventoryView({
     const needle = query.trim().toLowerCase();
     let result = rows.filter((row) => {
       if (tab !== "all" && row.location !== tab) return false;
+      if (subFilter && row.item.subcategory_id !== subFilter) return false;
       if (useSoon) {
         const bucket = expiryBucket(row.expiration_date);
         if (bucket !== "expired" && bucket !== "urgent" && bucket !== "soon") {
@@ -97,18 +101,26 @@ export function InventoryView({
       return true;
     });
 
-    result = [...result].sort((a, b) => {
-      if (useSoon) {
-        const left = a.expiration_date ?? "9999-12-31";
-        const right = b.expiration_date ?? "9999-12-31";
-        if (left !== right) return left < right ? -1 : 1;
-      }
-      return a.item.name.localeCompare(b.item.name);
-    });
+    result = [...result].sort((a, b) =>
+      compareByExpiry(
+        a.expiration_date,
+        a.item.name,
+        b.expiration_date,
+        b.item.name,
+      ),
+    );
     return result;
-  }, [rows, tab, query, useSoon, lowOnly]);
+  }, [rows, tab, query, useSoon, lowOnly, subFilter]);
 
   const lowCount = rows.filter((row) => isLowStock(row, row.item)).length;
+
+  const subNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const subcategory of subcategories) {
+      map.set(subcategory.id, subcategory.name);
+    }
+    return map;
+  }, [subcategories]);
 
   async function handleBarcode(code: string) {
     setScanOpen(false);
@@ -210,6 +222,25 @@ export function InventoryView({
           >
             Low stock
           </button>
+          {subcategories.map((subcategory) => (
+            <button
+              key={subcategory.id}
+              type="button"
+              onClick={() =>
+                setSubFilter((current) =>
+                  current === subcategory.id ? null : subcategory.id,
+                )
+              }
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold uppercase transition-colors",
+                subFilter === subcategory.id
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-border bg-background text-muted-foreground hover:bg-accent",
+              )}
+            >
+              {subcategory.name}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -224,6 +255,11 @@ export function InventoryView({
             <InventoryRow
               key={row.id}
               entry={row}
+              subcategoryName={
+                row.item.subcategory_id
+                  ? (subNameById.get(row.item.subcategory_id) ?? null)
+                  : null
+              }
               onHold={
                 holdsByItem[stockPoolKey(row.item_id, row.unit)] ?? 0
               }
@@ -300,10 +336,12 @@ function EmptyState({
 
 function InventoryRow({
   entry,
+  subcategoryName,
   onHold,
   onConsume,
 }: {
   entry: InventoryEntry;
+  subcategoryName: string | null;
   onHold: number;
   onConsume: (mode: "partial" | "last") => void;
 }) {
@@ -477,6 +515,11 @@ function InventoryRow({
           ) : null}
           <ExpiryChip date={entry.expiration_date} className="uppercase" />
           <LocationBadge location={entry.location} className="uppercase" />
+          {subcategoryName ? (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase text-emerald-800">
+              {subcategoryName}
+            </span>
+          ) : null}
           {onHold > 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
               {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold

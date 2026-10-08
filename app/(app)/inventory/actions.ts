@@ -22,6 +22,7 @@ const locationSchema = z.enum(["pantry", "fridge", "freezer"]);
 const addInputSchema = z.object({
   itemId: z.string().uuid().nullish(),
   name: z.string().trim().min(1).max(160),
+  subcategoryId: z.string().uuid().nullish(),
   barcode: z
     .string()
     .trim()
@@ -179,6 +180,7 @@ export async function addToInventory(
           name: input.name,
           barcode: input.barcode ?? null,
           category_id: input.categoryId ?? null,
+          subcategory_id: input.subcategoryId ?? null,
           default_location: input.location,
           expiration_days: input.expirationDays ?? null,
           low_threshold: lowThreshold,
@@ -203,13 +205,15 @@ export async function addToInventory(
       input.lowThreshold != null ||
       input.expirationDays != null ||
       input.autoRestock != null ||
-      input.categoryId != null
+      input.categoryId != null ||
+      input.subcategoryId != null
     ) {
       const patch: Record<string, unknown> = {};
       if (lowThreshold != null) patch.low_threshold = lowThreshold;
       if (input.expirationDays != null) patch.expiration_days = input.expirationDays;
       if (input.autoRestock != null) patch.auto_restock = input.autoRestock;
       if (input.categoryId != null) patch.category_id = input.categoryId;
+      if (input.subcategoryId != null) patch.subcategory_id = input.subcategoryId;
       await supabase.from("items").update(patch).eq("id", item.id);
       item = { ...item, ...patch } as ItemRow;
     }
@@ -377,6 +381,7 @@ export async function consumeInventory(
 const patchSchema = z.object({
   inventoryId: z.string().uuid(),
   itemName: z.string().trim().min(1).max(160).optional(),
+  subcategoryId: z.string().uuid().nullish(),
   quantity: z.number().min(0).max(9999).optional(),
   unit: z.string().trim().max(32).nullish(),
   location: locationSchema.optional(),
@@ -488,12 +493,14 @@ export async function updateInventory(
     if (
       input.lowThreshold !== undefined ||
       input.autoRestock !== undefined ||
-      input.itemName !== undefined
+      input.itemName !== undefined ||
+      input.subcategoryId !== undefined
     ) {
       const itemPatch: Record<string, unknown> = {};
       if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
       if (input.itemName !== undefined) itemPatch.name = input.itemName;
+      if (input.subcategoryId !== undefined) itemPatch.subcategory_id = input.subcategoryId;
       const { error: itemError } = await supabase
         .from("items")
         .update(itemPatch)
@@ -514,8 +521,13 @@ export async function updateInventory(
           .update({ name: input.itemName })
           .eq("household_id", householdId)
           .eq("item_id", current.item_id);
-        revalidatePath("/");
         revalidatePath("/grocery");
+      }
+      if (
+        input.itemName !== undefined ||
+        input.subcategoryId !== undefined
+      ) {
+        revalidatePath("/");
       }
     }
 

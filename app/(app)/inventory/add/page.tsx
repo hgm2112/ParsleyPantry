@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddForm } from "@/components/inventory/add-form";
-import type { CategoryRow, Location } from "@/lib/types";
+import type { CategoryRow, Location, SubcategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Add to inventory" };
 
@@ -29,7 +29,7 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
 
   const { supabase, householdId } = await requireDal();
 
-  const [categoriesResult, settingsResult] = await Promise.all([
+  const [categoriesResult, settingsResult, subsResult] = await Promise.all([
     supabase
       .from("categories")
       .select("id, household_id, name, icon, sort_order")
@@ -40,6 +40,11 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
       .select("default_location")
       .eq("household_id", householdId)
       .maybeSingle(),
+    supabase
+      .from("subcategories")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const categories = (categoriesResult.data ?? []) as CategoryRow[];
@@ -50,6 +55,7 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
   return (
     <AddForm
       categories={categories}
+      subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       defaultLocation={defaultLocation}
       initialBarcode={initialBarcode}
     />

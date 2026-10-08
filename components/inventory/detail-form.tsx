@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -27,7 +34,7 @@ import {
 import { addDays } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { InventoryEntry, Location } from "@/lib/types";
+import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
 
 const LOCATIONS: { value: Location; label: string }[] = [
   { value: "pantry", label: "Pantry" },
@@ -37,8 +44,10 @@ const LOCATIONS: { value: Location; label: string }[] = [
 
 export function InventoryDetail({
   entry: initial,
+  subcategories,
 }: {
   entry: InventoryEntry;
+  subcategories: SubcategoryRow[];
 }) {
   const router = useRouter();
   const [entry, setEntry] = useState<InventoryEntry>(initial);
@@ -283,6 +292,37 @@ export function InventoryDetail({
       </section>
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
+        <div className="space-y-2">
+          <Label>Sub-category</Label>
+          <Select
+            value={entry.item.subcategory_id ?? "__none"}
+            items={[
+              { value: "__none", label: "None" },
+              ...subcategories.map((subcategory) => ({
+                value: subcategory.id,
+                label: subcategory.name,
+              })),
+            ]}
+            onValueChange={(value) =>
+              void patch({
+                subcategoryId: value && value !== "__none" ? value : null,
+              })
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">None</SelectItem>
+              {subcategories.map((subcategory) => (
+                <SelectItem key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="unit">Unit</Label>
           <Input

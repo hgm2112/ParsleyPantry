@@ -157,6 +157,24 @@ export function addDays(days: number, from: Date = startOfToday()): string {
   return toDateString(date);
 }
 
+/** Soonest-expiring first: dated rows (overdue included), undated last, name tiebreak. */
+export function compareByExpiry(
+  aDate: string | null,
+  aName: string,
+  bDate: string | null,
+  bName: string,
+): number {
+  if (aDate && bDate) {
+    const byDate = aDate.localeCompare(bDate);
+    if (byDate !== 0) return byDate;
+  } else if (aDate) {
+    return -1;
+  } else if (bDate) {
+    return 1;
+  }
+  return aName.localeCompare(bName);
+}
+
 export function startOfToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());

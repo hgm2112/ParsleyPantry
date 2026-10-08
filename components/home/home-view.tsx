@@ -9,6 +9,7 @@ import {
   type ShoppingPreviewItem,
 } from "@/components/home/shopping-widget";
 import { SmartActions } from "@/components/home/smart-actions";
+import { SnackWidget } from "@/components/home/snack-widget";
 import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
 import type { RecipeOption } from "@/components/plan/day-dialog";
@@ -19,6 +20,7 @@ import type {
   InventoryEntry,
   StoreAisleRow,
   StoreRow,
+  SubcategoryRow,
 } from "@/lib/types";
 
 function PromoCard() {
@@ -40,6 +42,7 @@ export function HomeView({
   meals,
   pantry,
   categories,
+  subcategories,
   grocery,
   stores,
   aisles,
@@ -51,6 +54,7 @@ export function HomeView({
   meals: HomeMeal[];
   pantry: InventoryEntry[];
   categories: CategoryRow[];
+  subcategories: SubcategoryRow[];
   grocery: ShoppingPreviewItem[];
   stores: StoreRow[];
   aisles: StoreAisleRow[];
@@ -69,6 +73,10 @@ export function HomeView({
         <SmartActions pantry={pantry} grocery={grocery} meals={meals} recipes={recipes} />
       </div>
 
+      <div className="lg:col-start-3 lg:row-start-2">
+        <SnackWidget rows={pantry} subcategories={subcategories} />
+      </div>
+
       <div className="lg:col-start-1 lg:row-start-2">
         <PantryPreview rows={pantry} />
       </div>
@@ -85,7 +93,7 @@ export function HomeView({
         />
       </div>
 
-      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+      <div className="space-y-4 lg:col-start-3 lg:row-start-3">
         <PantryInsights rows={pantry} />
         <MiniCalendar meals={meals} recipes={recipes} />
         <PromoCard />

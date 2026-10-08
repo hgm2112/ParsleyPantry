@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireDal } from "@/lib/auth";
-import type { CategoryRow } from "@/lib/types";
+import type { CategoryRow, SubcategoryRow } from "@/lib/types";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -243,6 +243,120 @@ export async function reorderCategories(ids: string[]): Promise<ActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not reorder",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-categories — item classifications like snack/candy. Managed on this
+// page, assigned per item from the pantry's add/edit forms.
+// ---------------------------------------------------------------------------
+
+function subFriendly(error: { code?: string; message: string }): string {
+  if (error.code === "23505") return "You already have a sub-category with that name";
+  return error.message;
+}
+
+export async function createSubcategory(
+  name: string,
+): Promise<ActionResult<{ subcategory: SubcategoryRow }>> {
+  try {
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: "Sub-category needs a name" };
+    const { supabase, householdId } = await requireDal();
+
+    const { data: last } = await supabase
+      .from("subcategories")
+      .select("sort_order")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const sortOrder =
+      ((last as { sort_order: number } | null)?.sort_order ?? -1) + 1;
+
+    const { data, error } = await supabase
+      .from("subcategories")
+      .insert({
+        household_id: householdId,
+        name: trimmed,
+        sort_order: sortOrder,
+      })
+      .select("*")
+      .single();
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error ? subFriendly(error) : "Could not create sub-category",
+      };
+    }
+
+    revalidatePath("/", "layout");
+    return { ok: true, data: { subcategory: data as SubcategoryRow } };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not create sub-category",
+    };
+  }
+}
+
+export async function updateSubcategory(
+  id: string,
+  patch: { name?: string },
+): Promise<ActionResult> {
+  try {
+    const trimmed = (patch.name ?? "").trim();
+    if (!trimmed) return { ok: false, error: "Sub-category needs a name" };
+    const { supabase, householdId } = await requireDal();
+
+    const { data: current } = await supabase
+      .from("subcategories")
+      .select("*")
+      .eq("id", id)
+      .eq("household_id", householdId)
+      .maybeSingle();
+    const row = current as SubcategoryRow | null;
+    if (!row) return { ok: false, error: "Sub-category not found" };
+    if (row.name === trimmed) return { ok: true, data: null };
+
+    const { error: updateError } = await supabase
+      .from("subcategories")
+      .update({ name: trimmed })
+      .eq("id", id)
+      .eq("household_id", householdId);
+    if (updateError) return { ok: false, error: subFriendly(updateError) };
+
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed",
+    };
+  }
+}
+
+/** Removes the sub-category; classified items fall back to none (FK set null). */
+export async function deleteSubcategory(id: string): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const { error } = await supabase
+      .from("subcategories")
+      .delete()
+      .eq("id", id)
+      .eq("household_id", householdId);
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Delete failed",
     };
   }
 }

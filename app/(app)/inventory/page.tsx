@@ -3,7 +3,8 @@ import { requireDal } from "@/lib/auth";
 import { InventoryView } from "@/components/inventory/inventory-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { stockPoolKey } from "@/lib/stock";
-import type { InventoryEntry, StockHoldRow } from "@/lib/types";
+import { compareByExpiry } from "@/lib/expiry";
+import type { InventoryEntry, StockHoldRow, SubcategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Pantry" };
 
@@ -31,7 +32,7 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [inventoryResult, holdsResult] = await Promise.all([
+  const [inventoryResult, holdsResult, subsResult] = await Promise.all([
     supabase
       .from("inventory")
       .select("*, item:items!inner(*)")
@@ -40,20 +41,22 @@ async function InventoryContent() {
       .from("stock_holds")
       .select("item_id, quantity, unit")
       .eq("household_id", householdId),
+    supabase
+      .from("subcategories")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const rows = ((inventoryResult.data ?? []) as unknown as InventoryEntry[])
-    .sort((a, b) => {
-      if (a.expiration_date && b.expiration_date) {
-        const byDate = a.expiration_date.localeCompare(b.expiration_date);
-        if (byDate !== 0) return byDate;
-      } else if (a.expiration_date) {
-        return -1;
-      } else if (b.expiration_date) {
-        return 1;
-      }
-      return a.item.name.localeCompare(b.item.name);
-    });
+    .sort((a, b) =>
+      compareByExpiry(
+        a.expiration_date,
+        a.item.name,
+        b.expiration_date,
+        b.item.name,
+      ),
+    );
   const holdsByItem: Record<string, number> = {};
   for (const hold of (holdsResult.data ?? []) as Pick<
     StockHoldRow,
@@ -64,7 +67,11 @@ async function InventoryContent() {
   }
 
   return (
-    <InventoryView rows={rows} holdsByItem={holdsByItem} />
+    <InventoryView
+      rows={rows}
+      subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
+      holdsByItem={holdsByItem}
+    />
   );
 }
 

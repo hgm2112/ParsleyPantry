@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { displayQtyUnit } from "@/lib/stock";
-import { ExpiryChip } from "@/components/expiry-chip";
-import { LocationBadge } from "@/components/location-badge";
+import { compareByExpiry } from "@/lib/expiry";
+import { StockRow } from "@/components/home/stock-row";
 import { Input } from "@/components/ui/input";
 import type { InventoryEntry, Location } from "@/lib/types";
 
@@ -29,17 +28,9 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
         if (!needle) return true;
         return row.item.name.toLowerCase().includes(needle);
       })
-      .sort((a, b) => {
-        if (a.expiration_date && b.expiration_date) {
-          const byDate = a.expiration_date.localeCompare(b.expiration_date);
-          if (byDate !== 0) return byDate;
-        } else if (a.expiration_date) {
-          return -1;
-        } else if (b.expiration_date) {
-          return 1;
-        }
-        return a.item.name.localeCompare(b.item.name);
-      });
+      .sort((a, b) =>
+        compareByExpiry(a.expiration_date, a.item.name, b.expiration_date, b.item.name),
+      );
   }, [rows, query, activeLocation]);
 
   const visible = filtered.slice(0, 7);
@@ -93,33 +84,9 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
         </p>
       ) : (
         <ul className="space-y-2">
-          {visible.map((row) => {
-            const { qtyText, unitText } = displayQtyUnit(row.quantity, row.unit);
-            return (
-              <li key={row.id}>
-                <Link
-                  href={`/inventory/${row.id}`}
-                  className="group block rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
-                >
-                  <p className="truncate text-sm font-semibold group-hover:text-primary">
-                    {row.item.name}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold uppercase text-blue-800">
-                      QTY: {qtyText}
-                    </span>
-                    {unitText ? (
-                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
-                        {unitText}
-                      </span>
-                    ) : null}
-                    <ExpiryChip date={row.expiration_date} className="uppercase" />
-                    <LocationBadge location={row.location} className="uppercase" />
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
+          {visible.map((row) => (
+            <StockRow key={row.id} row={row} />
+          ))}
         </ul>
       )}
     </section>
