@@ -37,7 +37,7 @@ import {
 } from "@/app/(app)/inventory/actions";
 import { expiryBucket } from "@/lib/expiry";
 import { isLowStock, stockPoolKey } from "@/lib/stock";
-import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { foodEmoji, splitLeadingEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import type { CategoryRow, InventoryEntry, Location } from "@/lib/types";
 
@@ -322,6 +322,8 @@ function InventoryRow({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const low = isLowStock(entry, entry.item);
   const quantity = entry.quantity;
+  const [nameEmoji, cleanName] = splitLeadingEmoji(entry.item.name);
+  const tileEmoji = entry.item.icon ?? nameEmoji ?? foodEmoji(entry.item.name);
 
   async function quickUse() {
     const name = entry.item.name;
@@ -381,7 +383,7 @@ function InventoryRow({
             )}
             aria-hidden
           >
-            {entry.item.icon ?? foodEmoji(entry.item.name)}
+            {tileEmoji}
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
@@ -391,7 +393,7 @@ function InventoryRow({
                   quantity <= 0 && "text-muted-foreground line-through",
                 )}
               >
-                {entry.item.name}
+                {cleanName}
               </span>
               {low ? (
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronRight, Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { foodEmoji, splitLeadingEmoji, tileGradient } from "@/lib/tiles";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { Input } from "@/components/ui/input";
@@ -79,26 +79,31 @@ export function PantryPreview({
         </button>
         {categories
           .filter((category) => usedCategoryIds.has(category.id))
-          .map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() =>
-                setActiveCategory((current) =>
-                  current === category.id ? null : category.id,
-                )
-              }
-              className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
-                activeCategory === category.id
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {category.icon ? `${category.icon} ` : ""}
-              {category.name}
-            </button>
-          ))}
+          .map((category) => {
+            const chipName = category.icon
+              ? splitLeadingEmoji(category.name)[1]
+              : category.name;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() =>
+                  setActiveCategory((current) =>
+                    current === category.id ? null : category.id,
+                  )
+                }
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+                  activeCategory === category.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {category.icon ? `${category.icon} ` : ""}
+                {chipName}
+              </button>
+            );
+          })}
       </div>
 
       {visible.length === 0 ? (
@@ -110,7 +115,8 @@ export function PantryPreview({
       ) : (
         <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {visible.map((row) => {
-            const emoji = row.item.icon ?? foodEmoji(row.item.name);
+            const [nameEmoji, cleanName] = splitLeadingEmoji(row.item.name);
+            const emoji = row.item.icon ?? nameEmoji ?? foodEmoji(row.item.name);
             return (
               <li key={row.id}>
                 <Link
@@ -130,7 +136,7 @@ export function PantryPreview({
                     <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                   </div>
                   <p className="mt-2 truncate text-sm font-semibold group-hover:text-primary">
-                    {row.item.name}
+                    {cleanName}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {row.quantity}

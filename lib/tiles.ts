@@ -79,6 +79,16 @@ const AISLE_KEYWORDS: [RegExp, string][] = [
   [/\b(health|pharmacy|vitamin|medicine)\b/, "💊"],
 ];
 
+const LEADING_EMOJI =
+  /^\s*((?:\p{Extended_Pictographic}\uFE0F?)(?:\u200D\p{Extended_Pictographic}\uFE0F?)*)\s*/u;
+
+/** Splits a leading emoji (if any) off a display name: [emoji, rest]. */
+export function splitLeadingEmoji(name: string): [string | null, string] {
+  const match = name.match(LEADING_EMOJI);
+  if (!match || !match[1]) return [null, name];
+  return [match[1], name.slice(match[0].length)];
+}
+
 export function hashString(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
