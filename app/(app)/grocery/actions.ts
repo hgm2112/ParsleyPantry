@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { categoryMatchKey } from "@/lib/kitchenowl";
-import { syncStoreAislesToCategories } from "@/lib/grocery";
+import { fileGroceryItem, syncStoreAislesToCategories } from "@/lib/grocery";
 import type {
   GroceryViewMode,
   StoreAisleRow,
@@ -81,6 +81,8 @@ export async function addGroceryItem(
     if (error || !data) {
       return { ok: false, error: error?.message ?? "Could not add item" };
     }
+
+    await fileGroceryItem(supabase, householdId, (data as { id: string }).id);
 
     revalidatePath("/grocery");
     return { ok: true, data: { id: (data as { id: string }).id, created: true } };
@@ -159,14 +161,21 @@ export async function deleteGroceryItem(id: string): Promise<ActionResult> {
   }
 }
 
-export async function clearCheckedGrocery(): Promise<ActionResult> {
+/**
+ * Clears bought lines. Pass `ids` to clear only the ones in view — the
+ * shopping page never empties stores it isn't showing.
+ */
+export async function clearCheckedGrocery(ids?: string[]): Promise<ActionResult> {
   try {
     const { supabase, householdId } = await requireDal();
-    const { error } = await supabase
+    const query = supabase
       .from("grocery_items")
       .delete()
       .eq("household_id", householdId)
       .eq("checked", true);
+    const { error } = ids
+      ? await query.in("id", ids.length > 0 ? ids : ["__none__"])
+      : await query;
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
     return { ok: true, data: null };
@@ -205,22 +214,32 @@ export async function restoreGroceryItems(
     if (parsed.data.length === 0) return { ok: true, data: { restored: 0 } };
     const { supabase, householdId, user } = await requireDal();
 
-    const { error } = await supabase.from("grocery_items").insert(
-      parsed.data.map((item) => ({
-        id: item.id,
-        household_id: householdId,
-        item_id: item.item_id ?? null,
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit ?? null,
-        category_id: item.category_id ?? null,
-        checked: true,
-        sale_only: item.sale_only,
-        source: item.source,
-        created_by: user.id,
-      })),
-    );
+    const { data: restored, error } = await supabase
+      .from("grocery_items")
+      .insert(
+        parsed.data.map((item) => ({
+          id: item.id,
+          household_id: householdId,
+          item_id: item.item_id ?? null,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit ?? null,
+          category_id: item.category_id ?? null,
+          checked: true,
+          sale_only: item.sale_only,
+          source: item.source,
+          created_by: user.id,
+        })),
+      )
+      .select("id");
     if (error) return { ok: false, error: error.message };
+
+    // Cleared lines lose their store membership with their rows, so re-file
+    // them under the default store rather than dumping them in "Any store".
+    for (const row of (restored ?? []) as { id: string }[]) {
+      await fileGroceryItem(supabase, householdId, row.id);
+    }
+
     revalidatePath("/grocery");
     return { ok: true, data: { restored: parsed.data.length } };
   } catch (error) {
@@ -486,18 +505,21 @@ export async function resetStoreFromCategories(
 }
 
 /* ------------------------------------------------------------------ */
-/* Settings (selected store + view mode)                               */
+/* Settings (stores in view + view mode)                               */
 /* ------------------------------------------------------------------ */
 
 export async function setGrocerySettings(input: {
-  selectedStoreId?: string | null;
+  selectedStoreIds?: string[];
   groceryViewMode?: GroceryViewMode;
 }): Promise<ActionResult> {
   try {
     const { supabase, householdId } = await requireDal();
     const patch: Record<string, unknown> = {};
-    if (input.selectedStoreId !== undefined) {
-      patch.selected_store_id = input.selectedStoreId;
+    if (input.selectedStoreIds !== undefined) {
+      const ids = [...new Set(input.selectedStoreIds)];
+      patch.selected_store_ids = ids;
+      // Legacy column mirrors the head of the list for older readers.
+      patch.selected_store_id = ids[0] ?? null;
     }
     if (input.groceryViewMode !== undefined) {
       patch.grocery_view_mode = input.groceryViewMode;
@@ -511,11 +533,68 @@ export async function setGrocerySettings(input: {
 
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
+    revalidatePath("/");
     return { ok: true, data: null };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not save settings",
+    };
+  }
+}
+
+/**
+ * Sets every store a grocery line is bought at. An empty list makes it an
+ * "Any store" item — visible in the shared group, but not filed anywhere.
+ */
+export async function setGroceryItemStores(
+  groceryItemId: string,
+  storeIds: string[],
+): Promise<ActionResult> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const wanted = [...new Set(storeIds)];
+
+    const { data: rows, error: readError } = await supabase
+      .from("grocery_item_stores")
+      .select("store_id")
+      .eq("household_id", householdId)
+      .eq("grocery_item_id", groceryItemId);
+    if (readError) return { ok: false, error: readError.message };
+
+    const have = (rows ?? []).map((row) => (row as { store_id: string }).store_id);
+    const toRemove = have.filter((storeId) => !wanted.includes(storeId));
+    const toAdd = wanted.filter((storeId) => !have.includes(storeId));
+
+    if (toRemove.length > 0) {
+      const { error } = await supabase
+        .from("grocery_item_stores")
+        .delete()
+        .eq("household_id", householdId)
+        .eq("grocery_item_id", groceryItemId)
+        .in("store_id", toRemove);
+      if (error) return { ok: false, error: error.message };
+    }
+
+    if (toAdd.length > 0) {
+      const { error } = await supabase.from("grocery_item_stores").insert(
+        toAdd.map((storeId) => ({
+          household_id: householdId,
+          grocery_item_id: groceryItemId,
+          store_id: storeId,
+        })),
+      );
+      if (error) return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/grocery");
+    revalidatePath("/");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not save stores",
     };
   }
 }
@@ -596,8 +675,29 @@ export async function deleteStore(id: string): Promise<ActionResult> {
       .eq("id", id)
       .eq("household_id", householdId);
     if (error) return { ok: false, error: error.message };
+
+    // Its item memberships cascade away (those lines fall back to "Any
+    // store"); drop it from the list of stores in view too.
+    const { data: settings } = await supabase
+      .from("household_settings")
+      .select("selected_store_ids")
+      .eq("household_id", householdId)
+      .maybeSingle();
+    const ids = ((settings?.selected_store_ids ?? []) as unknown) as
+      | string[]
+      | null;
+    if ((ids ?? []).includes(id)) {
+      const kept = (ids ?? []).filter((storeId) => storeId !== id);
+      const { error: patchError } = await supabase
+        .from("household_settings")
+        .update({ selected_store_ids: kept, selected_store_id: kept[0] ?? null })
+        .eq("household_id", householdId);
+      if (patchError) return { ok: false, error: patchError.message };
+    }
+
     revalidatePath("/grocery");
     revalidatePath("/settings");
+    revalidatePath("/");
     return { ok: true, data: null };
   } catch (error) {
     return {

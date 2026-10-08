@@ -1,19 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ListChecks, Loader2, Pencil, Plus, Search, Settings2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
@@ -24,13 +17,13 @@ import {
   setGrocerySettings,
   updateGroceryItem,
 } from "@/app/(app)/grocery/actions";
-import { categoryMatchKey } from "@/lib/kitchenowl";
 import {
+  ANY_STORE_KEY,
   UNASSIGNED_GROUP_KEY,
-  aisleNameKeyMap,
-  buildAisleGroups,
-  buildCategoryGroups,
-  resolveEffectiveAisle,
+  buildItemStores,
+  buildStoreSections,
+  missingAislesForStore,
+  visibleForStores,
 } from "@/lib/grocery-groups";
 import { tintFor } from "@/lib/tints";
 import { aisleEmoji } from "@/lib/tiles";
@@ -84,6 +77,7 @@ type Props = {
   aisles: StoreAisleRow[];
   assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
   categories: CategoryRow[];
+  itemStores: { grocery_item_id: string; store_id: string }[];
   settings: HouseholdSettingsRow;
   inventory: InventoryEntry[];
   recipes: GroceryRecipe[];
@@ -99,12 +93,19 @@ type Group = {
   items: GroceryListItem[];
 };
 
+type Section = {
+  key: string;
+  title: string;
+  groups: Group[];
+};
+
 export function GroceryView({
   initialItems,
   stores,
   aisles,
   assignments,
   categories,
+  itemStores,
   settings,
   inventory,
   recipes,
@@ -113,9 +114,13 @@ export function GroceryView({
 }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<GroceryViewMode>(settings.grocery_view_mode);
-  const [storeId, setStoreId] = useState<string | null>(
-    settings.selected_store_id ?? (stores[0]?.id ?? null),
-  );
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    const live = (settings.selected_store_ids ?? []).filter((id) =>
+      stores.some((entry) => entry.id === id),
+    );
+    if (live.length > 0) return live;
+    return stores[0] ? [stores[0].id] : [];
+  });
   const [overrides, setOverrides] = useState<Record<string, Partial<GroceryListItem>>>({});
   const [editing, setEditing] = useState<GroceryListItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -123,17 +128,6 @@ export function GroceryView({
   const [searchFocused, setSearchFocused] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [adoptBusy, setAdoptBusy] = useState(false);
-
-  const store = stores.find((entry) => entry.id === storeId) ?? null;
-  const storeAisles = useMemo(
-    () =>
-      aisles
-        .filter((aisle) => aisle.store_id === storeId)
-        .sort((a, b) => a.sort_order - b.sort_order),
-    [aisles, storeId],
-  );
-
-  const aisleByKey = useMemo(() => aisleNameKeyMap(storeAisles), [storeAisles]);
 
   // Categories that are acting as store aisles are not item categories —
   // keep them out of the add/edit pickers.
@@ -154,34 +148,47 @@ export function GroceryView({
     [initialItems, overrides],
   );
 
-  const effectiveAisle = useMemo(
+  // Stores in view. An empty selection can't come from the UI (the last pill
+  // stays on); if it does anyway, read it as "every store" so the list never
+  // goes blank.
+  const sectionStores = useMemo(() => {
+    const active = stores.filter((entry) => selectedIds.includes(entry.id));
+    return active.length > 0 ? active : stores;
+  }, [stores, selectedIds]);
+
+  const itemStoreMap = useMemo(() => buildItemStores(itemStores), [itemStores]);
+
+  const visibleItems = useMemo(
     () =>
-      resolveEffectiveAisle(
+      visibleForStores(
         items,
-        storeId,
-        storeAisles,
-        assignments,
-        rememberedAisles,
-        categories,
+        itemStoreMap,
+        sectionStores.map((entry) => entry.id),
       ),
-    [items, storeId, storeAisles, assignments, rememberedAisles, categories],
+    [items, itemStoreMap, sectionStores],
   );
 
-  // Categories that would seed here but have no aisle yet — linked or by
-  // name. Drives the "Use my categories as aisles" rescue button.
-  const missingAisleCount = useMemo(() => {
-    const linked = new Set(
-      storeAisles
-        .map((aisle) => aisle.category_id)
-        .filter((id): id is string => id !== null),
-    );
-    return categories.filter(
-      (category) =>
-        category.seed_stores &&
-        !linked.has(category.id) &&
-        !aisleByKey.has(categoryMatchKey(category.name)),
-    ).length;
-  }, [categories, storeAisles, aisleByKey]);
+  // Would-seed categories without an aisle yet, per store. Drives each
+  // store's "Use my categories as aisles" rescue button.
+  const missingByStore = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of stores) {
+      map.set(entry.id, missingAislesForStore(entry.id, aisles, categories));
+    }
+    return map;
+  }, [stores, aisles, categories]);
+
+  // Unchecked lines per store, for the store pills.
+  const toBuyByStore = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of items) {
+      if (item.checked) continue;
+      for (const storeId of itemStoreMap.get(item.id) ?? []) {
+        map.set(storeId, (map.get(storeId) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [items, itemStoreMap]);
 
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -217,24 +224,67 @@ export function GroceryView({
     return scored.slice(0, 8).map((entry) => entry.entry);
   }, [catalog, query]);
 
-  const totalLeft = items.filter((item) => !item.checked).length;
-  const totalChecked = items.length - totalLeft;
+  const totalLeft = visibleItems.filter((item) => !item.checked).length;
+  const totalChecked = visibleItems.length - totalLeft;
 
-  const groups: Group[] = useMemo(() => {
-    if (mode === "aisle" && store) {
-      return buildAisleGroups(items, storeAisles, effectiveAisle).map((group) =>
-        group.key === UNASSIGNED_GROUP_KEY
-          ? {
-              ...group,
-              hint: "Tap an item to file it under an aisle",
-              adopt: missingAisleCount > 0,
-            }
-          : group,
-      );
+  const sections = useMemo<Section[]>(() => {
+    const built = buildStoreSections<GroceryListItem>({
+      items: visibleItems,
+      mode,
+      stores: sectionStores,
+      aisles,
+      itemStores: itemStoreMap,
+      assignments,
+      rememberedAisles,
+      categories,
+    });
+
+    if (mode !== "aisle") {
+      return built.map((section) => ({
+        key: section.key,
+        title: section.title,
+        groups: section.groups,
+      }));
     }
 
-    return buildCategoryGroups(items, categories);
-  }, [items, mode, store, storeAisles, effectiveAisle, categories, missingAisleCount]);
+    return built.map((section) => {
+      const missing =
+        section.key === ANY_STORE_KEY
+          ? 0
+          : missingByStore.get(section.key) ?? 0;
+      return {
+        key: section.key,
+        title: section.title,
+        groups: section.groups.map(
+          (group): Group =>
+            section.key === ANY_STORE_KEY
+              ? {
+                  ...group,
+                  hint: "Tap an item to choose where you buy it",
+                }
+              : group.key.endsWith(UNASSIGNED_GROUP_KEY)
+                ? {
+                    ...group,
+                    hint: "Tap an item to file it under an aisle",
+                    adopt: missing > 0,
+                  }
+                : group,
+        ),
+      };
+    });
+  }, [
+    visibleItems,
+    mode,
+    sectionStores,
+    aisles,
+    itemStoreMap,
+    assignments,
+    rememberedAisles,
+    categories,
+    missingByStore,
+  ]);
+
+  const showStoreHeaders = sections.length > 1;
 
   async function quickAdd(entry: CatalogEntry) {
     if (onListSet.has(entry.id)) {
@@ -280,18 +330,38 @@ export function GroceryView({
     if (!result.ok) toast.error(result.error);
   }
 
-  async function changeStore(next: string) {
-    setStoreId(next || null);
-    const result = await setGrocerySettings({ selectedStoreId: next || null });
-    if (!result.ok) toast.error(result.error);
+  /** Turns one store on or off. The last store always stays in view. */
+  async function toggleStore(storeId: string) {
+    const next = selectedIds.includes(storeId)
+      ? selectedIds.filter((id) => id !== storeId)
+      : stores
+          .filter((entry) => selectedIds.includes(entry.id) || entry.id === storeId)
+          .map((entry) => entry.id);
+    if (next.length === 0) return;
+
+    setSelectedIds(next);
+    const result = await setGrocerySettings({ selectedStoreIds: next });
+    if (!result.ok) {
+      setSelectedIds(selectedIds);
+      toast.error(result.error);
+    }
   }
 
-  async function adoptAisles() {
-    if (!store) return;
-    setAdoptBusy(true);
-    const result = await adoptCategoryAisles(store.id);
-    setAdoptBusy(false);
+  async function showAllStores() {
+    const next = stores.map((entry) => entry.id);
+    if (next.length === 0) return;
+    setSelectedIds(next);
+    const result = await setGrocerySettings({ selectedStoreIds: next });
     if (!result.ok) {
+      setSelectedIds(selectedIds);
+      toast.error(result.error);
+    }
+  }
+
+  async function adoptAisles(storeId: string) {
+    setAdoptBusy(true);
+    const result = await adoptCategoryAisles(storeId);
+    setAdoptBusy(false);    if (!result.ok) {
       toast.error(result.error);
       return;
     }
@@ -325,14 +395,15 @@ export function GroceryView({
   }
 
   async function clearChecked() {
-    const removed = items.filter((item) => item.checked);
+    // Only the stores in view get emptied — never a store you aren't seeing.
+    const removed = visibleItems.filter((item) => item.checked);
     if (removed.length === 0) return;
     setOverrides((current) => {
       const copy = { ...current };
       for (const item of removed) delete copy[item.id];
       return copy;
     });
-    const result = await clearCheckedGrocery();
+    const result = await clearCheckedGrocery(removed.map((item) => item.id));
     if (!result.ok) {
       toast.error(result.error);
       router.refresh();
@@ -366,7 +437,7 @@ export function GroceryView({
             <div className="flex overflow-hidden rounded-md border">
               <button
                 type="button"
-                disabled={!store}
+                disabled={stores.length === 0}
                 onClick={() => void changeMode("aisle")}
                 className={cn(
                   "px-2 py-1 text-xs font-semibold disabled:opacity-40",
@@ -410,44 +481,55 @@ export function GroceryView({
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{
-                width: `${
-                  items.length === 0
-                    ? 0
-                    : Math.round((totalChecked / items.length) * 100)
-                }%`,
-              }}
-            />
-          </div>
-          <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
-            {totalChecked} of {items.length} ·{" "}
-            {items.length === 0
-              ? 0
-              : Math.round((totalChecked / items.length) * 100)}
-            %
-          </span>
+                style={{
+                  width: `${
+                    visibleItems.length === 0
+                      ? 0
+                      : Math.round((totalChecked / visibleItems.length) * 100)
+                  }%`,
+                }}
+              />
+            </div>
+            <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
+              {totalChecked} of {visibleItems.length} ·{" "}
+              {visibleItems.length === 0
+                ? 0
+                : Math.round((totalChecked / visibleItems.length) * 100)}
+              %
+            </span>
         </div>
 
-        <div className="mt-2.5 flex items-center gap-2">
-          {stores.length > 0 ? (
-            <Select
-              value={storeId}
-              items={stores.map((entry) => ({ value: entry.id, label: entry.name }))}
-              onValueChange={(value) => void changeStore(value ?? "")}
-            >
-              <SelectTrigger className="h-8 w-44 shrink-0 text-sm">
-                <SelectValue placeholder="Pick a store" />
-              </SelectTrigger>
-              <SelectContent>
-                {stores.map((entry) => (
-                  <SelectItem key={entry.id} value={entry.id}>
-                    {entry.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
+        {stores.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {stores.map((entry) => {
+              const on = selectedIds.includes(entry.id);
+              const count = toBuyByStore.get(entry.id) ?? 0;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => void toggleStore(entry.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
+                    on
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input bg-background text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {entry.name}
+                  {count > 0 ? (
+                    <span className="text-xs font-bold tabular-nums opacity-80">
+                      {count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
+        <div className="mt-2.5 flex items-center gap-2">
           <div
             className="relative flex-1"
             onBlur={(event) => {
@@ -518,7 +600,7 @@ export function GroceryView({
           </div>
         </div>
 
-        {mode === "aisle" && !store ? (
+        {mode === "aisle" && stores.length === 0 ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Showing your categories —{" "}
             <Link href="/grocery/stores" className="underline">
@@ -540,114 +622,135 @@ export function GroceryView({
             <Plus /> Add the first item
           </Button>
         </div>
-      ) : groups.length === 0 ? (
+      ) : sections.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-          Everything is in the cart.{" "}
-          <button type="button" className="underline" onClick={clearChecked}>
-            Clear checked items
+          Nothing on the list for{" "}
+          {sectionStores.map((entry) => entry.name).join(" or ")}.{" "}
+          <button type="button" className="underline" onClick={showAllStores}>
+            Show every store
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {groups.map((group) => {
-            const tint = tintFor(group.title);
-            const emoji = aisleEmoji(group.title);
-            return (
-              <section
-                key={group.key}
-                className={cn(
-                  "flex flex-col overflow-hidden rounded-xl border",
-                  tint.header,
-                )}
-              >
-                <div className="flex items-baseline justify-between px-3 py-2">
-                  <h2 className="text-sm font-extrabold">
-                    {emoji ? (
-                      <span className="mr-1.5" aria-hidden>
-                        {emoji}
-                      </span>
-                    ) : null}
-                    {group.title}
+          {sections.map((section) => (
+            <Fragment key={section.key}>
+              {showStoreHeaders ? (
+                <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-3">
+                  <h2 className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
+                    {section.title}
                   </h2>
-                  <span className="text-xs opacity-70">
-                    {group.items.filter((item) => !item.checked).length} left
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {section.groups.reduce(
+                      (total, group) =>
+                        total + group.items.filter((item) => !item.checked).length,
+                      0,
+                    )}{" "}
+                    left
                   </span>
                 </div>
-                {group.hint ? (
-                  <p className="px-3 pb-2 text-xs opacity-80">
-                    {group.hint}
-                    {group.adopt ? (
-                      <>
-                        {" "}
-                        <button
-                          type="button"
-                          className="underline disabled:no-underline"
-                          disabled={adoptBusy}
-                          onClick={() => void adoptAisles()}
-                        >
-                          {adoptBusy ? "Adding aisles…" : "Use my categories as aisles"}
-                        </button>
-                      </>
-                    ) : null}
-                  </p>
-                ) : null}
-                <ul className="flex-1 divide-y divide-black/5 bg-background">
-                  {group.items.map((item) => (
-                    <li key={item.id} className="flex items-center gap-3 px-3 py-2">
-                      <Checkbox
-                        checked={item.checked}
-                        onCheckedChange={() => void toggleChecked(item)}
-                        aria-label={
-                          item.checked
-                            ? `Put ${item.name} back on the list`
-                            : `Mark ${item.name} as bought`
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left"
-                        onClick={() => setEditing(item)}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "truncate text-sm font-semibold",
-                              item.checked && "text-muted-foreground line-through",
-                            )}
-                          >
-                            {item.name}
-                          </span>
-                          {item.sale_only ? (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                              <Tag className="h-2.5 w-2.5" />
-                              Sale only
-                            </span>
-                          ) : null}
-                        </span>
-                        {item.source !== "manual" ? (
-                          <span className="text-xs text-muted-foreground">
-                            from {item.source}
+              ) : null}
+              {section.groups.map((group) => {
+                const tint = tintFor(group.title);
+                const emoji = aisleEmoji(group.title);
+                return (
+                  <section
+                    key={group.key}
+                    className={cn(
+                      "flex flex-col overflow-hidden rounded-xl border",
+                      tint.header,
+                    )}
+                  >
+                    <div className="flex items-baseline justify-between px-3 py-2">
+                      <h2 className="text-sm font-extrabold">
+                        {emoji ? (
+                          <span className="mr-1.5" aria-hidden>
+                            {emoji}
                           </span>
                         ) : null}
-                      </button>
-                      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {item.quantity}
-                        {item.unit ? ` ${item.unit}` : ""}
+                        {group.title}
+                      </h2>
+                      <span className="text-xs opacity-70">
+                        {group.items.filter((item) => !item.checked).length} left
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Edit ${item.name}`}
-                        onClick={() => setEditing(item)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+                    </div>
+                    {group.hint ? (
+                      <p className="px-3 pb-2 text-xs opacity-80">
+                        {group.hint}
+                        {group.adopt ? (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              className="underline disabled:no-underline"
+                              disabled={adoptBusy}
+                              onClick={() => void adoptAisles(section.key)}
+                            >
+                              {adoptBusy ? "Adding aisles…" : "Use my categories as aisles"}
+                            </button>
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    <ul className="flex-1 divide-y divide-black/5 bg-background">
+                      {group.items.map((item) => (
+                        <li key={item.id} className="flex items-center gap-3 px-3 py-2">
+                          <Checkbox
+                            checked={item.checked}
+                            onCheckedChange={() => void toggleChecked(item)}
+                            aria-label={
+                              item.checked
+                                ? `Put ${item.name} back on the list`
+                                : `Mark ${item.name} as bought`
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left"
+                            onClick={() => setEditing(item)}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "truncate text-sm font-semibold",
+                                  item.checked && "text-muted-foreground line-through",
+                                )}
+                              >
+                                {item.name}
+                              </span>
+                              {item.sale_only ? (
+                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                  <Tag className="h-2.5 w-2.5" />
+                                  Sale only
+                                </span>
+                              ) : null}
+                            </span>
+                            {item.source !== "manual" ? (
+                              <span className="text-xs text-muted-foreground">
+                                from {item.source}
+                              </span>
+                            ) : null}
+                          </button>
+                          <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                            {item.quantity}
+                            {item.unit ? ` ${item.unit}` : ""}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${item.name}`}
+                            onClick={() => setEditing(item)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       )}
 
@@ -672,9 +775,11 @@ export function GroceryView({
         <ItemDialog
           key={editing.id}
           item={editing}
-          store={store}
+          stores={stores}
+          membership={Array.from(itemStoreMap.get(editing.id) ?? [])}
           aisles={aisles}
-          assignedAisleId={effectiveAisle.get(editing.id) ?? null}
+          assignments={assignments}
+          rememberedAisles={rememberedAisles}
           categories={pickerCategories}
           open
           onOpenChange={(open) => {

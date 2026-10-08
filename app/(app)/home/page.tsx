@@ -48,6 +48,7 @@ async function HomeContent() {
     settingsResult,
     recipesResult,
     subsResult,
+    itemStoresResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -102,6 +103,10 @@ async function HomeContent() {
       .select("*")
       .eq("household_id", householdId)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("grocery_item_stores")
+      .select("grocery_item_id, store_id")
+      .eq("household_id", householdId),
   ]);
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
@@ -121,6 +126,10 @@ async function HomeContent() {
     aisle_id: string;
   }[];
   const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
+  const itemStores = (itemStoresResult.data ?? []) as {
+    grocery_item_id: string;
+    store_id: string;
+  }[];
   const recipes = (recipesResult.data ?? []) as Pick<
     RecipeRow,
     "id" | "name" | "time" | "tags"
@@ -137,6 +146,7 @@ async function HomeContent() {
       aisles={aisles}
       assignments={assignments}
       rememberedAisles={rememberedAisles}
+      itemStores={itemStores}
       settings={settings}
       recipes={recipes}
     />

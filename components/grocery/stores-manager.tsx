@@ -29,7 +29,17 @@ export function StoresManager({
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<StoreRow | null>(null);
 
-  const selectedStoreId = settings?.selected_store_id ?? null;
+  // Mirrors what the list shows: an empty selection reads as the first store
+  // (and from there as every store), same as on /grocery.
+  const inView = new Set(
+    (() => {
+      const live = (settings?.selected_store_ids ?? []).filter((id) =>
+        stores.some((entry) => entry.id === id),
+      );
+      if (live.length > 0) return live;
+      return stores[0] ? [stores[0].id] : [];
+    })(),
+  );
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -48,16 +58,30 @@ export function StoresManager({
     router.refresh();
   }
 
-  async function selectStore(store: StoreRow) {
+  /** Toggles a store in and out of the shopping list's view. */
+  async function toggleStore(store: StoreRow) {
+    const hiding = inView.has(store.id);
+    const next = stores
+      .map((entry) => entry.id)
+      .filter((id) => (hiding ? inView.has(id) && id !== store.id : inView.has(id) || id === store.id));
+    if (next.length === 0) {
+      toast.message("Keep at least one store in view");
+      return;
+    }
+
     const result = await setGrocerySettings({
-      selectedStoreId: store.id,
-      groceryViewMode: "aisle",
+      selectedStoreIds: next,
+      ...(hiding ? {} : { groceryViewMode: "aisle" as const }),
     });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success(`Shopping at ${store.name}`);
+    toast.success(
+      hiding
+        ? `${store.name} hidden from the list`
+        : `Showing ${store.name}`,
+    );
     router.refresh();
   }
 
@@ -102,7 +126,7 @@ export function StoresManager({
             const aisleCount = aisles.filter(
               (aisle) => aisle.store_id === store.id,
             ).length;
-            const active = store.id === selectedStoreId;
+            const visible = inView.has(store.id);
             return (
               <li key={store.id} className="flex items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -110,9 +134,9 @@ export function StoresManager({
                     <span className="truncate text-sm font-semibold">
                       {store.name}
                     </span>
-                    {active ? (
+                    {visible ? (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                        Active
+                        In view
                       </span>
                     ) : null}
                   </div>
@@ -121,11 +145,13 @@ export function StoresManager({
                   </p>
                 </div>
 
-                {!active ? (
-                  <Button variant="outline" size="sm" onClick={() => void selectStore(store)}>
-                    Use
-                  </Button>
-                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void toggleStore(store)}
+                >
+                  {visible ? "Hide" : "Show"}
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"

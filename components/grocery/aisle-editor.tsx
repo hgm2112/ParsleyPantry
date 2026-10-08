@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -37,14 +38,19 @@ import {
   updateAisle,
   updateStore,
 } from "@/app/(app)/grocery/actions";
-import type { StoreAisleRow, StoreRow } from "@/lib/types";
+import type { HouseholdSettingsRow, StoreAisleRow, StoreRow } from "@/lib/types";
 
 export function AisleEditor({
   store,
   aisles,
+  settings,
+  storeIds,
 }: {
   store: StoreRow;
   aisles: StoreAisleRow[];
+  settings: HouseholdSettingsRow | null;
+  /** Every store id in household order — needed to read the view selection. */
+  storeIds: string[];
 }) {
   const router = useRouter();
   const [storeName, setStoreName] = useState(store.name);
@@ -177,16 +183,32 @@ export function AisleEditor({
     router.refresh();
   }
 
-  async function selectThisStore() {
+  // Mirrors what /grocery shows: no persisted selection reads as the first
+  // store, otherwise the list of stores in view.
+  const live = (settings?.selected_store_ids ?? []).filter((id) =>
+    storeIds.includes(id),
+  );
+  const inViewList = live.length > 0 ? live : storeIds[0] ? [storeIds[0]] : [];
+  const inView = inViewList.includes(store.id);
+
+  async function toggleInView() {
+    const next = inView
+      ? inViewList.filter((id) => id !== store.id)
+      : storeIds.filter((id) => inViewList.includes(id) || id === store.id);
+    if (next.length === 0) {
+      toast.message("Keep at least one store in view");
+      return;
+    }
+
     const result = await setGrocerySettings({
-      selectedStoreId: store.id,
-      groceryViewMode: "aisle",
+      selectedStoreIds: next,
+      ...(inView ? {} : { groceryViewMode: "aisle" as const }),
     });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success(`Shopping at ${store.name}`);
+    toast.success(inView ? `${store.name} hidden` : `${store.name} shown`);
     router.refresh();
   }
 
@@ -225,9 +247,17 @@ export function AisleEditor({
             </Button>
           ) : null}
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={() => void selectThisStore()}>
-          <Check aria-hidden />
-          <span className="sr-only">Use as active store</span>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={inView}
+          onClick={() => void toggleInView()}
+          className={cn(
+            "shrink-0",
+            inView && "border-primary/40 bg-primary/10 text-primary",
+          )}
+        >
+          {inView ? "In view" : "Show"}
         </Button>
         <Button
           variant="ghost"

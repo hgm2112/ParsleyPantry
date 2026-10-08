@@ -8,9 +8,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { tintFor } from "@/lib/tints";
 import {
-  buildAisleGroups,
-  buildCategoryGroups,
-  resolveEffectiveAisle,
+  buildItemStores,
+  buildStoreSections,
+  visibleForStores,
 } from "@/lib/grocery-groups";
 import {
   clearCheckedGrocery,
@@ -46,6 +46,7 @@ export function ShoppingWidget({
   aisles,
   assignments,
   rememberedAisles,
+  itemStores,
   settings,
 }: {
   items: ShoppingPreviewItem[];
@@ -54,6 +55,7 @@ export function ShoppingWidget({
   aisles: StoreAisleRow[];
   assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
   rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
+  itemStores: { grocery_item_id: string; store_id: string }[];
   settings: HouseholdSettingsRow | null;
 }) {
   const router = useRouter();
@@ -65,41 +67,61 @@ export function ShoppingWidget({
     checked: overrides[item.id] ?? item.checked,
   }));
 
-  const total = resolved.length;
-  const checkedCount = resolved.filter((item) => item.checked).length;
-  const percent = total === 0 ? 0 : Math.round((checkedCount / total) * 100);
-
   const mode = settings?.grocery_view_mode ?? "aisle";
-  const storeId = settings?.selected_store_id ?? stores[0]?.id ?? null;
-  const store = stores.find((entry) => entry.id === storeId) ?? null;
 
-  const storeAisles = useMemo(
+  // Same view rule as /grocery: the stores in view, never a blank list.
+  const sectionStores = useMemo(() => {
+    const live = (settings?.selected_store_ids ?? []).filter((id) =>
+      stores.some((entry) => entry.id === id),
+    );
+    const active = stores.filter((entry) =>
+      (live.length > 0 ? live : stores[0] ? [stores[0].id] : []).includes(
+        entry.id,
+      ),
+    );
+    return active.length > 0 ? active : stores;
+  }, [stores, settings]);
+
+  const itemStoreMap = useMemo(() => buildItemStores(itemStores), [itemStores]);
+
+  const visible = useMemo(
     () =>
-      aisles
-        .filter((aisle) => aisle.store_id === storeId)
-        .sort((a, b) => a.sort_order - b.sort_order),
-    [aisles, storeId],
+      visibleForStores(
+        resolved,
+        itemStoreMap,
+        sectionStores.map((entry) => entry.id),
+      ),
+    [resolved, itemStoreMap, sectionStores],
   );
 
-  const effectiveAisle = useMemo(
+  const sections = useMemo(
     () =>
-      resolveEffectiveAisle(
-        resolved,
-        storeId,
-        storeAisles,
+      buildStoreSections<ShoppingPreviewItem>({
+        items: visible,
+        mode,
+        stores: sectionStores,
+        aisles,
+        itemStores: itemStoreMap,
         assignments,
         rememberedAisles,
         categories,
-      ),
-    [resolved, storeId, storeAisles, assignments, rememberedAisles, categories],
+      }),
+    [
+      visible,
+      mode,
+      sectionStores,
+      aisles,
+      itemStoreMap,
+      assignments,
+      rememberedAisles,
+      categories,
+    ],
   );
 
-  const groups = useMemo(() => {
-    if (mode === "aisle" && store) {
-      return buildAisleGroups(resolved, storeAisles, effectiveAisle);
-    }
-    return buildCategoryGroups(resolved, categories);
-  }, [resolved, mode, store, storeAisles, effectiveAisle, categories]);
+  const total = visible.length;
+  const checkedCount = visible.filter((item) => item.checked).length;
+  const percent = total === 0 ? 0 : Math.round((checkedCount / total) * 100);
+  const showHeaders = sections.length > 1;
 
   async function toggle(item: ShoppingPreviewItem) {
     const next = !item.checked;
@@ -139,9 +161,9 @@ export function ShoppingWidget({
   }
 
   async function clearChecked() {
-    const removed = resolved.filter((item) => item.checked);
+    const removed = visible.filter((item) => item.checked);
     if (removed.length === 0) return;
-    const result = await clearCheckedGrocery();
+    const result = await clearCheckedGrocery(removed.map((item) => item.id));
     if (!result.ok) {
       toast.error(result.error);
       router.refresh();
@@ -175,7 +197,9 @@ export function ShoppingWidget({
 
       {total === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-          Nothing on the list yet.
+          {resolved.length === 0
+            ? "Nothing on the list yet."
+            : "Nothing here for the stores in view."}
         </p>
       ) : (
         <>
@@ -192,59 +216,69 @@ export function ShoppingWidget({
           </div>
 
           <div className="space-y-2.5 overflow-y-auto">
-            {groups.map((group) => {
-              const tint = tintFor(group.title);
-              return (
-                <div
-                  key={group.key}
-                  className={cn(
-                    "overflow-hidden rounded-xl border",
-                    tint.header,
-                  )}
-                >
-                  <div className="flex items-center justify-between px-3 py-1.5 text-xs font-extrabold">
-                    <span>{group.title}</span>
-                    <span className="opacity-70">
-                      {group.items.filter((item) => !item.checked).length} left
-                    </span>
-                  </div>
-                  <ul className="divide-y divide-black/5 bg-background">
-                    {group.items.map((item) => (
-                      <li key={item.id}>
-                        <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent/40">
-                          <input
-                            type="checkbox"
-                            checked={item.checked}
-                            disabled={busyId === item.id}
-                            onChange={() => void toggle(item)}
-                            className="size-4 shrink-0 accent-primary"
-                          />
-                          <span
-                            className={cn(
-                              "min-w-0 flex-1 truncate",
-                              item.checked &&
-                                "text-muted-foreground line-through",
-                            )}
-                          >
-                            {item.name}
-                          </span>
-                          {item.sale_only ? (
-                            <Tag
-                              className="h-3.5 w-3.5 shrink-0 text-amber-600"
-                              aria-label="Only buy if on sale"
-                            />
-                          ) : null}
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {item.quantity}
-                            {item.unit ? ` ${item.unit}` : ""}
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+            {sections.map((section) => (
+              <div key={section.key} className="space-y-2.5">
+                {showHeaders ? (
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                    {section.title}
+                  </p>
+                ) : null}
+                {section.groups.map((group) => {
+                  const tint = tintFor(group.title);
+                  return (
+                    <div
+                      key={group.key}
+                      className={cn(
+                        "overflow-hidden rounded-xl border",
+                        tint.header,
+                      )}
+                    >
+                      <div className="flex items-center justify-between px-3 py-1.5 text-xs font-extrabold">
+                        <span>{group.title}</span>
+                        <span className="opacity-70">
+                          {group.items.filter((item) => !item.checked).length}{" "}
+                          left
+                        </span>
+                      </div>
+                      <ul className="divide-y divide-black/5 bg-background">
+                        {group.items.map((item) => (
+                          <li key={item.id}>
+                            <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent/40">
+                              <input
+                                type="checkbox"
+                                checked={item.checked}
+                                disabled={busyId === item.id}
+                                onChange={() => void toggle(item)}
+                                className="size-4 shrink-0 accent-primary"
+                              />
+                              <span
+                                className={cn(
+                                  "min-w-0 flex-1 truncate",
+                                  item.checked &&
+                                    "text-muted-foreground line-through",
+                                )}
+                              >
+                                {item.name}
+                              </span>
+                              {item.sale_only ? (
+                                <Tag
+                                  className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                                  aria-label="Only buy if on sale"
+                                />
+                              ) : null}
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {item.quantity}
+                                {item.unit ? ` ${item.unit}` : ""}
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
 
           {checkedCount > 0 ? (

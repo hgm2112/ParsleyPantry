@@ -102,9 +102,19 @@ export interface StoreAisleRow {
 
 export interface HouseholdSettingsRow {
   household_id: string;
+  /** Stores currently shown in the shopping list. Empty means "all stores". */
+  selected_store_ids: string[];
+  /** Mirrors `selected_store_ids[0]`; kept for older readers. */
   selected_store_id: string | null;
   grocery_view_mode: GroceryViewMode;
   default_location: Location;
+}
+
+/** Which store a grocery line is bought at. No row = "Any store". */
+export interface GroceryItemStoreRow {
+  household_id: string;
+  grocery_item_id: string;
+  store_id: string;
 }
 
 export interface GroceryItemRow {

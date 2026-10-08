@@ -50,6 +50,7 @@ export function HomeView({
   aisles,
   assignments,
   rememberedAisles,
+  itemStores,
   settings,
   recipes,
 }: {
@@ -62,6 +63,7 @@ export function HomeView({
   aisles: StoreAisleRow[];
   assignments: { grocery_item_id: string; store_id: string; aisle_id: string }[];
   rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
+  itemStores: { grocery_item_id: string; store_id: string }[];
   settings: HouseholdSettingsRow | null;
   recipes: RecipeOption[];
 }) {
@@ -94,6 +96,7 @@ export function HomeView({
           aisles={aisles}
           assignments={assignments}
           rememberedAisles={rememberedAisles}
+          itemStores={itemStores}
           settings={settings}
         />
       </div>

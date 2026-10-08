@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AisleEditor } from "@/components/grocery/aisle-editor";
-import type { StoreAisleRow, StoreRow } from "@/lib/types";
+import type { HouseholdSettingsRow, StoreAisleRow, StoreRow } from "@/lib/types";
 
 export const metadata = { title: "Store aisles" };
 
@@ -22,20 +22,32 @@ function EditorSkeleton() {
 async function StoreContent({ storeId }: { storeId: string }) {
   const { supabase, householdId } = await requireDal();
 
-  const [storeResult, aislesResult] = await Promise.all([
-    supabase
-      .from("stores")
-      .select("*")
-      .eq("household_id", householdId)
-      .eq("id", storeId)
-      .maybeSingle(),
-    supabase
-      .from("store_aisles")
-      .select("*")
-      .eq("household_id", householdId)
-      .eq("store_id", storeId)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [storeResult, aislesResult, settingsResult, storesResult] =
+    await Promise.all([
+      supabase
+        .from("stores")
+        .select("*")
+        .eq("household_id", householdId)
+        .eq("id", storeId)
+        .maybeSingle(),
+      supabase
+        .from("store_aisles")
+        .select("*")
+        .eq("household_id", householdId)
+        .eq("store_id", storeId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("household_settings")
+        .select("*")
+        .eq("household_id", householdId)
+        .maybeSingle(),
+      supabase
+        .from("stores")
+        .select("id")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+    ]);
 
   const store = storeResult.data as StoreRow | null;
   if (!store) notFound();
@@ -44,6 +56,10 @@ async function StoreContent({ storeId }: { storeId: string }) {
     <AisleEditor
       store={store}
       aisles={(aislesResult.data ?? []) as StoreAisleRow[]}
+      settings={(settingsResult.data ?? null) as HouseholdSettingsRow | null}
+      storeIds={(storesResult.data ?? []).map(
+        (row) => (row as { id: string }).id,
+      )}
     />
   );
 }

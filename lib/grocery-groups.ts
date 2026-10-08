@@ -9,7 +9,12 @@
  */
 
 import { categoryMatchKey } from "@/lib/kitchenowl";
-import type { CategoryRow, StoreAisleRow } from "@/lib/types";
+import type {
+  CategoryRow,
+  GroceryViewMode,
+  StoreAisleRow,
+  StoreRow,
+} from "@/lib/types";
 
 export const UNASSIGNED_GROUP_KEY = "__unassigned";
 export const OTHER_GROUP_KEY = "__other";
@@ -160,6 +165,182 @@ export function buildAisleGroups<T extends { id: string; checked?: boolean }>(
   return result
     .filter((group) => group.items.length > 0)
     .map((group) => ({ ...group, items: sinkChecked(group.items) }));
+}
+
+/**
+ * Multi-store support. A line can be bought at several stores, so the list is
+ * read as one section per store in view (plus a shared "Any store" section for
+ * lines not filed anywhere) rather than one flat group list.
+ */
+
+export const ANY_STORE_KEY = "__any_store";
+
+export type ItemStoreMembership = {
+  grocery_item_id: string;
+  store_id: string;
+};
+
+export type ItemStoreMap = Map<string, Set<string>>;
+
+/** Rows → grocery item id → set of store ids it is bought at. */
+export function buildItemStores(rows: ItemStoreMembership[]): ItemStoreMap {
+  const map: ItemStoreMap = new Map();
+  for (const row of rows) {
+    const set = map.get(row.grocery_item_id) ?? new Set<string>();
+    set.add(row.store_id);
+    map.set(row.grocery_item_id, set);
+  }
+  return map;
+}
+
+/**
+ * Lines bought at one of `inView`, plus lines filed nowhere — unfiled work is
+ * never hidden. An empty view reads as "every store".
+ */
+export function visibleForStores<T extends { id: string }>(
+  items: T[],
+  itemStores: ItemStoreMap,
+  inView: Iterable<string>,
+): T[] {
+  const view = new Set(inView);
+  if (view.size === 0) return items;
+  return items.filter((item) => {
+    const stores = itemStores.get(item.id);
+    if (!stores || stores.size === 0) return true;
+    for (const storeId of stores) {
+      if (view.has(storeId)) return true;
+    }
+    return false;
+  });
+}
+
+export type StoreSection<T> = {
+  /** Store id, or `ANY_STORE_KEY`. Also the React key prefix. */
+  key: string;
+  title: string;
+  groups: GroceryGrouping<T>[];
+};
+
+const prefixKeys = <T>(
+  groups: GroceryGrouping<T>[],
+  prefix: string,
+): GroceryGrouping<T>[] => groups.map((group) => ({ ...group, key: `${prefix}:${group.key}` }));
+
+type SectionInput<T extends AisleSourceItem> = {
+  items: T[];
+  mode: GroceryViewMode;
+  /** Stores to render, in list order. */
+  stores: StoreRow[];
+  aisles: StoreAisleRow[];
+  itemStores: ItemStoreMap;
+  assignments: ItemAisleAssignment[];
+  rememberedAisles: RememberedAisle[];
+  categories: CategoryRow[];
+};
+
+/**
+ * One section per store (only the stores that have something to show), then
+ * "Any store" for lines with no store. Keys are prefixed with the section key
+ * so aisle/category ids never collide across stores.
+ */
+export function buildStoreSections<T extends AisleSourceItem>(
+  input: SectionInput<T>,
+): StoreSection<T>[] {
+  const {
+    items,
+    mode,
+    stores,
+    aisles,
+    itemStores,
+    assignments,
+    rememberedAisles,
+    categories,
+  } = input;
+
+  const sectionFor = (
+    key: string,
+    title: string,
+    storeItems: T[],
+    store: StoreRow | null,
+  ): StoreSection<T> | null => {
+    let groups: GroceryGrouping<T>[];
+    if (mode === "aisle") {
+      const storeAisles = store
+        ? aisles
+            .filter((aisle) => aisle.store_id === store.id)
+            .sort((a, b) => a.sort_order - b.sort_order)
+        : [];
+      if (store) {
+        const effective = resolveEffectiveAisle(
+          storeItems,
+          store.id,
+          storeAisles,
+          assignments,
+          rememberedAisles,
+          categories,
+        );
+        groups = buildAisleGroups(storeItems, storeAisles, effective);
+      } else {
+        // Nothing to file against — one flat "Any store" group.
+        groups = [
+          {
+            key: ANY_STORE_KEY,
+            title: "Any store",
+            items: [...storeItems].sort(
+              (a, b) =>
+                Number(a.checked ?? false) - Number(b.checked ?? false),
+            ),
+          },
+        ];
+      }
+    } else {
+      groups = buildCategoryGroups(storeItems, categories);
+    }
+    groups = prefixKeys(groups, key);
+    if (groups.length === 0) return null;
+    return { key, title, groups };
+  };
+
+  const sections: StoreSection<T>[] = [];
+  for (const store of stores) {
+    const storeItems = items.filter((item) =>
+      itemStores.get(item.id)?.has(store.id),
+    );
+    const section = sectionFor(store.id, store.name, storeItems, store);
+    if (section) sections.push(section);
+  }
+
+  const unfiled = items.filter((item) => {
+    const set = itemStores.get(item.id);
+    return !set || set.size === 0;
+  });
+  if (unfiled.length > 0) {
+    const section = sectionFor(ANY_STORE_KEY, "Any store", unfiled, null);
+    if (section) sections.push(section);
+  }
+
+  return sections;
+}
+
+/** Categories that would seed at `store` but have no aisle yet (per store). */
+export function missingAislesForStore(
+  storeId: string,
+  aisles: StoreAisleRow[],
+  categories: CategoryRow[],
+): number {
+  const storeAisles = aisles.filter((aisle) => aisle.store_id === storeId);
+  const linked = new Set(
+    storeAisles
+      .map((aisle) => aisle.category_id)
+      .filter((id): id is string => id !== null),
+  );
+  const byKey = aisleNameKeyMap(storeAisles);
+  return categories.filter(
+    (category) =>
+      category.seed_stores &&
+      !linked.has(category.id) &&
+      !byKey.has(categoryMatchKey(category.name)),
+  ).length;
 }
 
 /** Categories in sort_order → unlisted categories → Other (null) last. */

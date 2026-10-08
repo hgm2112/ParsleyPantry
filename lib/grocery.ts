@@ -13,6 +13,55 @@ export type EnsureGroceryInput = {
 };
 
 /**
+ * Where new grocery lines land: the first store in the household's list order
+ * that is in view, else its first store. Items with no store show up in
+ * "Any store", so a null return is fine.
+ */
+export async function primaryStoreId(
+  supabase: SupabaseClient,
+  householdId: string,
+): Promise<string | null> {
+  const [settingsResult, storesResult] = await Promise.all([
+    supabase
+      .from("household_settings")
+      .select("selected_store_ids")
+      .eq("household_id", householdId)
+      .maybeSingle(),
+    supabase
+      .from("stores")
+      .select("id")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const ordered = (storesResult.data ?? []).map((row) => (row as { id: string }).id);
+  if (ordered.length === 0) return null;
+
+  const selected = new Set(
+    ((settingsResult.data?.selected_store_ids ?? []) as unknown) as
+      | string[]
+      | null,
+  );
+  return ordered.find((id) => selected.has(id)) ?? ordered[0];
+}
+
+/** Files a freshly created grocery line under the default store. */
+export async function fileGroceryItem(
+  supabase: SupabaseClient,
+  householdId: string,
+  groceryItemId: string,
+): Promise<void> {
+  const storeId = await primaryStoreId(supabase, householdId);
+  if (!storeId) return;
+  await supabase.from("grocery_item_stores").insert({
+    household_id: householdId,
+    grocery_item_id: groceryItemId,
+    store_id: storeId,
+  });
+}
+
+/**
  * Adds an unchecked grocery row unless the same item is already waiting to be
  * bought. Never duplicates low-stock / consume re-adds.
  */
@@ -51,7 +100,10 @@ export async function ensureGroceryItem(
     .single();
 
   if (error || !inserted) return { created: false, id: null };
-  return { created: true, id: (inserted as { id: string }).id };
+
+  const id = (inserted as { id: string }).id;
+  await fileGroceryItem(supabase, householdId, id);
+  return { created: true, id };
 }
 
 /**

@@ -54,6 +54,7 @@ async function GroceryContent() {
     inventoryResult,
     recipesResult,
     catalogResult,
+    itemStoresResult,
   ] = await Promise.all([
     supabase
       .from("grocery_items")
@@ -107,6 +108,10 @@ async function GroceryContent() {
       .select("id, name, unit, category_id, barcode")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
+    supabase
+      .from("grocery_item_stores")
+      .select("grocery_item_id, store_id")
+      .eq("household_id", householdId),
   ]);
 
   const items = (groceryResult.data ?? []) as unknown as (GroceryItemRow & {
@@ -133,6 +138,10 @@ async function GroceryContent() {
     aisle_id: string;
   }[];
   const catalog = (catalogResult.data ?? []) as CatalogEntry[];
+  const itemStores = (itemStoresResult.data ?? []) as {
+    grocery_item_id: string;
+    store_id: string;
+  }[];
   const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
   const inventory = (inventoryResult.data ?? []) as unknown as InventoryEntry[];
   const recipes = (recipesResult.data ?? []) as unknown as RecipeWithIngredients[];
@@ -144,9 +153,11 @@ async function GroceryContent() {
       aisles={aisles}
       assignments={assignments}
       categories={categories}
+      itemStores={itemStores}
       settings={
         settings ?? {
           household_id: householdId,
+          selected_store_ids: [],
           selected_store_id: null,
           grocery_view_mode: "aisle",
           default_location: "pantry",
