@@ -100,7 +100,7 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
-                  <div className="inline-flex flex-col items-center self-start">
+                  <div className="flex flex-col items-center">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-sm font-extrabold uppercase">
                         {label.weekday}
@@ -123,7 +123,7 @@ export function WeekMeals({
                         width={792}
                         height={720}
                         unoptimized
-                        className="h-10 w-auto select-none brightness-0 invert"
+                        className="h-9 w-auto select-none brightness-0 invert"
                       />
                       {meal?.made_at ? (
                         <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -132,7 +132,7 @@ export function WeekMeals({
                       ) : null}
                     </span>
                   </div>
-                  <p className="mt-2 line-clamp-3 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
+                  <p className="mt-2 line-clamp-4 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
                   {recipe.time > 0 ? (
@@ -144,7 +144,7 @@ export function WeekMeals({
                 </>
               ) : (
                 <>
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline justify-center gap-1.5">
                     <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
