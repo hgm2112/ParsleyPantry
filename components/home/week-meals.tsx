@@ -100,36 +100,38 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-base font-extrabold uppercase">
-                      {label.weekday}
-                    </span>
-                    <span className="text-sm opacity-70">
-                      {label.month} {label.dayOfMonth}
+                  <div className="inline-flex flex-col items-center self-start">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-extrabold uppercase">
+                        {label.weekday}
+                      </span>
+                      <span className="text-xs opacity-70">
+                        {label.month} {label.dayOfMonth}
+                      </span>
+                    </div>
+
+                    <span
+                      className={cn(
+                        "relative mt-2 flex size-12 items-center justify-center rounded-full",
+                        tint.dot,
+                      )}
+                      aria-hidden
+                    >
+                      <Image
+                        src="/knifefork2.svg"
+                        alt=""
+                        width={792}
+                        height={720}
+                        unoptimized
+                        className="h-10 w-auto select-none brightness-0 invert"
+                      />
+                      {meal?.made_at ? (
+                        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-2.5 w-2.5" aria-label="Made" />
+                        </span>
+                      ) : null}
                     </span>
                   </div>
-
-                  <span
-                    className={cn(
-                      "relative mx-auto mt-2 flex size-9 items-center justify-center rounded-full",
-                      tint.dot,
-                    )}
-                    aria-hidden
-                  >
-                    <Image
-                      src="/knifefork2.svg"
-                      alt=""
-                      width={792}
-                      height={720}
-                      unoptimized
-                      className="h-7 w-7 select-none brightness-0 invert"
-                    />
-                    {meal?.made_at ? (
-                      <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <Check className="h-2.5 w-2.5" aria-label="Made" />
-                      </span>
-                    ) : null}
-                  </span>
                   <p className="mt-2 line-clamp-3 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
                   </p>
@@ -143,10 +145,10 @@ export function WeekMeals({
               ) : (
                 <>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-base font-extrabold uppercase">
+                    <span className="text-sm font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
