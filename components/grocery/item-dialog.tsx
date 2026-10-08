@@ -318,7 +318,7 @@ export function ItemDialog({
 
         {storeIds.map((storeId) => {
           const store = stores.find((entry) => entry.id === storeId);
-          if (!store || storeAisles(storeId).length === 0) return null;
+          if (!store || !store.use_aisles || storeAisles(storeId).length === 0) return null;
           const value = aisleByStore[storeId] ?? effectiveAisle(storeId);
           return (
             <div key={storeId} className="space-y-2">

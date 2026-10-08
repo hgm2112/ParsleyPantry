@@ -264,7 +264,8 @@ export function buildStoreSections<T extends AisleSourceItem>(
     store: StoreRow | null,
   ): StoreSection<T> | null => {
     let groups: GroceryGrouping<T>[];
-    if (mode === "aisle") {
+    const useAisles = !store || (store.use_aisles ?? true);
+    if (mode === "aisle" && useAisles) {
       const storeAisles = store
         ? aisles
             .filter((aisle) => aisle.store_id === store.id)

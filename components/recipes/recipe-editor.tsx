@@ -12,12 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
+  addRecipeToGrocery,
   createRecipe,
   deleteRecipe,
   updateRecipe,
 } from "@/app/(app)/recipes/actions";
 import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
 import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
+import { parseQuantityText } from "@/lib/stock";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 type IngredientDraft = {
@@ -25,14 +27,17 @@ type IngredientDraft = {
   quantity_text: string;
   optional: boolean;
   on_shopping_list: boolean;
+  item_id?: string | null;
 };
 
 type Props = {
   recipe: RecipeRow | null;
   ingredients: RecipeIngredientRow[];
+  stockByItem?: Record<string, number>;
+  nameToItemId?: Record<string, string>;
 };
 
-export function RecipeEditor({ recipe, ingredients }: Props) {
+export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId }: Props) {
   const router = useRouter();
   const isEdit = recipe !== null;
 
@@ -49,6 +54,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
       quantity_text: ingredient.quantity_text,
       optional: ingredient.optional,
       on_shopping_list: ingredient.on_shopping_list,
+      item_id: ingredient.item_id,
     })),
   );
   const [busy, setBusy] = useState(false);
@@ -130,6 +136,36 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
     router.refresh();
   }
 
+  async function handleAddMissing() {
+    if (!recipe || !stockByItem) return;
+    const missingIds = ingredients
+      .filter((ingredient) => {
+        if (!ingredient.item_id) return false;
+        const needed = parseQuantityText(ingredient.quantity_text).quantity;
+        const have = stockByItem[ingredient.item_id] || 0;
+        return have < needed;
+      })
+      .map((ingredient) => ingredient.id);
+    if (missingIds.length === 0) {
+      toast.success("You have everything needed in your pantry");
+      return;
+    }
+    setBusy(true);
+    const result = await addRecipeToGrocery(recipe.id, missingIds);
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    const { added, skipped } = result.data;
+    toast.success(
+      added === 0 && skipped > 0
+        ? "All missing items are already on the list"
+        : `${added} missing ingredient${added === 1 ? "" : "s"} added to the list${skipped ? ` · ${skipped} already there` : ""}`,
+    );
+    router.refresh();
+  }
+
   return (
     <form onSubmit={save} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -144,15 +180,27 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
         </Button>
         <div className="flex items-center gap-2">
           {isEdit ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setGroceryOpen(true)}
-            >
-              <ShoppingCart />
-              To grocery list
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleAddMissing()}
+                disabled={busy}
+              >
+                <ShoppingCart />
+                Add only the missing ones
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setGroceryOpen(true)}
+              >
+                <ShoppingCart />
+                Select for grocery list
+              </Button>
+            </>
           ) : null}
           <Button type="submit" size="sm" disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : null}
@@ -242,6 +290,23 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
           <h2 className="text-sm font-extrabold">Ingredients</h2>
           <span className="text-xs text-muted-foreground">
             {rows.filter((row) => row.name.trim()).length} listed
+            {stockByItem && (() => {
+              let covered = 0;
+              let total = 0;
+              for (const row of rows) {
+                if (row.name.trim()) {
+                  const key = row.name.trim().toLowerCase();
+                  const effId = nameToItemId?.[key] ?? row.item_id ?? null;
+                  if (effId) {
+                    total += 1;
+                    const needed = parseQuantityText(row.quantity_text).quantity;
+                    const have = stockByItem[effId] || 0;
+                    if (have >= needed) covered += 1;
+                  }
+                }
+              }
+              return total > 0 ? ` · ✓ ${covered}/${total}` : "";
+            })()}
           </span>
         </div>
 
@@ -254,7 +319,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
           {rows.map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-[1fr_7.5rem_auto_auto] items-center gap-2"
+              className="grid grid-cols-[1fr_5rem_auto_auto_auto] items-center gap-2"
             >
               <Input
                 value={row.name}
@@ -270,6 +335,24 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
                 placeholder="2 cans"
                 aria-label={`Ingredient ${index + 1} amount`}
               />
+              {stockByItem ? (() => {
+                const key = row.name.trim().toLowerCase();
+                const effId = nameToItemId?.[key] ?? row.item_id ?? null;
+                if (effId) {
+                  const needed = parseQuantityText(row.quantity_text).quantity;
+                  const have = stockByItem[effId] || 0;
+                  const sufficient = have >= needed;
+                  return (
+                    <span
+                      className={`text-xs ${sufficient ? "text-emerald-600" : "text-muted-foreground"}`}
+                      title={sufficient ? `Have ${have}` : `Have ${have} (need ${needed})`}
+                    >
+                      {sufficient ? "✓ " : ""}{have}
+                    </span>
+                  );
+                }
+                return null;
+              })() : null}
               <label
                 className="flex cursor-pointer items-center gap-1.5 px-1 text-xs text-muted-foreground"
                 title="Optional ingredient"
@@ -310,7 +393,7 @@ export function RecipeEditor({ recipe, ingredients }: Props) {
           onClick={() =>
             setRows((current) => [
               ...current,
-              { name: "", quantity_text: "", optional: false, on_shopping_list: true },
+              { name: "", quantity_text: "", optional: false, on_shopping_list: true, item_id: null },
             ])
           }
         >

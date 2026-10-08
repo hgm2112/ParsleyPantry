@@ -212,6 +212,19 @@ export function AisleEditor({
     router.refresh();
   }
 
+  /** Toggles whether this store uses aisles for grouping. */
+  async function toggleUseAisles() {
+    const result = await updateStore(store.id, { useAisles: !store.use_aisles });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      store.use_aisles ? `${store.name} aisles disabled` : `${store.name} aisles enabled`,
+    );
+    router.refresh();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -250,6 +263,18 @@ export function AisleEditor({
         <Button
           variant="outline"
           size="sm"
+          aria-pressed={store.use_aisles}
+          onClick={() => void toggleUseAisles()}
+          className={cn(
+            "shrink-0",
+            !store.use_aisles && "border-gray-300 bg-gray-100 text-gray-500",
+          )}
+        >
+          {store.use_aisles ? "Aisles" : "Flat"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
           aria-pressed={inView}
           onClick={() => void toggleInView()}
           className={cn(

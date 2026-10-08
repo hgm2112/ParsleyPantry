@@ -55,22 +55,4 @@ export function dayLabel(index: number, weekStart: string): {
   };
 }
 
-export function weekTitle(weekStart: string): string {
-  const start = new Date(`${weekStart}T00:00:00Z`);
-  const end = new Date(`${addDays(weekStart, 6)}T00:00:00Z`);
-  const sameMonth =
-    start.getUTCMonth() === end.getUTCMonth() &&
-    start.getUTCFullYear() === end.getUTCFullYear();
-  const startPart = start.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-  const endPart = end.toLocaleDateString("en-US", {
-    month: sameMonth ? undefined : "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return `${startPart} – ${endPart}`;
-}
+

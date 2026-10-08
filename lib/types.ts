@@ -89,6 +89,7 @@ export interface StoreRow {
   household_id: string;
   name: string;
   sort_order: number;
+  use_aisles: boolean;
 }
 
 export interface StoreAisleRow {

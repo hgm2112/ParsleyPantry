@@ -20,7 +20,7 @@ function RecipeSkeleton() {
 async function RecipeContent({ recipeId }: { recipeId: string }) {
   const { supabase, householdId } = await requireDal();
 
-  const [recipeResult, ingredientsResult] = await Promise.all([
+  const [recipeResult, ingredientsResult, inventoryResult, itemsResult] = await Promise.all([
     supabase
       .from("recipes")
       .select("*")
@@ -33,6 +33,14 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
       .eq("household_id", householdId)
       .eq("recipe_id", recipeId)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("inventory")
+      .select("item_id, quantity")
+      .eq("household_id", householdId),
+    supabase
+      .from("items")
+      .select("id, name")
+      .eq("household_id", householdId),
   ]);
 
   const recipe = recipeResult.data as RecipeRow | null;
@@ -40,9 +48,27 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
 
   const ingredients = (ingredientsResult.data ?? []) as RecipeIngredientRow[];
 
+  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number }[];
+  const stockByItem: Record<string, number> = {};
+  for (const row of inventoryData) {
+    stockByItem[row.item_id] = (stockByItem[row.item_id] ?? 0) + row.quantity;
+  }
+
+  const itemsData = (itemsResult.data ?? []) as { id: string; name: string }[];
+  const nameToItemId: Record<string, string> = {};
+  for (const it of itemsData) {
+    const k = it.name.trim().toLowerCase();
+    if (k) nameToItemId[k] = it.id;
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
-      <RecipeEditor recipe={recipe} ingredients={ingredients} />
+      <RecipeEditor
+        recipe={recipe}
+        ingredients={ingredients}
+        stockByItem={stockByItem}
+        nameToItemId={nameToItemId}
+      />
     </div>
   );
 }

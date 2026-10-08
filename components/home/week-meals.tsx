@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
-import { addDays, dateLabel, dayIndexOf, mondayOf, weekTitle } from "@/lib/plan";
+import { addDays, dateLabel, dayIndexOf, mondayOf } from "@/lib/plan";
 import { tintFor } from "@/lib/tints";
 import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
@@ -48,6 +48,9 @@ export function WeekMeals({
     [start],
   );
 
+  const rangeStart = dateLabel(dates[0]);
+  const rangeEnd = dateLabel(dates[dates.length - 1]);
+
   const byDate = useMemo(() => {
     const map = new Map<string, HomeMeal>();
     for (const meal of meals) {
@@ -74,8 +77,8 @@ export function WeekMeals({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-36 text-center text-sm font-semibold text-muted-foreground">
-            {weekTitle(start)}
+          <span className="min-w-44 whitespace-nowrap text-center text-sm font-semibold text-muted-foreground">
+            {`${rangeStart.weekday} ${rangeStart.month} ${rangeStart.dayOfMonth} - ${rangeEnd.weekday} ${rangeEnd.month} ${rangeEnd.dayOfMonth}`}
           </span>
           <button
             type="button"

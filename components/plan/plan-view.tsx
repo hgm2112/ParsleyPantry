@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { dayLabel, addDays, mondayOf, weekTitle } from "@/lib/plan";
+import { dayLabel, addDays, dateLabel, mondayOf } from "@/lib/plan";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
@@ -57,7 +57,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
   if (weekStart === null) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-6 w-56" />
+        <Skeleton className="h-6 w-64" />
         <Skeleton className="h-9 w-full" />
         {Array.from({ length: 7 }).map((_, index) => (
           <Skeleton key={index} className="h-16 w-full rounded-xl" />
@@ -66,13 +66,16 @@ export function PlanView({ weekStart, days, recipes }: Props) {
     );
   }
 
+  const rangeStart = dateLabel(weekStart);
+  const rangeEnd = dateLabel(addDays(weekStart, 6));
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-extrabold">Meal plan</h1>
           <p className="text-xs text-muted-foreground">
-            {weekTitle(weekStart)}
+            {`${rangeStart.weekday} ${rangeStart.month} ${rangeStart.dayOfMonth} - ${rangeEnd.weekday} ${rangeEnd.month} ${rangeEnd.dayOfMonth}`}
           </p>
         </div>
         <div className="flex items-center gap-1.5">

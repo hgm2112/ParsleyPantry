@@ -13,11 +13,13 @@ export function RecipesView({
   ingredientCounts,
   itemIdsByRecipe,
   onlyItemIds,
+  pantryStatus,
 }: {
   recipes: RecipeRow[];
   ingredientCounts: Record<string, number>;
   itemIdsByRecipe?: Record<string, string[]>;
   onlyItemIds?: string[];
+  pantryStatus?: Record<string, { covered: number; total: number }>;
 }) {
   const [query, setQuery] = useState("");
 
@@ -121,6 +123,9 @@ export function RecipesView({
                       </span>
                     ) : null}
                     <span>{count} ingredients</span>
+                    {pantryStatus?.[recipe.id] && pantryStatus[recipe.id].total > 0 ? (
+                      <span>✓ {pantryStatus[recipe.id].covered}/{pantryStatus[recipe.id].total}</span>
+                    ) : null}
                   </div>
                   {recipe.tags.length > 0 ? (
                     <div className="flex flex-wrap gap-1 px-4 pb-4">

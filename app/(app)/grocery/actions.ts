@@ -643,13 +643,14 @@ export async function createStore(
 
 export async function updateStore(
   id: string,
-  patch: { name?: string; sortOrder?: number },
+  patch: { name?: string; sortOrder?: number; useAisles?: boolean },
 ): Promise<ActionResult> {
   try {
     const { supabase, householdId } = await requireDal();
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name.trim();
     if (patch.sortOrder !== undefined) body.sort_order = patch.sortOrder;
+    if (patch.useAisles !== undefined) body.use_aisles = patch.useAisles;
     const { error } = await supabase
       .from("stores")
       .update(body)
@@ -657,6 +658,7 @@ export async function updateStore(
       .eq("household_id", householdId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
+    revalidatePath("/");
     return { ok: true, data: null };
   } catch (error) {
     return {

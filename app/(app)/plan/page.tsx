@@ -10,7 +10,7 @@ export const metadata = { title: "Meal plan" };
 function PlanSkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-6 w-56" />
+      <Skeleton className="h-6 w-64" />
       <Skeleton className="h-9 w-full" />
       {Array.from({ length: 7 }).map((_, index) => (
         <Skeleton key={index} className="h-16 w-full rounded-xl" />
