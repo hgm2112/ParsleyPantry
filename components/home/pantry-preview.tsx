@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { displayQuantity } from "@/lib/stock";
+import { displayQtyUnit } from "@/lib/stock";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { Input } from "@/components/ui/input";
@@ -82,7 +82,7 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
       ) : (
         <ul className="space-y-2">
           {visible.map((row) => {
-            const display = displayQuantity(row.quantity, row.unit);
+            const { qtyText, unitText } = displayQtyUnit(row.quantity, row.unit);
             return (
               <li key={row.id}>
                 <Link
@@ -92,15 +92,17 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
                   <p className="truncate text-sm font-semibold group-hover:text-primary">
                     {row.item.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {display.quantity % 1 === 0
-                      ? display.quantity
-                      : display.quantity.toFixed(1)}
-                    {display.unit ? ` ${display.unit}` : ""}
-                  </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                    <LocationBadge location={row.location} />
-                    <ExpiryChip date={row.expiration_date} />
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                      QTY: {qtyText}
+                    </span>
+                    {unitText ? (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                        {unitText}
+                      </span>
+                    ) : null}
+                    <ExpiryChip date={row.expiration_date} className="uppercase" />
+                    <LocationBadge location={row.location} className="uppercase" />
                   </div>
                 </Link>
               </li>

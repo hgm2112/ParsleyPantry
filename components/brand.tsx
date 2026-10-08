@@ -47,7 +47,7 @@ export function LogoMark({
 }) {
   return (
     <Image
-      src="/parsleypantrylogo.svg"
+      src="/parsleypantrylogov2.svg"
       alt={alt}
       width={936}
       height={1008}

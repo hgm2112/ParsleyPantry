@@ -31,16 +31,42 @@ const WEIGHT_TO_IMPERIAL: Record<string, { unit: string; factor: number }> = {
   kg: { unit: "lb", factor: 2.20462 },
 };
 
-/** Renders metric weight in imperial (g -> oz, kg -> lb) for display. */
-export function displayQuantity(
+function trimDecimal(value: number): string {
+  return value % 1 === 0 ? String(value) : value.toFixed(1);
+}
+
+/**
+ * Pill texts for an inventory quantity: quantity text and unit text.
+ * Metric weights convert to imperial (g -> OZ, kg -> LB); pack-size units
+ * ("500 g") convert inside the unit text.
+ */
+export function displayQtyUnit(
   quantity: number,
   unit: string | null,
-): { quantity: number; unit: string | null } {
-  if (!unit) return { quantity, unit };
-  const target = WEIGHT_TO_IMPERIAL[unit.trim().toLowerCase()];
-  if (!target) return { quantity, unit };
-  const converted = Math.round(quantity * target.factor * 10) / 10;
-  return { quantity: converted, unit: target.unit };
+): { qtyText: string; unitText: string | null } {
+  if (!unit) return { qtyText: trimDecimal(quantity), unitText: null };
+  const normalized = unit.trim().toLowerCase();
+
+  const bare = WEIGHT_TO_IMPERIAL[normalized];
+  if (bare) {
+    return {
+      qtyText: trimDecimal(Math.round(quantity * bare.factor * 10) / 10),
+      unitText: bare.unit.toUpperCase(),
+    };
+  }
+
+  const pack = normalized.match(/^(\d+(?:\.\d+)?)\s*(g|grams?|kg)$/);
+  if (pack && pack[1]) {
+    const factor =
+      pack[2] === "kg" ? WEIGHT_TO_IMPERIAL.kg! : WEIGHT_TO_IMPERIAL.g!;
+    const amount = Math.round(Number(pack[1]) * factor.factor * 10) / 10;
+    return {
+      qtyText: trimDecimal(quantity),
+      unitText: `${trimDecimal(amount)} ${factor.unit.toUpperCase()}`,
+    };
+  }
+
+  return { qtyText: trimDecimal(quantity), unitText: unit.trim().toUpperCase() };
 }
 
 /** "6 oz" -> { quantity: 6, unit: "oz" } */
