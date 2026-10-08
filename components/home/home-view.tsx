@@ -70,7 +70,7 @@ export function HomeView({
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
-        <PantryPreview rows={pantry} categories={categories} />
+        <PantryPreview rows={pantry} />
       </div>
 
       <div className="lg:col-start-2 lg:row-start-2">

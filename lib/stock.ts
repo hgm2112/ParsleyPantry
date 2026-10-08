@@ -24,6 +24,25 @@ export function stockPoolKey(itemId: string, unit: string | null): string {
   return `${itemId}__${(unit ?? "").toLowerCase()}`;
 }
 
+const WEIGHT_TO_IMPERIAL: Record<string, { unit: string; factor: number }> = {
+  g: { unit: "oz", factor: 1 / 28.3495 },
+  gram: { unit: "oz", factor: 1 / 28.3495 },
+  grams: { unit: "oz", factor: 1 / 28.3495 },
+  kg: { unit: "lb", factor: 2.20462 },
+};
+
+/** Renders metric weight in imperial (g -> oz, kg -> lb) for display. */
+export function displayQuantity(
+  quantity: number,
+  unit: string | null,
+): { quantity: number; unit: string | null } {
+  if (!unit) return { quantity, unit };
+  const target = WEIGHT_TO_IMPERIAL[unit.trim().toLowerCase()];
+  if (!target) return { quantity, unit };
+  const converted = Math.round(quantity * target.factor * 10) / 10;
+  return { quantity: converted, unit: target.unit };
+}
+
 /** "6 oz" -> { quantity: 6, unit: "oz" } */
 export function parseQuantityText(text: string): {
   quantity: number;

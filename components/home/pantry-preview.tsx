@@ -2,44 +2,35 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, Search, Package } from "lucide-react";
+import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { foodEmoji, splitLeadingEmoji, tileGradient } from "@/lib/tiles";
+import { displayQuantity } from "@/lib/stock";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { Input } from "@/components/ui/input";
-import type { CategoryRow, InventoryEntry } from "@/lib/types";
+import type { InventoryEntry, Location } from "@/lib/types";
 
-export function PantryPreview({
-  rows,
-  categories,
-}: {
-  rows: InventoryEntry[];
-  categories: CategoryRow[];
-}) {
+const LOCATION_FILTERS: { value: Location | null; label: string }[] = [
+  { value: null, label: "All" },
+  { value: "pantry", label: "Pantry" },
+  { value: "fridge", label: "Fridge" },
+  { value: "freezer", label: "Freezer" },
+];
+
+export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeLocation, setActiveLocation] = useState<Location | null>(null);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return rows.filter((row) => {
-      if (activeCategory && row.item.category_id !== activeCategory) {
-        return false;
-      }
+      if (activeLocation && row.location !== activeLocation) return false;
       if (!needle) return true;
       return row.item.name.toLowerCase().includes(needle);
     });
-  }, [rows, query, activeCategory]);
+  }, [rows, query, activeLocation]);
 
-  const visible = filtered.slice(0, 16);
-
-  const usedCategoryIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const row of rows) {
-      if (row.item.category_id) ids.add(row.item.category_id);
-    }
-    return ids;
-  }, [rows]);
+  const visible = filtered.slice(0, 8);
 
   return (
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
@@ -65,45 +56,21 @@ export function PantryPreview({
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={() => setActiveCategory(null)}
-          className={cn(
-            "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
-            activeCategory === null
-              ? "border-primary bg-primary text-primary-foreground"
-              : "bg-background text-muted-foreground hover:bg-accent",
-          )}
-        >
-          All
-        </button>
-        {categories
-          .filter((category) => usedCategoryIds.has(category.id))
-          .map((category) => {
-            const chipName = category.icon
-              ? splitLeadingEmoji(category.name)[1]
-              : category.name;
-            return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() =>
-                  setActiveCategory((current) =>
-                    current === category.id ? null : category.id,
-                  )
-                }
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
-                  activeCategory === category.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent",
-                )}
-              >
-                {category.icon ? `${category.icon} ` : ""}
-                {chipName}
-              </button>
-            );
-          })}
+        {LOCATION_FILTERS.map((filter) => (
+          <button
+            key={filter.label}
+            type="button"
+            onClick={() => setActiveLocation(filter.value)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+              activeLocation === filter.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
 
       {visible.length === 0 ? (
@@ -113,36 +80,25 @@ export function PantryPreview({
             : "Nothing matches."}
         </p>
       ) : (
-        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        <ul className="space-y-2">
           {visible.map((row) => {
-            const [nameEmoji, cleanName] = splitLeadingEmoji(row.item.name);
-            const emoji = row.item.icon ?? nameEmoji ?? foodEmoji(row.item.name);
+            const display = displayQuantity(row.quantity, row.unit);
             return (
               <li key={row.id}>
                 <Link
                   href={`/inventory/${row.id}`}
-                  className="group flex h-full flex-col rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
+                  className="group block rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-2xl",
-                        tileGradient(row.item.name),
-                      )}
-                      aria-hidden
-                    >
-                      {emoji}
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                  <p className="mt-2 truncate text-sm font-semibold group-hover:text-primary">
-                    {cleanName}
+                  <p className="truncate text-sm font-semibold group-hover:text-primary">
+                    {row.item.name}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {row.quantity}
-                    {row.unit ? ` ${row.unit}` : ""}
+                    {display.quantity % 1 === 0
+                      ? display.quantity
+                      : display.quantity.toFixed(1)}
+                    {display.unit ? ` ${display.unit}` : ""}
                   </p>
-                  <div className="mt-auto flex flex-wrap items-center gap-1 pt-2">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
                     <LocationBadge location={row.location} />
                     <ExpiryChip date={row.expiration_date} />
                   </div>
