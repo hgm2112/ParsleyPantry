@@ -2,18 +2,23 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Check,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Loader2,
   Plus,
   Utensils,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
 import { addDays, dateLabel, dayIndexOf, mondayOf, weekTitle } from "@/lib/plan";
 import { tintFor } from "@/lib/tints";
+import { markMealMade } from "@/app/(app)/plan/actions";
 import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
@@ -26,8 +31,25 @@ export function WeekMeals({
   recipes: RecipeOption[];
 }) {
   const today = useToday();
+  const router = useRouter();
   const [offset, setOffset] = useState(0);
   const [openDate, setOpenDate] = useState<string | null>(null);
+  const [madeBusy, setMadeBusy] = useState(false);
+
+  async function quickMarkMade() {
+    setMadeBusy(true);
+    const result = await markMealMade({
+      weekStart: mondayOf(new Date(`${today}T00:00:00Z`)),
+      dayIndex: dayIndexOf(today),
+    });
+    setMadeBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Marked as made — pantry updated");
+    router.refresh();
+  }
 
   // Rolling 7-day window that always leads with today.
   const start = useMemo(() => addDays(today, offset * 7), [today, offset]);
@@ -92,7 +114,7 @@ export function WeekMeals({
               type="button"
               onClick={() => setOpenDate(iso)}
               className={cn(
-                "group flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+                "group relative flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
                 recipe
                   ? cn(tint.header, "hover:border-primary/50")
                   : "border-dashed bg-background",
@@ -100,6 +122,33 @@ export function WeekMeals({
             >
               {recipe ? (
                 <>
+                  {iso === today && !meal?.made_at ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Mark today's dinner as made"
+                      aria-disabled={madeBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        if (!madeBusy) void quickMarkMade();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.stopPropagation();
+                          event.preventDefault();
+                          if (!madeBusy) void quickMarkMade();
+                        }
+                      }}
+                      className="absolute right-1.5 top-1.5 z-10 rounded-full p-1 text-muted-foreground transition-colors hover:bg-white/70 hover:text-primary"
+                    >
+                      {madeBusy ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ChefHat className="h-4 w-4" />
+                      )}
+                    </span>
+                  ) : null}
                   <div className="flex flex-col items-center">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-sm font-extrabold uppercase">
