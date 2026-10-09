@@ -4,6 +4,46 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 6) — Signup always gets plain default categories
+
+**Shipped**
+- New `supabase/migrations/20261009160000_restore_default_signup_categories.sql`:
+  `create or replace function public.handle_new_user()` re-asserting the
+  canonical body from `20261006160000_init.sql:279-326` (auto household →
+  member → profile → settings → the 12 plain categories, `icon` NULL,
+  `sort_order` 1–12). Trigger `on_auth_user_created` already points at it,
+  so no re-create
+- Why: the repo already guarantees this (only signup seed is the trigger;
+  all category reads are household-filtered + RLS `is_member`), but
+  migrations are hand-run in the SQL Editor and `20261006230000` documents
+  a prior out-of-repo "desired-order apply" — so the live function may have
+  drifted and seeded KitchenOwl-style rows (`🥫 12 - Canned food`, icons,
+  `sort_order` 1000+) at signup. This closes that gap
+- Same file carries, in comments: two **read-only diagnostics**
+  (`select prosrc from pg_proc where proname = 'handle_new_user'` and an
+  affected-auto-households query) and an **opt-in cleanup** (commented out,
+  run manually only if the diagnostic returns rows) — temp table of
+  untouched auto households (`is_auto` + no items/recipes/grocery/inventory/
+  stores, same guard as `join_household()`), delete only drifted rows, then
+  restore missing canonical defaults by `lower(name)`
+- `README.md` Deploy section: added the new file to the must-run list
+
+**Gotchas**
+- No app/TS change — the guarantee lives entirely in the Postgres trigger;
+  `npx tsc --noEmit && npm run lint` clean (`next build` skipped: no code
+  changed and the dev server was live on :3000)
+- The live function still needs the migration applied in the dashboard
+  (repo convention, same as `meal_plan_kind`) — the `prosrc` check is the
+  read-only way to confirm which version is live
+- No `psql` in this environment, so the SQL is hand-verified only
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`, `MealIcon`'s
+  `recipe ?` branch)
+- Untracked working files still in the tree: `parsley2.svg`,
+  `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`,
+  `PPmessedup.jpg`
+
 ## 2026-10-09 (part 5) — Login logo stray "ntry" text
 
 **Shipped** (pushed `e5ef246`)
