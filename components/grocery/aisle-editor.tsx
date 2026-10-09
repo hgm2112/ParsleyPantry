@@ -17,9 +17,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   SortableList,
@@ -212,15 +212,15 @@ export function AisleEditor({
     router.refresh();
   }
 
-  /** Toggles whether this store uses aisles for grouping. */
-  async function toggleUseAisles() {
-    const result = await updateStore(store.id, { useAisles: !store.use_aisles });
+  async function setUseAisles(useAisles: boolean) {
+    if (useAisles === store.use_aisles) return;
+    const result = await updateStore(store.id, { useAisles });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     toast.success(
-      store.use_aisles ? `${store.name} aisles disabled` : `${store.name} aisles enabled`,
+      useAisles ? `${store.name} aisles enabled` : `${store.name} aisles disabled`,
     );
     router.refresh();
   }
@@ -259,31 +259,28 @@ export function AisleEditor({
               <Check />
             </Button>
           ) : null}
+          {inView ? (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              In view
+            </span>
+          ) : null}
         </div>
         <Button
           variant="outline"
           size="sm"
-          aria-pressed={store.use_aisles}
-          onClick={() => void toggleUseAisles()}
-          className={cn(
-            "shrink-0",
-            !store.use_aisles && "border-gray-300 bg-gray-100 text-gray-500",
-          )}
-        >
-          {store.use_aisles ? "Aisles" : "Flat"}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-pressed={inView}
           onClick={() => void toggleInView()}
-          className={cn(
-            "shrink-0",
-            inView && "border-primary/40 bg-primary/10 text-primary",
-          )}
         >
-          {inView ? "In view" : "Show"}
+          {inView ? "Hide" : "Show"}
         </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-sm text-muted-foreground">Aisles</span>
+          <Switch
+            checked={store.use_aisles}
+            onCheckedChange={(checked) => void setUseAisles(checked)}
+            size="sm"
+            aria-label="Toggle aisles for this store"
+          />
+        </div>
         <Button
           variant="ghost"
           size="icon-sm"
