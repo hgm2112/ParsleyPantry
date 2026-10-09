@@ -61,6 +61,33 @@ Import the repo, set the two Supabase env vars in the project settings, and
 deploy. Note: `@supabase/supabase-js` wants Node 22+ (Vercel default); on
 Node 20 it only prints a deprecation warning.
 
+Before the first deploy, run every migration in `supabase/migrations/` in
+filename order in the Supabase SQL Editor — this includes
+`20261009120000_meal_plan_kind.sql` (the day-kind column for eating out /
+meal kits / no-cook days).
+
+## Install on your phone
+
+The app is a PWA (web app manifest + minimal service worker, registered in
+production builds). Installing it adds a home-screen icon and opens in a
+standalone window — no app-store step.
+
+**iOS / iPadOS** — open the site in Safari, tap **Share**, then **Add to Home
+Screen**.
+
+**Android / Chrome** — open the site; tap **Install** in the address bar (or
+the ⋮ menu → **Install app**).
+
+To test locally, build and run the production server (the service worker only
+registers in production, so `npm run dev` won't trigger it):
+
+```bash
+npm run build && npm start
+```
+
+Then open the site on your phone over the same network (or on the deployed
+Vercel URL, which is HTTPS as required for service workers) and install.
+
 ## Migrating from KitchenOwl
 
 1. In KitchenOwl: Export → save the JSON.

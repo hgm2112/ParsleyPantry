@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Geist_Mono } from "next/font/google";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-dvh flex flex-col bg-background text-foreground">
         {children}
+        <ServiceWorkerRegister />
         <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
