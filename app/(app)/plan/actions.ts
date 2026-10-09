@@ -20,8 +20,12 @@ const setMealSchema = dayKeySchema.extend({
   recipeId: z.string().uuid().nullable(),
 });
 
+const mealKindSchema = z.enum(["eating_out", "meal_kit", "no_cook"]);
+
 const noteSchema = dayKeySchema.extend({
   note: z.string().trim().max(500),
+  /** null/undefined = no kind (recipe day or plain note). */
+  kind: mealKindSchema.nullable().optional(),
 });
 
 type Dal = Awaited<ReturnType<typeof requireDal>>;
@@ -63,6 +67,8 @@ export async function setMealDay(
         week_start: parsed.data.weekStart,
         day_index: parsed.data.dayIndex,
         recipe_id: parsed.data.recipeId,
+        // A recipe replaces any kind on the day.
+        ...(parsed.data.recipeId !== null ? { kind: null } : {}),
         // A new recipe on a made day is not made yet.
         ...(changed ? { made_at: null } : {}),
       },
@@ -87,20 +93,39 @@ export async function saveMealNote(
   try {
     const parsed = noteSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid note" };
-    const { supabase, householdId } = await requireDal();
+    const dal = await requireDal();
+    const kind = parsed.data.kind ?? null;
 
-    const { error } = await supabase.from("meal_plan_days").upsert(
+    const { data: existingRow } = await dal.supabase
+      .from("meal_plan_days")
+      .select("recipe_id")
+      .eq("household_id", dal.householdId)
+      .eq("week_start", parsed.data.weekStart)
+      .eq("day_index", parsed.data.dayIndex)
+      .maybeSingle();
+    const existingRecipeId =
+      (existingRow as { recipe_id: string | null } | null)?.recipe_id ?? null;
+    // A kind replaces the recipe: drop it and release its reservations.
+    const replacesRecipe = kind !== null && existingRecipeId !== null;
+    if (replacesRecipe) {
+      await releaseDayHolds(dal, parsed.data.weekStart, parsed.data.dayIndex);
+    }
+
+    const { error } = await dal.supabase.from("meal_plan_days").upsert(
       {
-        household_id: householdId,
+        household_id: dal.householdId,
         week_start: parsed.data.weekStart,
         day_index: parsed.data.dayIndex,
         note: parsed.data.note || null,
+        kind,
+        ...(replacesRecipe ? { recipe_id: null, made_at: null } : {}),
       },
       { onConflict: "household_id,week_start,day_index" },
     );
     if (error) return { ok: false, error: error.message };
 
     revalidatePath("/plan");
+    revalidatePath("/home");
     return { ok: true, data: null };
   } catch (error) {
     return {

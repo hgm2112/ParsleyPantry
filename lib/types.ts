@@ -157,11 +157,15 @@ export interface RecipeIngredientRow {
   sort_order: number;
 }
 
+/** Structured non-recipe day: eating out / meal kit / no cooking. */
+export type MealKind = "eating_out" | "meal_kit" | "no_cook";
+
 export interface MealPlanDayRow {
   household_id: string;
   week_start: string;
   day_index: number;
   recipe_id: string | null;
+  kind: MealKind | null;
   note: string | null;
   made_at: string | null;
 }

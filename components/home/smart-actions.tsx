@@ -8,6 +8,7 @@ import { daysUntil } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import { foodEmoji } from "@/lib/tiles";
 import { mondayOf } from "@/lib/plan";
+import { isPlanned } from "@/lib/meal-kind";
 import { useToday } from "@/lib/use-now";
 import { addGroceryItem } from "@/app/(app)/grocery/actions";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
@@ -59,9 +60,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
     meals.find(
       (meal) => meal.week_start === weekStart && meal.day_index === todayIndex,
     ) ?? null;
-  const dinnerPlanned = Boolean(
-    todayEntry && (todayEntry.recipe_id || todayEntry.note),
-  );
+  const dinnerPlanned = isPlanned(todayEntry);
 
   const lowAlreadyListed =
     lowRow !== null &&

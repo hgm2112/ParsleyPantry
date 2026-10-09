@@ -23,6 +23,9 @@ import {
 } from "@/app/(app)/plan/actions";
 import { MadeConfirmContent } from "@/components/plan/made-confirm";
 import { dayLabel } from "@/lib/plan";
+import { MEAL_KINDS, dayTitle, isPlanned, mealKindInfo } from "@/lib/meal-kind";
+import type { MealKind } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import type { PlannedDay } from "@/components/plan/plan-view";
 
 export type RecipeOption = {
@@ -47,6 +50,7 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
   const currentRecipe = recipes.find((entry) => entry.id === currentRecipeId);
 
   const [note, setNote] = useState(day.entry?.note ?? "");
+  const [kind, setKind] = useState<MealKind | null>(day.entry?.kind ?? null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -103,13 +107,23 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
       weekStart,
       dayIndex: day.index,
       note,
+      kind,
     });
     setBusy(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success("Note saved");
+    if (kind) {
+      const kindLabel = mealKindInfo(kind)?.label ?? "Meal";
+      toast.success(
+        currentRecipe
+          ? `Recipe replaced — ${kindLabel}`
+          : `${kindLabel} planned for ${label.weekday}`,
+      );
+    } else {
+      toast.success("Note saved");
+    }
     router.refresh();
   }
 
@@ -159,6 +173,14 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
     );
   }
 
+  const mealTitle = dayTitle(day.entry, currentRecipe?.name);
+  const savedNote = day.entry?.note?.trim() ?? "";
+  const description = mealTitle
+    ? savedNote && savedNote !== mealTitle
+      ? `${mealTitle} — ${savedNote}`
+      : mealTitle
+    : "Pick a recipe, or just leave a note";
+
   return (
     <Dialog open onOpenChange={(open) => !open && onDone()}>
       <DialogContent className="max-h-[85vh] gap-3 overflow-y-auto">
@@ -166,7 +188,7 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
           <MadeConfirmContent
             weekStart={weekStart}
             dayIndex={day.index}
-            recipeName={currentRecipe?.name ?? null}
+            mealName={mealTitle}
             onCancel={() => setConfirmOpen(false)}
             onConfirmed={onDone}
           />
@@ -176,11 +198,7 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
               <DialogTitle>
                 {label.weekday} {label.month} {label.dayOfMonth}
               </DialogTitle>
-              <DialogDescription>
-                {currentRecipe
-                  ? currentRecipe.name
-                  : "Pick a recipe, or just leave a note"}
-              </DialogDescription>
+              <DialogDescription>{description}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3">
@@ -200,7 +218,7 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
                 </div>
               ) : null}
 
-              {currentRecipe && !day.entry?.made_at ? (
+              {isPlanned(day.entry) && !day.entry?.made_at ? (
                 <Button
                   variant="outline"
                   className="w-full"
@@ -243,12 +261,49 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
               </ul>
 
               <div className="space-y-2">
-                <Label htmlFor="day-note">Note (no recipe needed)</Label>
+                <Label>Other plans</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {MEAL_KINDS.map((entry) => {
+                    const active = kind === entry.kind;
+                    const Icon = entry.Icon;
+                    return (
+                      <button
+                        key={entry.kind}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={busy}
+                        onClick={() => setKind(active ? null : entry.kind)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+                          active
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {entry.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {kind && currentRecipe ? (
+                  <p className="text-xs text-muted-foreground">
+                    Saving replaces &ldquo;{currentRecipe.name}&rdquo;.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="day-note">Note</Label>
                 <Textarea
                   id="day-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="Leftovers night…"
+                  placeholder={
+                    kind
+                      ? (mealKindInfo(kind)?.placeholder ?? "Add details…")
+                      : "Leftovers night…"
+                  }
                   rows={2}
                 />
                 <Button
@@ -258,7 +313,7 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
                   disabled={busy}
                 >
                   {busy ? <Loader2 className="animate-spin" /> : <Check />}
-                  Save note
+                  Save
                 </Button>
               </div>
             </div>

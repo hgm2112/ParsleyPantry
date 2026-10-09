@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayLabel, addDays, dateLabel, mondayOf } from "@/lib/plan";
+import { dayTitle, isPlanned, mealKindInfo } from "@/lib/meal-kind";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
@@ -120,6 +121,9 @@ export function PlanView({ weekStart, days, recipes }: Props) {
             ? recipes.find((entry) => entry.id === day.entry?.recipe_id)
             : null;
           const note = day.entry?.note ?? null;
+          const kindInfo = mealKindInfo(day.entry?.kind);
+          const KindIcon = kindInfo?.Icon;
+          const title = dayTitle(day.entry, recipe?.name);
 
           return (
             <li key={day.index}>
@@ -140,31 +144,40 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                 <span
                   className={cn(
                     "flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-lg",
-                    recipe ? tileGradient(recipe.name) : "bg-muted",
+                    recipe
+                      ? tileGradient(recipe.name)
+                      : kindInfo
+                        ? kindInfo.tint.header
+                        : "bg-muted",
                   )}
                   aria-hidden
                 >
-                  {recipe ? foodEmoji(recipe.name, recipe.tags) : ""}
+                  {recipe ? (
+                    foodEmoji(recipe.name, recipe.tags)
+                  ) : KindIcon ? (
+                    <KindIcon className="h-4 w-4" />
+                  ) : (
+                    ""
+                  )}
                 </span>
 
                 <span className="min-w-0 flex-1">
-                  {recipe ? (
-                    <>
-                      <span className="block truncate text-sm font-semibold">
-                        {recipe.name}
-                      </span>
-                      {recipe.time > 0 ? (
-                        <span className="text-xs text-muted-foreground">
-                          {recipe.time} min
-                        </span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span className="block text-sm text-muted-foreground">
-                      {note ? note : "Plan a meal"}
+                  <span
+                    className={cn(
+                      "block truncate text-sm",
+                      recipe || kindInfo
+                        ? "font-semibold"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {title ?? "Plan a meal"}
+                  </span>
+                  {recipe && recipe.time > 0 ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {recipe.time} min
                     </span>
-                  )}
-                  {recipe && note ? (
+                  ) : null}
+                  {note && note !== title ? (
                     <span className="block truncate text-xs text-muted-foreground">
                       {note}
                     </span>
@@ -177,7 +190,7 @@ export function PlanView({ weekStart, days, recipes }: Props) {
                   </span>
                 ) : null}
                 <span className="text-xs text-muted-foreground">
-                  {recipe || note ? "Edit" : "Add"}
+                  {isPlanned(day.entry) ? "Edit" : "Add"}
                 </span>
               </button>
             </li>
@@ -187,11 +200,11 @@ export function PlanView({ weekStart, days, recipes }: Props) {
 
       {recipes.length === 0 ? (
         <div className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          Create a recipe first —{" "}
+          No recipes yet —{" "}
           <Link href="/recipes/new" className="underline">
             new recipe
           </Link>
-          .
+          , or tap any day to plan eating out / no cooking.
         </div>
       ) : null}
 

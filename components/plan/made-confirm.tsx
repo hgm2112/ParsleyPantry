@@ -21,7 +21,7 @@ type PreviewItem = { name: string; quantity: number; unit: string | null };
 type Props = {
   weekStart: string;
   dayIndex: number;
-  recipeName?: string | null;
+  mealName?: string | null;
   onCancel: () => void;
   onConfirmed?: () => void;
 };
@@ -33,7 +33,7 @@ type Props = {
 export function MadeConfirmContent({
   weekStart,
   dayIndex,
-  recipeName,
+  mealName,
   onCancel,
   onConfirmed,
 }: Props) {
@@ -72,7 +72,7 @@ export function MadeConfirmContent({
       toast.error(result.error);
       return;
     }
-    toast.success("Marked as made — pantry updated");
+    toast.success("Marked as made");
     router.refresh();
     onConfirmed?.();
   }
@@ -82,8 +82,8 @@ export function MadeConfirmContent({
       <DialogHeader>
         <DialogTitle>Mark dinner as made?</DialogTitle>
         <DialogDescription>
-          {recipeName
-            ? `“${recipeName}” will use these pantry items:`
+          {mealName
+            ? `“${mealName}” will use these pantry items:`
             : "These pantry items will be used up:"}
         </DialogDescription>
       </DialogHeader>
@@ -179,13 +179,13 @@ export function MadeConfirmDialog({
   onOpenChange,
   weekStart,
   dayIndex,
-  recipeName,
+  mealName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weekStart: string;
   dayIndex: number;
-  recipeName?: string | null;
+  mealName?: string | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,7 +193,7 @@ export function MadeConfirmDialog({
         <MadeConfirmContent
           weekStart={weekStart}
           dayIndex={dayIndex}
-          recipeName={recipeName}
+          mealName={mealName}
           onCancel={() => onOpenChange(false)}
           onConfirmed={() => onOpenChange(false)}
         />

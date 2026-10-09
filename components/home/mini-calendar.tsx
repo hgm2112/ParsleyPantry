@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
 import { addDays, dayIndexOf, mondayOf } from "@/lib/plan";
+import { isPlanned } from "@/lib/meal-kind";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import type { HomeMeal } from "@/lib/types";
 
@@ -36,7 +37,7 @@ export function MiniCalendar({
   const byDate = useMemo(() => {
     const map = new Map<string, HomeMeal>();
     for (const meal of meals) {
-      if (meal.recipe_id) map.set(addDays(meal.week_start, meal.day_index), meal);
+      if (isPlanned(meal)) map.set(addDays(meal.week_start, meal.day_index), meal);
     }
     return map;
   }, [meals]);

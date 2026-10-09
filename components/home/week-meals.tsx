@@ -9,11 +9,18 @@ import {
   ChevronRight,
   Clock,
   Plus,
+  StickyNote,
   Utensils,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToday } from "@/lib/use-now";
 import { addDays, dateLabel, dayIndexOf, mondayOf } from "@/lib/plan";
+import {
+  NOTE_TINT,
+  dayTitle,
+  isPlanned,
+  mealKindInfo,
+} from "@/lib/meal-kind";
 import { tintFor } from "@/lib/tints";
 import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
@@ -39,7 +46,13 @@ function MealIcon({
   }) => void;
   size?: "lg" | "sm";
 }) {
-  const tint = tintFor(recipe?.name ?? "");
+  const kindInfo = mealKindInfo(meal?.kind);
+  const KindIcon = kindInfo?.Icon;
+  const tint = recipe
+    ? tintFor(recipe.name)
+    : kindInfo
+      ? kindInfo.tint
+      : NOTE_TINT;
   const box = size === "lg" ? "size-12" : "size-9";
   const icon = size === "lg" ? "h-7 w-7" : "h-4 w-4";
   const image = size === "lg" ? "h-9" : "h-5";
@@ -78,7 +91,7 @@ function MealIcon({
     >
       {meal?.made_at ? (
         <Check className={cn(icon, "text-white")} aria-label="Made" />
-      ) : (
+      ) : recipe ? (
         <Image
           src="/knifefork2.svg"
           alt=""
@@ -87,6 +100,10 @@ function MealIcon({
           unoptimized
           className={cn(image, "w-auto select-none brightness-0 invert")}
         />
+      ) : KindIcon ? (
+        <KindIcon className={cn(icon, "text-white")} />
+      ) : (
+        <StickyNote className={cn(icon, "text-white")} />
       )}
     </span>
   );
@@ -131,7 +148,8 @@ export function WeekMeals({
     return map;
   }, [meals]);
 
-  const firstUnplanned = dates.find((iso) => !byDate.get(iso)?.recipe) ?? today;
+  const firstUnplanned =
+    dates.find((iso) => !isPlanned(byDate.get(iso) ?? null)) ?? today;
 
   const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
 
@@ -171,7 +189,15 @@ export function WeekMeals({
           const label = dateLabel(iso);
           const meal = byDate.get(iso) ?? null;
           const recipe = meal?.recipe ?? null;
-          const tint = tintFor(recipe?.name ?? "");
+          const kindInfo = mealKindInfo(meal?.kind);
+          const tint = recipe
+            ? tintFor(recipe.name)
+            : kindInfo
+              ? kindInfo.tint
+              : NOTE_TINT;
+          const planned = isPlanned(meal);
+          const title = dayTitle(meal, recipe?.name);
+          const showNote = meal?.note && meal.note !== title;
 
           return (
             <button
@@ -180,12 +206,12 @@ export function WeekMeals({
               onClick={() => setOpenDate(iso)}
               className={cn(
                 "group flex h-full flex-col overflow-hidden rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
-                recipe
+                planned
                   ? cn(tint.header, "hover:border-primary/50")
                   : "border-dashed bg-background",
               )}
             >
-              {recipe ? (
+              {planned ? (
                 <>
                   <div className="flex flex-col items-center">
                     <div className="flex items-baseline gap-1.5">
@@ -208,12 +234,22 @@ export function WeekMeals({
                     </span>
                   </div>
                   <p className="mt-2 line-clamp-4 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
-                    {recipe.name}
+                    {title}
                   </p>
-                  {recipe.time > 0 ? (
+                  {recipe && recipe.time > 0 ? (
                     <span className="mt-auto flex items-center justify-center gap-1 pt-1 text-[9px] opacity-70">
                       <Clock className="h-3 w-3" />
                       {recipe.time} min
+                    </span>
+                  ) : null}
+                  {showNote ? (
+                    <span
+                      className={cn(
+                        "block truncate text-center text-[9px] opacity-70",
+                        recipe && recipe.time > 0 ? "" : "mt-auto pt-1",
+                      )}
+                    >
+                      {meal?.note}
                     </span>
                   ) : null}
                 </>
@@ -253,7 +289,7 @@ export function WeekMeals({
         onOpenChange={setConfirmOpen}
         weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
         dayIndex={dayIndexOf(today)}
-        recipeName={byDate.get(today)?.recipe?.name ?? null}
+        mealName={dayTitle(byDate.get(today), byDate.get(today)?.recipe?.name)}
       />
     </section>
   );
@@ -293,7 +329,8 @@ export function CompactDinners({
     return map;
   }, [meals]);
 
-  const firstUnplanned = dates.find((iso) => !byDate.get(iso)?.recipe) ?? today;
+  const firstUnplanned =
+    dates.find((iso) => !isPlanned(byDate.get(iso) ?? null)) ?? today;
 
   const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
 
@@ -310,6 +347,9 @@ export function CompactDinners({
           const meal = byDate.get(iso) ?? null;
           const recipe = meal?.recipe ?? null;
           const note = meal?.note ?? null;
+          const kindInfo = mealKindInfo(meal?.kind);
+          const planned = isPlanned(meal);
+          const title = dayTitle(meal, recipe?.name);
 
           return (
             <li key={iso}>
@@ -327,7 +367,7 @@ export function CompactDinners({
                   </span>
                 </span>
 
-                {recipe ? (
+                {planned ? (
                   <MealIcon
                     iso={iso}
                     today={today}
@@ -346,26 +386,25 @@ export function CompactDinners({
                 )}
 
                 <span className="min-w-0 flex-1">
-                  {recipe ? (
-                    <>
-                      <span className="block truncate text-sm font-semibold">
-                        {recipe.name}
-                      </span>
-                      {note ? (
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {note}
-                        </span>
-                      ) : recipe.time > 0 ? (
-                        <span className="block text-[11px] text-muted-foreground">
-                          {recipe.time} min
-                        </span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span className="block truncate text-sm text-muted-foreground">
-                      {note ? note : "Plan a meal"}
+                  <span
+                    className={cn(
+                      "block truncate text-sm",
+                      recipe || kindInfo
+                        ? "font-semibold"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {title ?? "Plan a meal"}
+                  </span>
+                  {note && note !== title ? (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {note}
                     </span>
-                  )}
+                  ) : recipe && recipe.time > 0 ? (
+                    <span className="block text-[11px] text-muted-foreground">
+                      {recipe.time} min
+                    </span>
+                  ) : null}
                 </span>
 
                 {meal?.made_at ? (
@@ -374,7 +413,7 @@ export function CompactDinners({
                   </span>
                 ) : null}
                 <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {recipe || note ? "Edit" : "Add"}
+                  {planned ? "Edit" : "Add"}
                 </span>
               </button>
             </li>
@@ -408,7 +447,7 @@ export function CompactDinners({
         onOpenChange={setConfirmOpen}
         weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
         dayIndex={dayIndexOf(today)}
-        recipeName={byDate.get(today)?.recipe?.name ?? null}
+        mealName={dayTitle(byDate.get(today), byDate.get(today)?.recipe?.name)}
       />
     </section>
   );
