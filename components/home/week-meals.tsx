@@ -20,6 +20,78 @@ import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MadeConfirmDialog } from "@/components/plan/made-confirm";
 import type { HomeMeal } from "@/lib/types";
 
+/** Round tinted icon used by the dinners widgets (today = ChefHat, made = check). */
+function MealIcon({
+  iso,
+  today,
+  meal,
+  recipe,
+  onMark,
+  size = "lg",
+}: {
+  iso: string;
+  today: string;
+  meal: HomeMeal | null;
+  recipe: { name: string } | null;
+  onMark: (event: {
+    stopPropagation: () => void;
+    preventDefault: () => void;
+  }) => void;
+  size?: "lg" | "sm";
+}) {
+  const tint = tintFor(recipe?.name ?? "");
+  const box = size === "lg" ? "size-12" : "size-9";
+  const icon = size === "lg" ? "h-7 w-7" : "h-4 w-4";
+  const image = size === "lg" ? "h-9" : "h-5";
+
+  if (iso === today && !meal?.made_at) {
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label="Mark today's dinner as made"
+        onClick={onMark}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            onMark(event);
+          }
+        }}
+        className={cn(
+          "relative flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-shadow hover:ring-2 hover:ring-white/80",
+          box,
+          tint.dot,
+        )}
+      >
+        <ChefHat className={cn(icon, "text-white")} />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "relative flex shrink-0 items-center justify-center rounded-full",
+        box,
+        tint.dot,
+      )}
+      aria-hidden
+    >
+      {meal?.made_at ? (
+        <Check className={cn(icon, "text-white")} aria-label="Made" />
+      ) : (
+        <Image
+          src="/knifefork2.svg"
+          alt=""
+          width={792}
+          height={720}
+          unoptimized
+          className={cn(image, "w-auto select-none brightness-0 invert")}
+        />
+      )}
+    </span>
+  );
+}
+
 export function WeekMeals({
   meals,
   recipes,
@@ -125,46 +197,15 @@ export function WeekMeals({
                       </span>
                     </div>
 
-                    {iso === today && !meal?.made_at ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Mark today's dinner as made"
-                        onClick={stopAndMark}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            stopAndMark(event);
-                          }
-                        }}
-                        className={cn(
-                          "relative mt-2 flex size-12 cursor-pointer items-center justify-center rounded-full transition-shadow hover:ring-2 hover:ring-white/80",
-                          tint.dot,
-                        )}
-                      >
-                        <ChefHat className="h-7 w-7 text-white" />
-                      </span>
-                    ) : (
-                      <span
-                        className={cn(
-                          "relative mt-2 flex size-12 items-center justify-center rounded-full",
-                          tint.dot,
-                        )}
-                        aria-hidden
-                      >
-                        {meal?.made_at ? (
-                          <Check className="h-7 w-7 text-white" aria-label="Made" />
-                        ) : (
-                          <Image
-                            src="/knifefork2.svg"
-                            alt=""
-                            width={792}
-                            height={720}
-                            unoptimized
-                            className="h-9 w-auto select-none brightness-0 invert"
-                          />
-                        )}
-                      </span>
-                    )}
+                    <span className="mt-2 flex">
+                      <MealIcon
+                        iso={iso}
+                        today={today}
+                        meal={meal}
+                        recipe={recipe}
+                        onMark={stopAndMark}
+                      />
+                    </span>
                   </div>
                   <p className="mt-2 line-clamp-4 text-center text-xs font-extrabold leading-snug group-hover:text-primary">
                     {recipe.name}
@@ -195,6 +236,161 @@ export function WeekMeals({
             </button>
           );
         })}
+      </div>
+
+      {openDate ? (
+        <DayDialog
+          key={openDate}
+          weekStart={mondayOf(new Date(`${openDate}T00:00:00Z`))}
+          day={{ index: dayIndexOf(openDate), entry: openMeal }}
+          recipes={recipes}
+          onDone={() => setOpenDate(null)}
+        />
+      ) : null}
+
+      <MadeConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
+        dayIndex={dayIndexOf(today)}
+        recipeName={byDate.get(today)?.recipe?.name ?? null}
+      />
+    </section>
+  );
+}
+
+/** Mobile-only 4-day glance: today + next 3, plan-page rows, widget icons. */
+export function CompactDinners({
+  meals,
+  recipes,
+}: {
+  meals: HomeMeal[];
+  recipes: RecipeOption[];
+}) {
+  const today = useToday();
+  const [openDate, setOpenDate] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  function stopAndMark(event: {
+    stopPropagation: () => void;
+    preventDefault: () => void;
+  }) {
+    event.stopPropagation();
+    event.preventDefault();
+    setConfirmOpen(true);
+  }
+
+  const dates = useMemo(
+    () => Array.from({ length: 4 }, (_, index) => addDays(today, index)),
+    [today],
+  );
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, HomeMeal>();
+    for (const meal of meals) {
+      map.set(addDays(meal.week_start, meal.day_index), meal);
+    }
+    return map;
+  }, [meals]);
+
+  const firstUnplanned = dates.find((iso) => !byDate.get(iso)?.recipe) ?? today;
+
+  const openMeal = openDate ? (byDate.get(openDate) ?? null) : null;
+
+  return (
+    <section className="rounded-2xl border bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <Utensils className="h-4 w-4 text-primary" />
+        <h2 className="text-base font-extrabold">This Week&apos;s Dinners</h2>
+      </div>
+
+      <ul className="divide-y rounded-xl border bg-background">
+        {dates.map((iso) => {
+          const label = dateLabel(iso);
+          const meal = byDate.get(iso) ?? null;
+          const recipe = meal?.recipe ?? null;
+          const note = meal?.note ?? null;
+
+          return (
+            <li key={iso}>
+              <button
+                type="button"
+                onClick={() => setOpenDate(iso)}
+                className="flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/50"
+              >
+                <span className="flex w-10 shrink-0 flex-col items-center rounded-lg border py-0.5">
+                  <span className="text-[9px] font-semibold uppercase text-muted-foreground">
+                    {label.weekday}
+                  </span>
+                  <span className="text-xs font-extrabold tabular-nums leading-tight">
+                    {label.dayOfMonth}
+                  </span>
+                </span>
+
+                {recipe ? (
+                  <MealIcon
+                    iso={iso}
+                    today={today}
+                    meal={meal}
+                    recipe={recipe}
+                    onMark={stopAndMark}
+                    size="sm"
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed bg-muted/40 text-muted-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </span>
+                )}
+
+                <span className="min-w-0 flex-1">
+                  {recipe ? (
+                    <>
+                      <span className="block truncate text-sm font-semibold">
+                        {recipe.name}
+                      </span>
+                      {note ? (
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {note}
+                        </span>
+                      ) : recipe.time > 0 ? (
+                        <span className="block text-[11px] text-muted-foreground">
+                          {recipe.time} min
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {note ? note : "Plan a meal"}
+                    </span>
+                  )}
+                </span>
+
+                {meal?.made_at ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    Made ✓
+                  </span>
+                ) : null}
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {recipe || note ? "Edit" : "Add"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="mt-1.5 flex justify-end">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 px-2 text-xs font-semibold"
+          onClick={() => setOpenDate(firstUnplanned)}
+        >
+          <Plus className="h-3.5 w-3.5" /> Plan
+        </Button>
       </div>
 
       {openDate ? (

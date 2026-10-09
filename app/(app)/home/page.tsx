@@ -19,6 +19,7 @@ export const metadata = { title: "Home" };
 function HomeSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      <Skeleton className="lg:hidden rounded-2xl h-60" />
       <Skeleton className="hidden rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block h-[26rem]" />
       <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">

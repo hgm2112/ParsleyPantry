@@ -2,7 +2,7 @@
 
 import { Sparkles } from "lucide-react";
 import { ParsleyMark, TAGLINE, brandClassName } from "@/components/brand";
-import { WeekMeals } from "@/components/home/week-meals";
+import { WeekMeals, CompactDinners } from "@/components/home/week-meals";
 import { PantryPreview } from "@/components/home/pantry-preview";
 import {
   ShoppingWidget,
@@ -69,6 +69,10 @@ export function HomeView({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      <div className="lg:hidden">
+        <CompactDinners meals={meals} recipes={recipes} />
+      </div>
+
       <div className="hidden lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block">
         <WeekMeals meals={meals} recipes={recipes} />
       </div>
