@@ -4,6 +4,114 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 2)
+
+**Shipped** (both pushed):
+- `0807ad3` — Recipes list + day picker split into **Cooking / No cooking**
+  sections: a recipe is "Cooking" iff it has ≥1 `recipe_ingredients` row.
+  Headings render **only when both groups are non-empty**, so searches,
+  `?items=` filters, and marker-free households look exactly as before.
+  Recipes page derives the id set from the ingredient query it already runs;
+  plan/home pages changed to
+  `select("id, name, time, tags, recipe_ingredients(id)")` →
+  `RecipeOption.hasIngredients`
+- `c110dcc` — Plan **day kinds**: new nullable `meal_plan_days.kind`
+  (`eating_out | meal_kit | no_cook`), metadata + `dayTitle()` / `isPlanned()`
+  in `lib/meal-kind.ts` (UtensilsCrossed / Package / Ban + amber/sky/lime
+  tints), "Other plans" chips in DayDialog (saved together with the note in
+  one Save), kind rows show tinted icon + semibold title on the plan page and
+  both home widgets
+- `MealIcon` order is now: today → ChefHat · made → Check · recipe →
+  knifefork · kind → its icon · plain note → StickyNote (one place, as the
+  old gotcha wanted)
+- **Mark as made works for any planned day** (gate = `isPlanned`; no holds ⇒
+  nothing deducted); confirm copy takes `mealName` (renamed from
+  `recipeName`) so it reads "Eating out…"; toast is now just "Marked as made"
+- Bug fixes riding along: desktop `WeekMeals` rendered note-only days as
+  empty "Plan a meal" cards; `MiniCalendar` dotted only recipe days;
+  `SmartActions` ignored kinds; `saveMealNote` never revalidated `/home`;
+  "Add Meal"/"Plan" now skip days that are only kind/note
+- Verify = `npx tsc --noEmit && npm run lint && npm run build` clean
+
+**Gotchas**
+- **`supabase/migrations/20261009120000_meal_plan_kind.sql` must run before
+  deploy.** Until then reads are fine (`select("*")` + optional chaining) but
+  `setMealDay`/`saveMealNote` writes of `kind` error — no supabase CLI in the
+  repo, so it's a dashboard job like the earlier ones
+- `recipe_id` ↔ `kind` mutual exclusion lives in the actions, not the DB:
+  kind-over-recipe releases the day's holds + resets `made_at`; recipe-over-
+  kind nulls `kind`
+- Sets don't cross the RSC boundary here — `recipeIdsWithIngredients` is sent
+  as `string[]`, `new Set` built in the client component
+- `pkill -f "next dev"` matches its own command line and kills the shell —
+  use `pkill -f "[n]ext dev"`
+
+**Open — next session**
+- knifefork image removal is still pending, now a single branch inside
+  `MealIcon` (`week-meals.tsx`, the `recipe ?` arm after `made_at`)
+- Untracked working files: `parsley2.svg`, `example-thisweeksdinner.jpg`,
+  `shoppinglistpage.jpg`, `dev.log`
+
+## 2026-10-09 (part 1)
+
+**Shipped**
+- Recipes list: removed the Ingredients column — redundant, `Have?` already
+  shows `covered/total`. Desktop grid is now 4-col:
+  `sm:grid-cols-[minmax(0,1fr)_60px_50px_70px]` (Name / Time / Size / Have?);
+  base grid `grid-cols-[minmax(0,1fr)_60px]` untouched (mobile still Name +
+  Have?). Dropped the `ingredientCounts` prop from `RecipesView` and the
+  `counts` accumulator in `app/(app)/recipes/page.tsx` — the
+  `recipe_ingredients` query stays, it still feeds `itemIdsByRecipe` +
+  `pantryStatus`
+- Verify = `npx tsc --noEmit && npm run lint && npm run build` all clean
+
+**Gotchas**
+- `next build` during dev is unsafe → killed dev, built, restarted with
+  `nohup npm run dev > dev.log` (port 3000 confirmed listening)
+
+**Open — next session**
+- Still pending from part 5: remove the knifefork image from the PC/browser
+  meal plan — one-place edit inside `MealIcon` (planned row else-branch);
+  swap for `Utensils`/`UtensilsCrossed`
+- Untracked working files: `parsley2.svg`, `example-thisweeksdinner.jpg`,
+  `shoppinglistpage.jpg`, `dev.log`
+
+## 2026-10-08 (part 5)
+
+**Shipped** (both pushed):
+- `9e1e7c1` — Recipes list mobile: header + rows switch to
+  `grid-cols-[minmax(0,1fr)_60px]` at base (Name + Have?, text stays
+  centered), Time/Size/Ingredients get `hidden sm:block`; full 5-col
+  restores at `sm:` (640px)
+- `99c58b4` — Home mobile: new `CompactDinners` widget at the very top
+  (`lg:hidden` first grid child in `home-view.tsx`) — today + 3 days,
+  plan-page style rows (date badge → icon → truncated name/note → Made ✓ →
+  Edit/Add), no chevrons, bottom-right **Plan** ghost button (opens first
+  unplanned day), today's ChefHat mark-made preserved
+- `MealIcon` extracted in `components/home/week-meals.tsx` — the round
+  tinted widget icon (ChefHat / Check / knifefork) with `size="lg"`
+  (size-12, desktop cards) and `"sm"` (size-9, compact rows); full
+  `WeekMeals` refactored onto it with identical output
+- `HomeSkeleton` gained a mobile-only `h-60` top block
+- Verify = `npx tsc --noEmit && npm run lint && npm run build` each time
+
+**Gotchas**
+- Two dinners components render simultaneously (compact mobile, full
+  desktop) with separate dialog state — fine, but both live in
+  `week-meals.tsx`, so icon changes must go through `MealIcon` or they
+  diverge
+- Skeleton/mobile order must track real DOM order: compact dinners →
+  SmartActions → snack/insights/calendar/promo stack → pantry → shopping
+- User decided earlier (recipes list): Have? column 60px, `text-center`
+  on mobile — no right-align
+
+**Open — next session**
+- User will remove the knifefork image from the PC/browser meal plan —
+  now a one-place edit inside `MealIcon` (planned row else-branch); swap
+  for an icon (e.g. `Utensils`/`UtensilsCrossed`) when ready
+- Untracked working files: `parsley2.svg`, `example-thisweeksdinner.jpg`,
+  `shoppinglistpage.jpg`, `dev.log`
+
 ## 2026-10-08 (part 2)
 
 **Shipped**
