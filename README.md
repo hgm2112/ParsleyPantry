@@ -64,7 +64,11 @@ Node 20 it only prints a deprecation warning.
 Before the first deploy, run every migration in `supabase/migrations/` in
 filename order in the Supabase SQL Editor — this includes
 `20261009120000_meal_plan_kind.sql` (the day-kind column for eating out /
-meal kits / no-cook days).
+meal kits / no-cook days) and
+`20261009160000_restore_default_signup_categories.sql` (re-asserts the
+signup bootstrap so every new standalone account gets the plain default
+categories, never KitchenOwl-style labels; it carries two read-only
+diagnostics and an opt-in cleanup for households that already drifted).
 
 ## Install on your phone
 
