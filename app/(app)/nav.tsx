@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFullscreen, setFullscreen } from "@/lib/fullscreen";
 import { useHour } from "@/lib/use-now";
 import { LogoMark, TAGLINE, Wordmark, brandClassName } from "@/components/brand";
 
@@ -224,13 +225,23 @@ function MobileNav({ pathname }: { pathname: string }) {
 
 export function Nav({ name }: { name: string | null }) {
   const pathname = usePathname();
+  const fullscreen = useFullscreen();
+
+  // Fullscreen is a transient, grocery-page-only state: any navigation away
+  // resets it so a back-button visit can't leave the shell stuck hidden.
+  useEffect(() => {
+    setFullscreen(false);
+  }, [pathname]);
+
+  const hideMobileChrome =
+    fullscreen && (pathname === "/grocery" || pathname.startsWith("/grocery/"));
 
   return (
     <>
       <SidebarNav pathname={pathname} />
-      <MobileHeader />
+      {!hideMobileChrome && <MobileHeader />}
       <DesktopHeader name={name} />
-      <MobileNav pathname={pathname} />
+      {!hideMobileChrome && <MobileNav pathname={pathname} />}
     </>
   );
 }

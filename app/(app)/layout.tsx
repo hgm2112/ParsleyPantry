@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import { getDal } from "@/lib/auth";
+import { AppMain } from "@/components/app-main";
 import { Nav, NavFallback } from "./nav";
 import { RealtimeSync } from "./realtime-sync";
 
@@ -15,9 +16,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <NavWithProfile />
       </Suspense>
       <div className="md:pl-60">
-        <main className="w-full max-w-7xl mx-auto px-4 pb-28 pt-5 md:px-6 md:pb-12">
-          {children}
-        </main>
+        <AppMain>{children}</AppMain>
       </div>
       <RealtimeSync />
     </div>

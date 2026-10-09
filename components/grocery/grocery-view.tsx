@@ -3,12 +3,23 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ListChecks, Loader2, Pencil, Plus, Search, Store, Tag } from "lucide-react";
+import {
+  ListChecks,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Pencil,
+  Plus,
+  Search,
+  Store,
+  Tag,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { useFullscreen, useToggleFullscreen } from "@/lib/fullscreen";
 import {
   adoptCategoryAisles,
   addGroceryItem,
@@ -128,6 +139,8 @@ export function GroceryView({
   const [searchFocused, setSearchFocused] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [adoptBusy, setAdoptBusy] = useState(false);
+  const fullscreen = useFullscreen();
+  const toggleFullscreen = useToggleFullscreen();
 
   // Categories that are acting as store aisles are not item categories —
   // keep them out of the add/edit pickers.
@@ -478,6 +491,16 @@ export function GroceryView({
             <Button size="sm" render={<Link href="/grocery/stores" />}>
               <Store /> Stores
             </Button>
+            <Button
+              size="icon-sm"
+              variant={fullscreen ? "default" : "outline"}
+              className="md:hidden"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              aria-pressed={fullscreen}
+            >
+              {fullscreen ? <Minimize2 /> : <Maximize2 />}
+            </Button>
           </div>
         </div>
 
@@ -759,7 +782,17 @@ export function GroceryView({
       )}
 
       {totalChecked > 0 ? (
-        <div className="sticky bottom-16 z-30 -mx-3 border-t bg-background/95 px-3 py-2.5 backdrop-blur md:bottom-0 md:-mx-6 md:px-6">
+        <div
+          className={cn(
+            "sticky z-30 -mx-3 border-t bg-background/95 px-3 py-2.5 backdrop-blur md:bottom-0 md:-mx-6 md:px-6",
+            fullscreen ? "bottom-0" : "bottom-16",
+          )}
+          style={
+            fullscreen
+              ? { paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }
+              : undefined
+          }
+        >
           <Button size="lg" className="w-full" onClick={clearChecked}>
             <ListChecks /> Finish shopping · {totalChecked}
           </Button>
