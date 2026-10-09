@@ -38,6 +38,16 @@ zod · sonner · @zxing/browser
    default categories, and settings), join/switch RPCs, and Realtime
    publications.
 3. Project Settings → API → copy the **Project URL** and **anon key**.
+4. **Authentication → URL Configuration** — required, or confirmation emails
+   point at localhost:
+   - **Site URL** → your production origin (`https://parsleypantry.vercel.app`)
+   - **Redirect URLs** → `https://parsleypantry.vercel.app/**` **and**
+     `http://localhost:3000/**`. GoTrue silently discards a sign-up
+     `emailRedirectTo` that isn't in this list and falls back to Site URL —
+     that's exactly how a production sign-up ends up with a
+     `http://localhost:3000/...` confirmation link. Listing both keeps
+     local sign-ups confirming on localhost and production ones on the
+     deployed site.
 
 ### 2. Environment
 
@@ -60,6 +70,11 @@ Open http://localhost:3000, sign up — your household is created automatically.
 Import the repo, set the two Supabase env vars in the project settings, and
 deploy. Note: `@supabase/supabase-js` wants Node 22+ (Vercel default); on
 Node 20 it only prints a deprecation warning.
+
+Then point Supabase **Authentication → URL Configuration** at the deployed
+URL (Site URL + the Vercel origin in Redirect URLs, `http://localhost:3000/**`
+kept for dev) — Setup step 1.4 explains why, otherwise confirmation emails
+from production sign-ups link to localhost.
 
 Before the first deploy, run every migration in `supabase/migrations/` in
 filename order in the Supabase SQL Editor — this includes

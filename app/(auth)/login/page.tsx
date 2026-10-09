@@ -85,7 +85,10 @@ function LoginForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         New here?{" "}
-        <Link href="/signup" className="font-semibold text-foreground underline">
+        <Link
+          href={`/signup?next=${encodeURIComponent(next)}`}
+          className="font-semibold text-foreground underline"
+        >
           Create an account
         </Link>
       </p>

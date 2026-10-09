@@ -120,7 +120,10 @@ function SignupForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-foreground underline">
+        <Link
+          href={`/login?next=${encodeURIComponent(next)}`}
+          className="font-semibold text-foreground underline"
+        >
           Sign in
         </Link>
       </p>
