@@ -4,6 +4,37 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 5) — Login logo stray "ntry" text
+
+**Shipped**
+- `public/parsleypantrylogov2.svg` + root `parsleypantrylogov2.svg` (kept
+  byte-identical): deleted the two leftover Illustrator `<text>` elements —
+  a giant off-canvas `P` (font-size 884 @ x=-1041) and `Parsley Pantry`
+  (font-size 240 @ x=-1092), both `font-family='Gabriola'`, default black
+  fill, drawn last so on top of the artwork
+- Why it only broke on mobile: the strings start at negative x (outside the
+  `0 0 936 1008` viewBox → clipped), so visibility depends on the rendered
+  font's width. Desktop has Gabriola / a narrower fallback → stays clipped;
+  the phone doesn't → tail of "Parsley Pantry" lands at x>0 = black `ntry`
+  over the P on the login page (`LogoMark`, `app/(auth)/layout.tsx:12`)
+- Visible PP artwork is all `<path>` data — unchanged; PWA icons were
+  already safe (`scripts/generate-icons.mjs:11` strips `<text>`)
+- Verify: 0 `<text>` left in both copies, copies `diff`-identical,
+  `xmllint` OK, sharp rasterizes clean; `npx tsc --noEmit && npm run lint`
+  clean (skipped `next build` — SVG-only change and the dev server was live
+  on :3000)
+
+**Gotchas**
+- Root `parsleypantrylogov2.svg` and `public/parsleypantrylogov2.svg` are
+  both tracked and were byte-identical — edit both or they drift
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`, `MealIcon`'s
+  `recipe ?` branch)
+- Untracked working files still in the tree: `parsley2.svg`,
+  `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`,
+  `PPmessedup.jpg`
+
 ## 2026-10-09 (part 4) — Grocery mobile fullscreen toggle
 
 **Shipped** (pushed `511e42c`)
