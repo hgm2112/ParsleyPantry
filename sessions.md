@@ -4,6 +4,51 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 7) — Confirmation emails pointed at localhost
+
+**Shipped**
+- `app/(auth)/login/page.tsx` — "Create an account" now links to
+  `` `/signup?next=${encodeURIComponent(next)}` `` instead of `/signup`; a
+  `?next=/inventory` arrival (proxy sets it) survived the login hop only if
+  you hand-edited the URL
+- `app/(auth)/signup/page.tsx` — symmetric: "Sign in" footer link carries
+  `next` back to `/login`
+- `README.md` — Setup gets step 1.4 (**Authentication → URL
+  Configuration**): Site URL = `https://parsleypantry.vercel.app`,
+  Redirect URLs = both `https://parsleypantry.vercel.app/**` and
+  `http://localhost:3000/**`, with the fallback warning; Deploy section
+  repeats it as a post-deploy reminder
+
+**Root cause (no code could fix it)**
+- The pasted email link was
+  `…/auth/v1/verify?token=pkce_…&type=signup&redirect_to=http://localhost:3000/auth/callback?next=%2Finventory`
+  — GoTrue's default `{{ .ConfirmationURL }}` carrying our
+  `signup/page.tsx:33` `emailRedirectTo` string
+- GoTrue silently discards an `emailRedirectTo` that isn't in the dashboard's
+  Redirect URLs allow-list and falls back to **Site URL**, which was still
+  `http://localhost:3000` (confirmed with the user). Prod origin was never
+  allow-listed → production sign-ups confirm against localhost
+- Dashboard fix is the user's (no service key in the repo, and it's Supabase
+  UI): Site URL → Vercel URL, allow-list both origins. Email template needs
+  no change (it's the default `{{ .ConfirmationURL }}`); the alternate
+  `{{ .SiteURL }}/auth/confirm?token_hash=…` template documented in
+  `app/auth/confirm/route.ts:8` is covered by the same Site URL setting
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` clean
+- End-to-end (user): sign up on Vercel from `/inventory` → signup request
+  body `email_redirect_to` = `https://parsleypantry.vercel.app/…`, email
+  link host = `parsleypantry.vercel.app`, click → logged in on `/inventory`;
+  localhost sign-up still yields a localhost link that works with `npm run
+  dev`
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`, `MealIcon`'s
+  `recipe ?` branch)
+- Untracked working files still in the tree: `parsley2.svg`,
+  `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`,
+  `PPmessedup.jpg`
+
 ## 2026-10-09 (part 6) — Signup always gets plain default categories
 
 **Shipped**
