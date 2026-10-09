@@ -12,7 +12,7 @@ import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import { planWeekToGrocery } from "@/app/(app)/plan/actions";
 import type { MealPlanDayRow } from "@/lib/types";
-import { DayDialog } from "@/components/plan/day-dialog";
+import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 
 export type PlannedDay = {
   index: number;
@@ -23,7 +23,7 @@ type Props = {
   /** null = no ?week= param yet; the client redirects with its local Monday. */
   weekStart: string | null;
   days: PlannedDay[];
-  recipes: { id: string; name: string; time: number; tags: string[] }[];
+  recipes: RecipeOption[];
 };
 
 export function PlanView({ weekStart, days, recipes }: Props) {

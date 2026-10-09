@@ -32,7 +32,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       .lte("week_start", weekEnd),
     supabase
       .from("recipes")
-      .select("id, name, time, tags")
+      .select("id, name, time, tags, recipe_ingredients(id)")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
   ]);
@@ -47,16 +47,17 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
     entry: byDay.get(index) ?? null,
   }));
 
-  return (
-    <PlanView
-      weekStart={weekStart}
-      days={days}
-      recipes={(recipesResult.data ?? []) as Pick<
-        RecipeRow,
-        "id" | "name" | "time" | "tags"
-      >[]}
-    />
-  );
+  const recipes = (
+    (recipesResult.data ?? []) as (Pick<
+      RecipeRow,
+      "id" | "name" | "time" | "tags"
+    > & { recipe_ingredients: { id: string }[] })[]
+  ).map(({ recipe_ingredients, ...recipe }) => ({
+    ...recipe,
+    hasIngredients: recipe_ingredients.length > 0,
+  }));
+
+  return <PlanView weekStart={weekStart} days={days} recipes={recipes} />;
 }
 
 export default function PlanPage({

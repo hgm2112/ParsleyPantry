@@ -56,6 +56,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
 
   const recipes = (recipesResult.data ?? []) as RecipeRow[];
   const itemIdsByRecipe: Record<string, string[]> = {};
+  const recipeIdsWithIngredients = new Set<string>();
   const pantryStatus: Record<string, { covered: number; total: number }> = {};
   const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
   const stockByItem: Record<string, number> = {};
@@ -82,6 +83,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
     quantity_text: string;
     name: string;
   }[]) {
+    recipeIdsWithIngredients.add(row.recipe_id);
     let itemId = row.item_id;
     if (!itemId) {
       const { name: cleanName } = splitNameAndQuantity(row.name || "");
@@ -113,6 +115,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       itemIdsByRecipe={itemIdsByRecipe}
       onlyItemIds={onlyItemIds}
       pantryStatus={pantryStatus}
+      recipeIdsWithIngredients={Array.from(recipeIdsWithIngredients)}
     />
   );
 }

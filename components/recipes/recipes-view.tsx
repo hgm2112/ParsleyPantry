@@ -13,13 +13,19 @@ export function RecipesView({
   itemIdsByRecipe,
   onlyItemIds,
   pantryStatus,
+  recipeIdsWithIngredients,
 }: {
   recipes: RecipeRow[];
   itemIdsByRecipe?: Record<string, string[]>;
   onlyItemIds?: string[];
   pantryStatus?: Record<string, { covered: number; total: number }>;
+  recipeIdsWithIngredients: string[];
 }) {
   const [query, setQuery] = useState("");
+  const withIngredients = useMemo(
+    () => new Set(recipeIdsWithIngredients),
+    [recipeIdsWithIngredients],
+  );
 
   const itemFilter = onlyItemIds ?? [];
   const filtered = useMemo(() => {
@@ -38,6 +44,67 @@ export function RecipesView({
         recipe.tags.some((tag) => tag.toLowerCase().includes(needle)),
     );
   }, [recipes, query, onlyItemIds, itemIdsByRecipe]);
+
+  // Cooking = at least one recipe_ingredients row; "No cooking" = markers.
+  const cooking = filtered.filter((recipe) => withIngredients.has(recipe.id));
+  const noCooking = filtered.filter(
+    (recipe) => !withIngredients.has(recipe.id),
+  );
+  const showHeadings = cooking.length > 0 && noCooking.length > 0;
+
+  function renderRow(recipe: RecipeRow) {
+    const ps = pantryStatus?.[recipe.id];
+    const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
+    const grad = tileGradient(recipe.name);
+    return (
+      <Link
+        key={recipe.id}
+        href={`/recipes/${recipe.id}`}
+        className="block border-b border-border last:border-b-0 hover:ring-2 hover:ring-inset hover:ring-foreground/20 transition-all"
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] items-center px-3 py-1.5 text-sm">
+          <div
+            className={cn(
+              "flex items-center gap-2 min-w-0 -ml-3 pl-3 relative",
+            )}
+          >
+            <div
+              className={cn(
+                "absolute inset-0 bg-gradient-to-r pointer-events-none",
+                grad.split(" ")[0],
+                "to-transparent opacity-50",
+              )}
+            />
+            <span className="font-semibold truncate">{recipe.name}</span>
+            {recipe.tags.length > 0 && (
+              <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
+                {recipe.tags.slice(0, 3).map((tag) => (
+                  <span key={tag} className="rounded-full border-2 bg-card px-1.5 py-0.5 border-border">
+                    {tag}
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
+          <div className="text-center tabular-nums text-muted-foreground hidden sm:block">
+            {recipe.time > 0 ? `${recipe.time}m` : ""}
+          </div>
+          <div className="text-center tabular-nums hidden sm:block">
+            {recipe.yields > 1 ? recipe.yields : ""}
+          </div>
+          <div className="text-center tabular-nums font-medium">{have}</div>
+        </div>
+      </Link>
+    );
+  }
+
+  function groupHeading(title: string) {
+    return (
+      <div className="bg-muted/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b">
+        {title}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -93,51 +160,10 @@ export function RecipesView({
             <div className="text-center hidden sm:block">Size</div>
             <div className="text-center">Have?</div>
           </div>
-          {filtered.map((recipe) => {
-            const ps = pantryStatus?.[recipe.id];
-            const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
-            const grad = tileGradient(recipe.name);
-            return (
-              <Link
-                key={recipe.id}
-                href={`/recipes/${recipe.id}`}
-                className="block border-b border-border last:border-b-0 hover:ring-2 hover:ring-inset hover:ring-foreground/20 transition-all"
-              >
-                <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] items-center px-3 py-1.5 text-sm">
-                  <div
-                    className={cn(
-                      "flex items-center gap-2 min-w-0 -ml-3 pl-3 relative",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute inset-0 bg-gradient-to-r pointer-events-none",
-                        grad.split(" ")[0],
-                        "to-transparent opacity-50",
-                      )}
-                    />
-                    <span className="font-semibold truncate">{recipe.name}</span>
-                    {recipe.tags.length > 0 && (
-                      <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
-                        {recipe.tags.slice(0, 3).map((tag) => (
-                          <span key={tag} className="rounded-full border-2 bg-card px-1.5 py-0.5 border-border">
-                            {tag}
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-center tabular-nums text-muted-foreground hidden sm:block">
-                    {recipe.time > 0 ? `${recipe.time}m` : ""}
-                  </div>
-                  <div className="text-center tabular-nums hidden sm:block">
-                    {recipe.yields > 1 ? recipe.yields : ""}
-                  </div>
-                  <div className="text-center tabular-nums font-medium">{have}</div>
-                </div>
-              </Link>
-            );
-          })}
+          {showHeadings ? groupHeading("Cooking") : null}
+          {cooking.map(renderRow)}
+          {showHeadings ? groupHeading("No cooking") : null}
+          {noCooking.map(renderRow)}
         </div>
       )}
     </div>

@@ -25,7 +25,13 @@ import { MadeConfirmContent } from "@/components/plan/made-confirm";
 import { dayLabel } from "@/lib/plan";
 import type { PlannedDay } from "@/components/plan/plan-view";
 
-export type RecipeOption = { id: string; name: string; time: number; tags: string[] };
+export type RecipeOption = {
+  id: string;
+  name: string;
+  time: number;
+  tags: string[];
+  hasIngredients: boolean;
+};
 
 type Props = {
   weekStart: string;
@@ -53,6 +59,9 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
           recipe.tags.some((tag) => tag.toLowerCase().includes(needle)),
       )
     : recipes;
+  const cooking = matches.filter((recipe) => recipe.hasIngredients);
+  const noCooking = matches.filter((recipe) => !recipe.hasIngredients);
+  const showHeadings = cooking.length > 0 && noCooking.length > 0;
 
   async function chooseRecipe(recipeId: string) {
     setBusy(true);
@@ -115,6 +124,39 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
     toast.success(`${label.weekday} cleared`);
     router.refresh();
     onDone();
+  }
+
+  function groupHeading(title: string) {
+    return (
+      <li className="bg-muted/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </li>
+    );
+  }
+
+  function renderOption(recipe: RecipeOption) {
+    return (
+      <li key={recipe.id}>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50"
+          onClick={() => void chooseRecipe(recipe.id)}
+          disabled={busy}
+        >
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {recipe.name}
+            {recipe.id === currentRecipeId ? (
+              <Check className="ml-1.5 inline h-3.5 w-3.5 text-primary" />
+            ) : null}
+          </span>
+          {recipe.time > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {recipe.time}m
+            </span>
+          ) : null}
+        </button>
+      </li>
+    );
   }
 
   return (
@@ -191,28 +233,12 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
                     No recipes match.
                   </li>
                 ) : (
-                  matches.map((recipe) => (
-                    <li key={recipe.id}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50"
-                        onClick={() => void chooseRecipe(recipe.id)}
-                        disabled={busy}
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm">
-                          {recipe.name}
-                          {recipe.id === currentRecipeId ? (
-                            <Check className="ml-1.5 inline h-3.5 w-3.5 text-primary" />
-                          ) : null}
-                        </span>
-                        {recipe.time > 0 ? (
-                          <span className="text-xs text-muted-foreground">
-                            {recipe.time}m
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  ))
+                  <>
+                    {showHeadings ? groupHeading("Cooking") : null}
+                    {cooking.map(renderOption)}
+                    {showHeadings ? groupHeading("No cooking") : null}
+                    {noCooking.map(renderOption)}
+                  </>
                 )}
               </ul>
 
