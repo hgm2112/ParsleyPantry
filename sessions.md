@@ -6,7 +6,7 @@ for "what changed", this is for "what's true now / what's next".
 
 ## 2026-10-09 (part 5) — Login logo stray "ntry" text
 
-**Shipped**
+**Shipped** (pushed `e5ef246`)
 - `public/parsleypantrylogov2.svg` + root `parsleypantrylogov2.svg` (kept
   byte-identical): deleted the two leftover Illustrator `<text>` elements —
   a giant off-canvas `P` (font-size 884 @ x=-1041) and `Parsley Pantry`
