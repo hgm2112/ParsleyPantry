@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { isPlanned } from "@/lib/meal-kind";
 import { useToday } from "@/lib/use-now";
 import { addGroceryItem } from "@/app/(app)/grocery/actions";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
+import { useLocalStorage } from "@/lib/use-local-storage";
 import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type { InventoryEntry } from "@/lib/types";
@@ -36,8 +37,20 @@ type Props = {
 export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   const today = useToday();
   const [busy, setBusy] = useState(false);
-  const [lowOnList, setLowOnList] = useState<boolean | null>(null);
+  const [addedLocal, setAddedLocal] = useState<string[]>([]);
   const [dinnerOpen, setDinnerOpen] = useState(false);
+
+  const [ignoredRaw, setIgnoredRaw] = useLocalStorage("smart-low-ignored");
+  const ignored = useMemo(() => {
+    if (!ignoredRaw) return [] as string[];
+    try {
+      const parsed = JSON.parse(ignoredRaw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [] as string[];
+    }
+  }, [ignoredRaw]);
+  const setIgnored = (ids: string[]) => setIgnoredRaw(JSON.stringify(ids));
 
   const expiring = pantry.filter((row) => {
     const days = daysUntil(row.expiration_date);
@@ -46,10 +59,30 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
 
   const unchecked = grocery.filter((item) => !item.checked).length;
 
-  const lowRow =
-    [...pantry]
-      .filter((row) => isLowStock(row, row.item))
+  const lowRow = useMemo(() => {
+    const listedIds = new Set([
+      ...grocery.filter((g) => !g.checked).map((g) => g.item_id).filter(Boolean) as string[],
+      ...addedLocal,
+    ]);
+    return [...pantry]
+      .filter((row) =>
+        isLowStock(row, row.item) &&
+        !listedIds.has(row.item_id) &&
+        !ignored.includes(row.item_id)
+      )
       .sort((a, b) => a.quantity - b.quantity)[0] ?? null;
+  }, [pantry, grocery, addedLocal, ignored]);
+
+  // Auto-clean persisted ignores for items that are no longer low
+  useEffect(() => {
+    const currentLowIds = new Set(
+      pantry.filter((row) => isLowStock(row, row.item)).map((row) => row.item_id)
+    );
+    const cleaned = ignored.filter((id) => currentLowIds.has(id));
+    if (cleaned.length !== ignored.length) {
+      setIgnored(cleaned);
+    }
+  }, [pantry, ignored]);
 
   const weekStart = mondayOf(new Date(`${today}T00:00:00Z`));
   const todayIndex = Math.round(
@@ -61,13 +94,6 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       (meal) => meal.week_start === weekStart && meal.day_index === todayIndex,
     ) ?? null;
   const dinnerPlanned = isPlanned(todayEntry);
-
-  const lowAlreadyListed =
-    lowRow !== null &&
-    (lowOnList ??
-      grocery.some(
-        (item) => item.item_id === lowRow.item_id && !item.checked,
-      ));
 
   const cards: Card[] = [];
 
@@ -98,7 +124,6 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
 
   if (lowRow) {
     const out = lowRow.quantity <= 0;
-    const listed = lowAlreadyListed;
     async function addToList() {
       if (!lowRow) return;
       setBusy(true);
@@ -115,31 +140,42 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
         toast.error(result.error);
         return;
       }
+      setAddedLocal((prev) => [...new Set([...prev, lowRow.item_id])]);
       if (result.data.created) {
-        setLowOnList(true);
         toast.success(`${lowRow.item.name} added to your shopping list`);
       } else {
-        setLowOnList(true);
         toast.message(`${lowRow.item.name} is already on your list`);
       }
     }
+    const handleIgnore = () => {
+      if (!lowRow) return;
+      setIgnored([...new Set([...ignored, lowRow.item_id])]);
+    };
     cards.push({
       key: "low",
       emoji: foodEmoji(lowRow.item.name),
       line: out
         ? `${lowRow.item.name} is out of stock`
         : `${lowRow.item.name} is running low`,
-      action: listed ? (
-        <Link href="/grocery">View shopping list →</Link>
-      ) : (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void addToList()}
-          className="disabled:opacity-60"
-        >
-          {busy ? "Adding…" : "Add to shopping list →"}
-        </button>
+      action: (
+        <span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void addToList()}
+            className="disabled:opacity-60"
+          >
+            {busy ? "Adding…" : "Add now"}
+          </button>
+          {" · "}
+          <button
+            type="button"
+            onClick={handleIgnore}
+            className="text-xs opacity-70 hover:opacity-100"
+          >
+            Don't add
+          </button>
+        </span>
       ),
       tint: "border-rose-200 bg-rose-50 text-rose-900",
     });
