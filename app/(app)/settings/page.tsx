@@ -39,7 +39,7 @@ async function SettingsContent() {
         .maybeSingle(),
       supabase
         .from("household_members")
-        .select("role, created_at, user_id, profiles(display_name, email)")
+        .select("household_id, role, created_at, user_id")
         .eq("household_id", householdId)
         .order("created_at", { ascending: true }),
       supabase
@@ -54,10 +54,30 @@ async function SettingsContent() {
         .maybeSingle(),
     ]);
 
+  // Robust fetch: separate queries avoid PostgREST embed issues (no FK from user_id -> profiles.id)
+  let members: MemberRow[] = [];
+  if (membersResult.data && membersResult.data.length > 0) {
+    const userIds = membersResult.data.map((m) => m.user_id);
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, display_name, email")
+      .in("id", userIds);
+    if (profilesError) {
+      console.error("profiles fetch error in settings", profilesError);
+    }
+    members = membersResult.data.map((m) => ({
+      ...m,
+      profiles: profilesData?.find((p) => p.id === m.user_id) ?? null,
+    })) as unknown as MemberRow[];
+  }
+  if (membersResult.error) {
+    console.error("members fetch error in settings", membersResult.error);
+  }
+
   return (
     <SettingsView
       household={(householdResult.data ?? null) as HouseholdRow | null}
-      members={(membersResult.data ?? []) as unknown as MemberRow[]}
+      members={members}
       memberships={
         (membershipsResult.data ?? []) as unknown as MembershipRow[]
       }

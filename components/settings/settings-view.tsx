@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -85,9 +86,76 @@ export function SettingsView({
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
 
+  const [membersList, setMembersList] = useState(members);
+
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+
   const others = memberships.filter(
     (entry) => entry.household_id !== household?.id,
   );
+
+  useEffect(() => {
+    setMembersList(members);
+  }, [members]);
+
+  useEffect(() => {
+    if (!household?.id) return;
+
+    supabaseRef.current ??= createClient();
+    const supabase = supabaseRef.current;
+
+    const fetchMembers = async () => {
+      const { data: memberRows, error: membersError } = await supabase
+        .from("household_members")
+        .select("household_id, role, created_at, user_id")
+        .eq("household_id", household.id)
+        .order("created_at", { ascending: true });
+      if (membersError) {
+        console.error("members fetch error (client)", membersError);
+        return;
+      }
+      if (!memberRows || memberRows.length === 0) {
+        setMembersList([]);
+        return;
+      }
+      const userIds = memberRows.map((m) => m.user_id);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, display_name, email")
+        .in("id", userIds);
+      if (profilesError) {
+        console.error("profiles fetch error (client)", profilesError);
+      }
+      const merged = memberRows.map((m) => ({
+        ...m,
+        profiles: profilesData?.find((p) => p.id === m.user_id) ?? null,
+      })) as unknown as MemberRow[];
+      setMembersList(merged);
+    };
+
+    // Bootstrap immediately so client can populate even if server render gave []
+    void fetchMembers();
+
+    const channel = supabase
+      .channel(`household-members-${household.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "household_members",
+          filter: `household_id=eq.${household.id}`,
+        },
+        () => {
+          void fetchMembers();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [household?.id]);
 
   async function saveHouseholdName() {
     const trimmed = householdName.trim();
@@ -296,35 +364,34 @@ export function SettingsView({
 
       <Section title="Members" description="Who you share data with.">
         <ul className="divide-y rounded-lg border">
-          {members.map((member) => {
-            const isSelf = member.user_id === currentUserId;
-            const name =
-              member.profiles?.display_name ||
-              member.profiles?.email?.split("@")[0] ||
-              "Member";
-            return (
-              <li key={member.user_id} className="flex items-center gap-3 px-3 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">
-                    {name}
-                    {isSelf ? (
-                      <span className="ml-1.5 text-xs text-muted-foreground">
-                        you
-                      </span>
-                    ) : null}
-                  </span>
-                  {member.profiles?.email ? (
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {member.profiles.email}
+          {membersList.length === 0 ? (
+            <li className="px-3 py-2.5 text-sm text-muted-foreground">No members yet.</li>
+          ) : (
+            membersList.map((member) => {
+              const isSelf = member.user_id === currentUserId;
+              const name =
+                member.profiles?.display_name ||
+                member.profiles?.email?.split("@")[0] ||
+                "Member";
+              return (
+                <li key={member.user_id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">
+                      {name}
+                      {isSelf ? (
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          you
+                        </span>
+                      ) : null}
                     </span>
-                  ) : null}
-                </span>
-                <Badge variant={member.role === "owner" ? "default" : "secondary"}>
-                  {member.role}
-                </Badge>
-              </li>
-            );
-          })}
+                  </span>
+                  <Badge variant={member.role === "owner" ? "default" : "secondary"}>
+                    {member.role}
+                  </Badge>
+                </li>
+              );
+            })
+          )}
         </ul>
       </Section>
 
