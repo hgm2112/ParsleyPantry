@@ -4,6 +4,106 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 4) — Grocery mobile fullscreen toggle
+
+**Shipped** (pushed `511e42c`)
+- New `lib/fullscreen.ts`: in-memory (non-persisted) external store +
+  `useFullscreen()` / `useToggleFullscreen()` hooks, mirroring the
+  `useSyncExternalStore` pattern already used in `lib/use-local-storage.ts` —
+  no new React context provider needed
+- `app/(app)/nav.tsx`: `Nav` now hides `MobileHeader` + `MobileNav` (fully
+  unmounts, not just CSS-hidden) when `fullscreen && pathname` is under
+  `/grocery`; `useEffect` resets the flag on any pathname change so a
+  back-button visit can't leave the shell stuck hidden. Desktop
+  `SidebarNav`/`DesktopHeader` untouched.
+- New `components/app-main.tsx` (swapped into `app/(app)/layout.tsx` in place
+  of the inline `<main>`): drops the mobile `pb-28` bottom-padding reservation
+  down to `pb-12` (what desktop already uses) while fullscreen, so the removed
+  bottom nav's reserved space collapses too
+- `components/grocery/grocery-view.tsx`: icon-only toggle button in the
+  toolbar (next to Add/Stores), `size="icon-sm"`, `md:hidden`,
+  Maximize2/Minimize2, outline↔default variant by state, `aria-pressed`;
+  "Finish shopping" sticky bar drops from `bottom-16` to `bottom-0` and picks
+  up `env(safe-area-inset-bottom)` padding while fullscreen (matters now that
+  this is an installable PWA with `viewportFit: cover` on iOS)
+- Known minor tradeoff (accepted, no animation added): unmounting the sticky
+  (in-flow) mobile header shifts page content up ~56px on toggle if already
+  scrolled deep in the list — matches the codebase's no-motion-utility style;
+  easy to revisit with a `transition-transform` approach if it bothers anyone
+- Verify: `npx tsc --noEmit && npm run lint && npm run build` clean
+
+**Gotchas**
+- Next.js 16 with `cacheComponents`: any client component calling
+  `usePathname()` must sit inside a `<Suspense>` boundary or prerendering
+  fails with `CLIENT_HOOK_DYNAMIC` (hit this on `/grocery/stores/[id]` when
+  `AppMain` first tried to check the pathname — fixed by dropping the check
+  entirely, since `fullscreen` can only ever be toggled on from the grocery
+  page anyway and Nav resets it on navigation). `Nav` itself was already safe
+  (wrapped in Suspense in the layout).
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`, `MealIcon`'s
+  `recipe ?` branch)
+- Untracked working files still in the tree: `parsley2.svg`,
+  `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`
+
+## 2026-10-09 (part 3) — PWA support
+
+**Shipped** (pushed `1a75b2b`)
+- `app/manifest.ts` (Next file convention → `/manifest.webmanifest`, auto-
+  linked): name/short_name "Parsley Pantry", `start_url: "/"`,
+  `display: standalone`, theme `#009444` / bg `#ffffff`, icons 192 + 512 +
+  512-maskable
+- Icons generated with `sharp` (already in node_modules, no ImageMagick
+  needed) from `public/parsleypantrylogov2.svg`, white-recolored onto a green
+  rounded-square tile → `public/icon-192x192.png`, `icon-512x512.png`,
+  `icon-maskable-512.png`, plus `app/apple-icon.png` (file convention, 180×180
+  full-bleed). Script kept at `scripts/generate-icons.mjs` for later tweaks
+  (strip `<text>` elements first — Gabriola isn't installed and would render
+  stray black fallback text)
+- `public/sw.js`: minimal service worker (skipWaiting/clientsClaim, fetch
+  handler registered but network-only no-op) — just enough for Chromium's
+  installability criteria; barcode scanning, Supabase realtime, Server Actions
+  untouched; every page load hits the network so a Vercel redeploy is picked
+  up on next open/refresh
+- `components/service-worker-register.tsx` mounted in the root layout: registers
+  `/sw.js` with `updateViaCache: "none"`, **production builds only** so
+  `npm run dev` never leaves a stale SW on localhost
+- `next.config.ts`: `headers()` for `/sw.js` (`no-cache, no-store,
+  must-revalidate` + `Service-Worker-Allowed: /`) so browsers check for a new
+  SW on every navigation
+- `proxy.ts` matcher now excludes `/sw.js` and `/manifest.webmanifest` — these
+  don't need the session-cookie check
+- README: "Install on your phone" section (iOS Share → Add to Home Screen,
+  Android/Chrome install prompt, local test via `npm run build && npm start`
+  since the SW is prod-only); also noted the pending
+  `meal_plan_kind` migration in the Deploy section
+- Verify: `npx tsc --noEmit && npm run lint && npm run build` all clean;
+  smoke-tested live: `/manifest.webmanifest` valid JSON, `/sw.js` headers
+  present, `<link rel="manifest">` + apple-touch-icon + appleWebApp meta tags
+  all in the rendered head
+
+**Gotchas**
+- Sharp SVG rendering: the logo SVG has off-canvas `<text>` elements that
+  silently render as black fallback-font junk when rasterized at larger sizes
+  — must strip them (done in the script) before compositing
+- `npm start` won't bind :3000 if `npm run dev` is already running — kill the
+  dev server first if you actually want a prod-server smoke test (this time
+  the dev server's own responses were verified instead, which is fine since
+  `headers()` applies in dev too)
+- Next.js 16 PWA docs (`node_modules/next/dist/docs/01-app/02-guides/progressive-web-apps.md`)
+  recommend `navigator.serviceWorker.register(new URL(...), {scope})` with a
+  bundled SW file — intentionally not used here, a plain static `public/sw.js`
+  sidesteps any Turbopack asset-emission/scope quirks
+- `20261009120000_meal_plan_kind.sql` migration confirmed run + verified live
+  (2026-10-09): REST select of the `kind` column → 200, bogus column → 400
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`, `MealIcon`'s
+  `recipe ?` branch)
+- Untracked working files still in the tree: `parsley2.svg`,
+  `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`
+
 ## 2026-10-09 (part 2)
 
 **Shipped** (both pushed):
