@@ -55,7 +55,6 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
   ]);
 
   const recipes = (recipesResult.data ?? []) as RecipeRow[];
-  const counts: Record<string, number> = {};
   const itemIdsByRecipe: Record<string, string[]> = {};
   const pantryStatus: Record<string, { covered: number; total: number }> = {};
   const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
@@ -83,7 +82,6 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
     quantity_text: string;
     name: string;
   }[]) {
-    counts[row.recipe_id] = (counts[row.recipe_id] ?? 0) + 1;
     let itemId = row.item_id;
     if (!itemId) {
       const { name: cleanName } = splitNameAndQuantity(row.name || "");
@@ -112,7 +110,6 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
   return (
     <RecipesView
       recipes={recipes}
-      ingredientCounts={counts}
       itemIdsByRecipe={itemIdsByRecipe}
       onlyItemIds={onlyItemIds}
       pantryStatus={pantryStatus}

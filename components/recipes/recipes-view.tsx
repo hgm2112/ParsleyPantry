@@ -10,13 +10,11 @@ import type { RecipeRow } from "@/lib/types";
 
 export function RecipesView({
   recipes,
-  ingredientCounts,
   itemIdsByRecipe,
   onlyItemIds,
   pantryStatus,
 }: {
   recipes: RecipeRow[];
-  ingredientCounts: Record<string, number>;
   itemIdsByRecipe?: Record<string, string[]>;
   onlyItemIds?: string[];
   pantryStatus?: Record<string, { covered: number; total: number }>;
@@ -89,15 +87,13 @@ export function RecipesView({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border">
-          <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_60px_70px] bg-muted/50 px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b">
+          <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] bg-muted/50 px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b">
             <div>Recipes</div>
             <div className="text-center hidden sm:block">Time</div>
             <div className="text-center hidden sm:block">Size</div>
-            <div className="text-center hidden sm:block">Ingredients</div>
             <div className="text-center">Have?</div>
           </div>
           {filtered.map((recipe) => {
-            const count = ingredientCounts[recipe.id] ?? 0;
             const ps = pantryStatus?.[recipe.id];
             const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
             const grad = tileGradient(recipe.name);
@@ -107,7 +103,7 @@ export function RecipesView({
                 href={`/recipes/${recipe.id}`}
                 className="block border-b border-border last:border-b-0 hover:ring-2 hover:ring-inset hover:ring-foreground/20 transition-all"
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_60px_70px] items-center px-3 py-1.5 text-sm">
+                <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] items-center px-3 py-1.5 text-sm">
                   <div
                     className={cn(
                       "flex items-center gap-2 min-w-0 -ml-3 pl-3 relative",
@@ -137,7 +133,6 @@ export function RecipesView({
                   <div className="text-center tabular-nums hidden sm:block">
                     {recipe.yields > 1 ? recipe.yields : ""}
                   </div>
-                  <div className="text-center tabular-nums text-muted-foreground hidden sm:block">{count}</div>
                   <div className="text-center tabular-nums font-medium">{have}</div>
                 </div>
               </Link>
