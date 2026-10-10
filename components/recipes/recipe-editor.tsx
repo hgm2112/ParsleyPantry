@@ -36,11 +36,22 @@ type Props = {
   stockByItem?: Record<string, number>;
   stockUnitByItem?: Record<string, string | null>;
   nameToItemId?: Record<string, string>;
+  /** item id → canonical root id (stock pools are root-keyed). */
+  itemRoots?: Record<string, string>;
 };
 
-export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem, nameToItemId }: Props) {
+export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem, nameToItemId, itemRoots }: Props) {
   const router = useRouter();
   const isEdit = recipe !== null;
+
+  /** Raw linked/name-resolved id → canonical matching key. */
+  function matchingKey(raw: string | null | undefined, name: string): string | null {
+    if (raw) return itemRoots?.[raw] ?? raw;
+    const { name: cleanName } = splitNameAndQuantity(name);
+    const byName = cleanName.trim().toLowerCase();
+    const resolved = byName ? nameToItemId?.[byName] : undefined;
+    return resolved ?? null;
+  }
 
   const [name, setName] = useState(recipe?.name ?? "");
   const [description, setDescription] = useState(recipe?.description ?? "");
@@ -141,11 +152,12 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
     if (!recipe || !stockByItem) return;
     const missingIds = ingredients
       .filter((ingredient) => {
-        if (!ingredient.item_id) return false;
+        const key = matchingKey(ingredient.item_id, ingredient.name);
+        if (!key) return false;
         const p = parseQuantityText(ingredient.quantity_text);
         const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
-        const haveRaw = stockByItem[ingredient.item_id] || 0;
-        const haveUnit = stockUnitByItem?.[ingredient.item_id] ?? null;
+        const haveRaw = stockByItem[key] || 0;
+        const haveUnit = stockUnitByItem?.[key] ?? null;
         const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
         return have < needed;
       })
@@ -299,8 +311,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
               let total = 0;
               for (const row of rows) {
                 if (row.name.trim()) {
-                  const key = row.name.trim().toLowerCase();
-                  const effId = nameToItemId?.[key] ?? row.item_id ?? null;
+                  const effId = matchingKey(row.item_id, row.name);
                   if (effId) {
                     total += 1;
                     const p = parseQuantityText(row.quantity_text);
@@ -343,9 +354,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
                 aria-label={`Ingredient ${index + 1} amount`}
               />
               {stockByItem ? (() => {
-                const { name: cleanName } = splitNameAndQuantity(row.name);
-                const key = cleanName.trim().toLowerCase();
-                const effId = nameToItemId?.[key] ?? row.item_id ?? null;
+                const effId = matchingKey(row.item_id, row.name);
                 if (effId) {
                   const p = parseQuantityText(row.quantity_text);
                   const neededRaw = p.quantity;

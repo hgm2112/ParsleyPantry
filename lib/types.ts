@@ -55,6 +55,18 @@ export interface ItemRow {
   subcategory_id: string | null;
   icon: string | null;
   barcode: string | null;
+  /** Brand from the barcode lookup when available. */
+  brand: string | null;
+  /**
+   * Generic catalog entry this product matches recipes as. null = canonical
+   * identity itself (generic or unmapped); matching key = this ?? id.
+   */
+  canonical_item_id: string | null;
+  /**
+   * User looked at this item in the ingredient review queue and chose to keep
+   * it as its own generic identity (never auto-mapped, hidden from review).
+   */
+  canonical_reviewed: boolean;
   default_location: Location;
   expiration_days: number | null;
   low_threshold: number | null;

@@ -28,9 +28,16 @@ import { addDays, suggestExpiration } from "@/lib/expiry";
 import type { OffProduct } from "@/lib/off";
 import {
   addToInventory,
+  listCanonicalCandidates,
   resolveBarcode,
   searchCatalog,
+  type CanonicalCandidateView,
 } from "@/app/(app)/inventory/actions";
+import {
+  brandTokenList,
+  matchCanonical,
+  type CanonicalCandidate,
+} from "@/lib/canonical";
 import type { ItemRow, Location, SubcategoryRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -67,11 +74,17 @@ export function AddForm({
   const [lowThreshold, setLowThreshold] = useState("");
   const [autoRestock, setAutoRestock] = useState(false);
   const [off, setOff] = useState<OffProduct | null>(null);
+  const [canonicalName, setCanonicalName] = useState("");
+  const [candidatePool, setCandidatePool] = useState<{
+    items: CanonicalCandidateView[];
+    recipeNames: string[];
+  } | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
   const searchTimer = useRef<number | undefined>(undefined);
   const lookupRef = useRef(false);
+  const canonicalTouchedRef = useRef(false);
 
   const suggestion = useMemo(() => {
     if (selectedItem?.expiration_days != null) {
@@ -91,6 +104,83 @@ export function AddForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBarcode]);
 
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const result = await listCanonicalCandidates();
+      if (alive && result.ok) setCandidatePool(result.data);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const canonicalCandidates: CanonicalCandidate[] = useMemo(() => {
+    if (!candidatePool) return [];
+    return [
+      ...candidatePool.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        categoryId: item.categoryId,
+        canonicalSafe: item.canonicalItemId == null,
+      })),
+      ...candidatePool.recipeNames.map((recipeName) => ({
+        id: `recipe:${recipeName}`,
+        name: recipeName,
+        categoryId: null,
+        canonicalSafe: true,
+        virtual: true,
+      })),
+    ];
+  }, [candidatePool]);
+
+  const canonicalMatch = useMemo(() => {
+    if (selectedItem || !candidatePool || name.trim().length < 2) return null;
+    return matchCanonical(name, canonicalCandidates, {
+      brandTokens: brandTokenList(off?.brands ?? null),
+      categoryId: categoryId || null,
+    });
+  }, [selectedItem, candidatePool, canonicalCandidates, name, off, categoryId]);
+
+  // Keep the suggested generic identity in sync until the user edits it.
+  useEffect(() => {
+    if (canonicalTouchedRef.current) return;
+    const first =
+      canonicalMatch?.status === "high" || canonicalMatch?.status === "suggested"
+        ? canonicalMatch.candidates[0]
+        : undefined;
+    setCanonicalName(first?.name ?? "");
+  }, [canonicalMatch]);
+
+  const canonicalOptions = useMemo(() => {
+    const matched = canonicalMatch?.candidates ?? [];
+    const matchedIds = new Set(matched.map((entry) => entry.id));
+    return [
+      ...matched,
+      ...canonicalCandidates
+        .filter((entry) => !matchedIds.has(entry.id) && entry.canonicalSafe)
+        .slice(0, 60),
+    ].slice(0, 80);
+  }, [canonicalMatch, canonicalCandidates]);
+
+  const canonicalHint = (() => {
+    if (selectedItem) return null;
+    if (canonicalMatch?.status === "high") {
+      return "Suggested match — confirm or change it.";
+    }
+    if (canonicalMatch?.status === "suggested") {
+      return "Possible match — confirm or change it.";
+    }
+    if (canonicalMatch?.status === "ambiguous") {
+      const names = canonicalMatch.candidates
+        .slice(0, 3)
+        .map((entry) => entry.name)
+        .join(", ");
+      return `Several possible matches (${names}) — pick one, or leave blank to keep it separate.`;
+    }
+    return "Optional — the generic ingredient recipes should match on.";
+  })();
+
   const effectiveExpiry = expiryTouched
     ? expirationDate
     : suggestion
@@ -101,6 +191,8 @@ export function AddForm({
     setSelectedItem(item);
     setName(item.name);
     setMatches([]);
+    setCanonicalName("");
+    canonicalTouchedRef.current = false;
     setBarcode(item.barcode ?? barcode);
     setUnit(item.unit ?? "oz");
     setCategoryId(item.category_id ?? "");
@@ -140,6 +232,7 @@ export function AddForm({
     if (product) {
       setOff(product);
       setSelectedItem(null);
+      canonicalTouchedRef.current = false;
       if (!name && product.name) setName(product.name);
       if (product.quantity && !unit) setUnit(product.quantity);
       toast.success(`Product found: ${product.name ?? clean}`);
@@ -153,6 +246,7 @@ export function AddForm({
 
   function onNameChange(value: string) {
     setName(value);
+    canonicalTouchedRef.current = false;
     if (selectedItem && value !== selectedItem.name) {
       setSelectedItem(null);
       setOff(null);
@@ -192,6 +286,8 @@ export function AddForm({
       expirationDate: effectiveExpiry || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
       autoRestock,
+      canonicalName: canonicalName.trim() || null,
+      brand: off?.brands?.trim() || null,
     });
     setBusy(false);
 
@@ -218,6 +314,8 @@ export function AddForm({
     setOff(null);
     setExpiryTouched(false);
     setExpirationDate("");
+    setCanonicalName("");
+    canonicalTouchedRef.current = false;
     lookupRef.current = false;
     router.refresh();
   }
@@ -285,6 +383,35 @@ export function AddForm({
             ) : null}
           </div>
         </div>
+
+        {!selectedItem ? (
+          <div className="space-y-2">
+            <Label htmlFor="canonical">Matches recipes as</Label>
+            <Input
+              id="canonical"
+              list="canonical-options"
+              placeholder={
+                canonicalMatch?.status === "ambiguous"
+                  ? "Pick the generic ingredient"
+                  : "Generic ingredient (e.g. Ground Beef)"
+              }
+              value={canonicalName}
+              onChange={(event) => {
+                canonicalTouchedRef.current = true;
+                setCanonicalName(event.target.value);
+              }}
+              autoComplete="off"
+            />
+            <datalist id="canonical-options">
+              {canonicalOptions.map((candidate) => (
+                <option key={candidate.id} value={candidate.name} />
+              ))}
+            </datalist>
+            {canonicalHint ? (
+              <p className="text-xs text-muted-foreground">{canonicalHint}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <section className="space-y-3 rounded-xl border bg-background p-4">
           <div className="space-y-2">

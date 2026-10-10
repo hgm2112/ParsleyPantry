@@ -10,6 +10,7 @@ import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
 import { groupByItem } from "@/lib/batches";
+import { buildCanonicalNameMap } from "@/lib/canonical";
 import { cn } from "@/lib/utils";
 import type { CategoryRow, InventoryEntry, ItemRow, RecipeRow } from "@/lib/types";
 
@@ -73,7 +74,7 @@ async function SearchContent({ query }: { query: string }) {
   const needle = `%${clean.replace(/[%_\\]/g, (match) => `\\${match}`)}%`;
   const isBarcode = /^\d{6,14}$/.test(query);
 
-  const [recipesResult, inventoryResult, itemsResult, groceryResult] =
+  const [recipesResult, inventoryResult, itemsResult, groceryResult, namesResult] =
     await Promise.all([
       supabase
         .from("recipes")
@@ -103,6 +104,10 @@ async function SearchContent({ query }: { query: string }) {
         .eq("household_id", householdId)
         .ilike("name", needle)
         .limit(24),
+      supabase
+        .from("items")
+        .select("id, name, canonical_item_id")
+        .eq("household_id", householdId),
     ]);
 
   const recipes = (recipesResult.data ?? []) as RecipeRow[];
@@ -126,6 +131,13 @@ async function SearchContent({ query }: { query: string }) {
   const inventoryGroups = groupByItem(inventory);
   const inventoryItemIds = new Set(inventoryGroups.map((group) => group.item.id));
   const catalogOnly = items.filter((item) => !inventoryItemIds.has(item.id));
+  const canonicalNames = buildCanonicalNameMap(
+    (namesResult.data ?? []) as {
+      id: string;
+      name: string;
+      canonical_item_id: string | null;
+    }[],
+  );
 
   const total =
     recipes.length + inventoryGroups.length + catalogOnly.length + grocery.length;
@@ -173,6 +185,11 @@ async function SearchContent({ query }: { query: string }) {
                         : ""}{" "}
                       · {group.locations.join(", ")}
                     </span>
+                    {canonicalNames[group.item.id] ? (
+                      <span className="block text-xs text-muted-foreground">
+                        as {canonicalNames[group.item.id]}
+                      </span>
+                    ) : null}
                   </span>
                 </Link>
               </li>
@@ -289,6 +306,11 @@ async function SearchContent({ query }: { query: string }) {
                           }`
                         : (categoryName(item.category_id) ?? "No category")}
                     </span>
+                    {canonicalNames[item.id] ? (
+                      <span className="block text-xs text-muted-foreground">
+                        as {canonicalNames[item.id]}
+                      </span>
+                    ) : null}
                   </span>
                 </Link>
               </li>

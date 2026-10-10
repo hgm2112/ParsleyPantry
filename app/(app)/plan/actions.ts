@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
-import { fromOunces, parseQuantityText, stockPoolKey, toOunces } from "@/lib/stock";
+import { createRootLookup } from "@/lib/canonical";
+import {
+  fromOunces,
+  parseQuantityText,
+  splitNameAndQuantity,
+  stockPoolKey,
+  toOunces,
+} from "@/lib/stock";
 import { addDays, isIsoDate } from "@/lib/plan";
 
 export type ActionResult<T = null> =
@@ -229,7 +236,7 @@ export async function planWeekToGrocery(
       return { ok: false, error: "Planned recipes have no ingredients yet" };
     }
 
-    const [inventoryResult, holdsResult] = await Promise.all([
+    const [inventoryResult, holdsResult, itemsResult] = await Promise.all([
       supabase
         .from("inventory")
         .select("item_id, quantity, unit")
@@ -238,7 +245,24 @@ export async function planWeekToGrocery(
         .from("stock_holds")
         .select("item_id, quantity, unit, week_start")
         .eq("household_id", householdId),
+      supabase
+        .from("items")
+        .select("id, name, canonical_item_id")
+        .eq("household_id", householdId),
     ]);
+
+    // Stock and holds are pooled by canonical identity: every product under
+    // one generic ingredient shares the same reservation pool.
+    const catalogRows = (itemsResult.data ?? []) as {
+      id: string;
+      name: string;
+      canonical_item_id: string | null;
+    }[];
+    const rootOf = createRootLookup(catalogRows);
+    const nameToRoot = new Map<string, string>();
+    for (const row of catalogRows) {
+      nameToRoot.set(row.name.trim().toLowerCase(), rootOf(row.id));
+    }
 
     const stock = new Map<string, number>();
     for (const row of (inventoryResult.data ?? []) as {
@@ -249,7 +273,7 @@ export async function planWeekToGrocery(
       const oz = toOunces(row.quantity, row.unit);
       const q = oz != null ? oz : row.quantity;
       const u = oz != null ? "oz" : row.unit;
-      const key = stockPoolKey(row.item_id, u);
+      const key = stockPoolKey(rootOf(row.item_id), u);
       stock.set(key, (stock.get(key) ?? 0) + q);
     }
     const held = new Map<string, number>();
@@ -263,7 +287,7 @@ export async function planWeekToGrocery(
       const oz = toOunces(row.quantity, row.unit);
       const q = oz != null ? oz : row.quantity;
       const u = oz != null ? "oz" : row.unit;
-      const key = stockPoolKey(row.item_id, u);
+      const key = stockPoolKey(rootOf(row.item_id), u);
       held.set(key, (held.get(key) ?? 0) + q);
     }
 
@@ -295,7 +319,12 @@ export async function planWeekToGrocery(
     for (const day of planDays) {
       for (const ingredient of ingredientsByRecipe.get(day.recipe_id) ?? []) {
         const parsed = parseQuantityText(ingredient.quantity_text);
-        if (!ingredient.item_id) {
+        const ingredientRoot = ingredient.item_id
+          ? rootOf(ingredient.item_id)
+          : (nameToRoot.get(
+              splitNameAndQuantity(ingredient.name).name.trim().toLowerCase(),
+            ) ?? null);
+        if (!ingredientRoot) {
           groceryInputs.push({
             itemId: null,
             name: ingredient.name,
@@ -308,14 +337,14 @@ export async function planWeekToGrocery(
         const oz = toOunces(parsed.quantity, parsed.unit);
         const q = oz != null ? oz : parsed.quantity;
         const u = oz != null ? "oz" : parsed.unit;
-        const key = stockPoolKey(ingredient.item_id, u);
+        const key = stockPoolKey(ingredientRoot, u);
         const available = (stock.get(key) ?? 0) - (held.get(key) ?? 0);
         const reserve = Math.max(0, Math.min(available, q));
         if (reserve > 0) {
           const holdQty = oz != null ? (fromOunces(reserve, parsed.unit) ?? reserve) : reserve;
           newHolds.push({
             household_id: householdId,
-            item_id: ingredient.item_id,
+            item_id: ingredientRoot,
             quantity: holdQty,
             unit: parsed.unit,
             week_start: weekStart,
@@ -328,7 +357,7 @@ export async function planWeekToGrocery(
         if (shortfall > 0) {
           const shortQty = oz != null ? (fromOunces(shortfall, parsed.unit) ?? shortfall) : shortfall;
           groceryInputs.push({
-            itemId: ingredient.item_id,
+            itemId: ingredientRoot,
             name: ingredient.name,
             quantity: shortQty,
             unit: parsed.unit,
@@ -393,16 +422,35 @@ export async function markMealMade(
       .eq("week_start", parsed.data.weekStart)
       .eq("day_index", parsed.data.dayIndex);
 
+    // Holds are keyed by canonical root — consume FEFO across every item in
+    // that group (legacy holds on a product id resolve the same way).
+    const { data: itemRows } = await supabase
+      .from("items")
+      .select("id, canonical_item_id")
+      .eq("household_id", householdId);
+    const catalogRows = (itemRows ?? []) as {
+      id: string;
+      canonical_item_id: string | null;
+    }[];
+    const rootOf = createRootLookup(catalogRows);
+    const groupByRoot = new Map<string, string[]>();
+    for (const row of catalogRows) {
+      const root = rootOf(row.id);
+      const group = groupByRoot.get(root) ?? [];
+      group.push(row.id);
+      groupByRoot.set(root, group);
+    }
+
     for (const hold of (holds ?? []) as {
       item_id: string;
       quantity: number;
       unit: string | null;
     }[]) {
+      const groupIds = groupByRoot.get(hold.item_id) ?? [hold.item_id];
       const rowQuery = supabase
         .from("inventory")
         .select("id, quantity")
-        .eq("household_id", householdId)
-        .eq("item_id", hold.item_id)
+        .in("item_id", groupIds)
         .order("expiration_date", { ascending: true, nullsFirst: false });
       const { data: rows, error: rowsError } =
         hold.unit === null

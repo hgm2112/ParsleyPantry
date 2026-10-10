@@ -5,6 +5,7 @@ import { requireDal } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipesView } from "@/components/recipes/recipes-view";
+import { createRootLookup } from "@/lib/canonical";
 import { parseQuantityText, splitNameAndQuantity, toOunces } from "@/lib/stock";
 import type { RecipeRow } from "@/lib/types";
 
@@ -50,7 +51,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       .eq("household_id", householdId),
     supabase
       .from("items")
-      .select("id, name")
+      .select("id, name, canonical_item_id")
       .eq("household_id", householdId),
   ]);
 
@@ -59,22 +60,31 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
   const recipeIdsWithIngredients = new Set<string>();
   const pantryStatus: Record<string, { covered: number; total: number }> = {};
   const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
+  const itemsData = (itemsResult.data ?? []) as {
+    id: string;
+    name: string;
+    canonical_item_id: string | null;
+  }[];
+  const rootOf = createRootLookup(itemsData);
+
+  // Stock and name resolution are keyed by canonical identity (root item),
+  // so every product under one generic ingredient shares its pantry pool.
   const stockByItem: Record<string, number> = {};
   const stockUnitByItem: Record<string, string | null> = {};
   for (const row of inventoryData) {
-    stockByItem[row.item_id] = (stockByItem[row.item_id] ?? 0) + row.quantity;
-    if (stockUnitByItem[row.item_id] == null) {
-      stockUnitByItem[row.item_id] = row.unit;
-    } else if (stockUnitByItem[row.item_id] !== row.unit) {
-      stockUnitByItem[row.item_id] = null;
+    const key = rootOf(row.item_id);
+    stockByItem[key] = (stockByItem[key] ?? 0) + row.quantity;
+    if (stockUnitByItem[key] == null) {
+      stockUnitByItem[key] = row.unit;
+    } else if (stockUnitByItem[key] !== row.unit) {
+      stockUnitByItem[key] = null;
     }
   }
 
-  const itemsData = (itemsResult.data ?? []) as { id: string; name: string }[];
   const nameToItemId: Record<string, string> = {};
   for (const it of itemsData) {
     const k = it.name.trim().toLowerCase();
-    if (k) nameToItemId[k] = it.id;
+    if (k) nameToItemId[k] = rootOf(it.id);
   }
   for (const row of (ingredientsResult.data ?? []) as {
     recipe_id: string;
@@ -84,7 +94,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
     name: string;
   }[]) {
     recipeIdsWithIngredients.add(row.recipe_id);
-    let itemId = row.item_id;
+    let itemId = row.item_id ? rootOf(row.item_id) : null;
     if (!itemId) {
       const { name: cleanName } = splitNameAndQuantity(row.name || "");
       const key = cleanName.trim().toLowerCase();

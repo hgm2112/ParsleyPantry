@@ -64,10 +64,13 @@ export function InventoryView({
   rows,
   subcategories,
   holdsByItem,
+  canonicalNames,
 }: {
   rows: InventoryEntry[];
   subcategories: SubcategoryRow[];
   holdsByItem: Record<string, number>;
+  /** Item id → display name of its generic ingredient ("as Ground Beef"). */
+  canonicalNames: Record<string, string>;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -280,6 +283,7 @@ export function InventoryView({
               key={group.item.id}
               group={group}
               tab={tab}
+              canonicalName={canonicalNames[group.item.id] ?? null}
               subcategoryName={
                 group.item.subcategory_id
                   ? (subNameById.get(group.item.subcategory_id) ?? null)
@@ -377,12 +381,15 @@ function EmptyState({
 function InventoryItemCard({
   group,
   tab,
+  canonicalName,
   subcategoryName,
   onHold,
   onConsume,
 }: {
   group: ItemGroup;
   tab: Tab;
+  /** Generic ingredient this product matches recipes as, when mapped. */
+  canonicalName: string | null;
   subcategoryName: string | null;
   onHold: number;
   onConsume: (mode: "partial" | "last") => void;
@@ -590,6 +597,10 @@ function InventoryItemCard({
           </DropdownMenu>
         </div>
         </div>
+
+        {canonicalName ? (
+          <p className="text-xs text-muted-foreground">as {canonicalName}</p>
+        ) : null}
 
         <Link
           href={`/inventory/${item.id}`}

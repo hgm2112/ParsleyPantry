@@ -108,14 +108,34 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   const unchecked = grocery.filter((item) => !item.checked).length;
 
   const lowGroup = useMemo(() => {
-    const listedIds = new Set([
-      ...grocery.filter((g) => !g.checked).map((g) => g.item_id).filter(Boolean) as string[],
-      ...addedLocal,
-    ]);
+    // Grocery lines pool by canonical identity — compare roots on both sides
+    // so "already listed" sees a product through its generic ingredient.
+    const roots = new Map<string, string>();
+    for (const group of groups) {
+      roots.set(
+        group.item.id,
+        group.item.canonical_item_id ?? group.item.id,
+      );
+    }
+    const rootOf = (id: string) => {
+      let current = id;
+      for (let hop = 0; hop < 8; hop += 1) {
+        const next = roots.get(current);
+        if (!next || next === current) break;
+        current = next;
+      }
+      return current;
+    };
+    const listedIds = new Set(
+      [
+        ...grocery.filter((g) => !g.checked).map((g) => g.item_id).filter(Boolean) as string[],
+        ...addedLocal,
+      ].map(rootOf),
+    );
     return groups
       .filter(
         (group) =>
-          !listedIds.has(group.item.id) && !ignored.includes(group.item.id),
+          !listedIds.has(rootOf(group.item.id)) && !ignored.includes(group.item.id),
       )
       .filter((group) => group.low)
       .sort((a, b) => a.totalQuantity - b.totalQuantity)[0] ?? null;

@@ -70,7 +70,7 @@ export function AddGrocerySheet({
 
   async function addFromInventory(group: ItemGroup) {
     const result = await addGroceryItem({
-      itemId: group.item.id,
+      itemId: group.item.canonical_item_id ?? group.item.id,
       name: group.item.name,
       quantity: 1,
       unit: group.item.unit,

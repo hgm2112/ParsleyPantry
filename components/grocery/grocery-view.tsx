@@ -67,6 +67,7 @@ export type CatalogEntry = {
   unit: string | null;
   category_id: string | null;
   barcode: string | null;
+  canonical_item_id: string | null;
 };
 
 export type GroceryRecipe = {
@@ -212,23 +213,42 @@ export function GroceryView({
     return map;
   }, [items, itemStoreMap]);
 
+  /** Canonical root per item — stock and list membership pool by identity. */
+  const rootOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of inventory) {
+      map.set(entry.item.id, entry.item.canonical_item_id ?? entry.item.id);
+    }
+    for (const entry of catalog) {
+      map.set(entry.id, entry.canonical_item_id ?? entry.id);
+    }
+    return (id: string) => {
+      let current = id;
+      for (let hop = 0; hop < 8; hop += 1) {
+        const next = map.get(current);
+        if (!next || next === current) break;
+        current = next;
+      }
+      return current;
+    };
+  }, [inventory, catalog]);
+
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of inventory) {
-      map.set(entry.item_id, (map.get(entry.item_id) ?? 0) + entry.quantity);
+      const key = rootOf(entry.item_id);
+      map.set(key, (map.get(key) ?? 0) + entry.quantity);
     }
     return map;
-  }, [inventory]);
+  }, [inventory, rootOf]);
 
-  const onListSet = useMemo(
-    () =>
-      new Set(
-        items
-          .map((item) => item.item_id)
-          .filter((itemId): itemId is string => !!itemId),
-      ),
-    [items],
-  );
+  const onListSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of items) {
+      if (item.item_id) set.add(rootOf(item.item_id));
+    }
+    return set;
+  }, [items, rootOf]);
 
   const searchResults = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -309,14 +329,14 @@ export function GroceryView({
   const showStoreHeaders = sections.length > 1;
 
   async function quickAdd(entry: CatalogEntry) {
-    if (onListSet.has(entry.id)) {
+    if (onListSet.has(rootOf(entry.id))) {
       toast.message(`${entry.name} is already on the list`);
       return;
     }
     setAddingId(entry.id);
     const result = await addGroceryItem({
       name: entry.name,
-      itemId: entry.id,
+      itemId: rootOf(entry.id),
       categoryId: entry.category_id,
       quantity: 1,
       unit: entry.unit,
@@ -618,12 +638,12 @@ export function GroceryView({
                           <span className="text-muted-foreground"> · {entry.unit}</span>
                         ) : null}
                       </span>
-                      {stockByItem.get(entry.id) ? (
+                      {stockByItem.get(rootOf(entry.id)) ? (
                         <span className="shrink-0 text-xs text-muted-foreground">
-                          ×{stockByItem.get(entry.id)} in pantry
+                          ×{stockByItem.get(rootOf(entry.id))} in pantry
                         </span>
                       ) : null}
-                      {onListSet.has(entry.id) ? (
+                      {onListSet.has(rootOf(entry.id)) ? (
                         <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                           on list
                         </span>

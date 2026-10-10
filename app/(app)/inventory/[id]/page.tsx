@@ -55,11 +55,23 @@ async function DetailContent({ id }: { id: string }) {
     .eq("item_id", item.id);
   if (!batches || batches.length === 0) redirect("/inventory");
 
+  const canonicalResult = item.canonical_item_id
+    ? await supabase
+        .from("items")
+        .select("id, name")
+        .eq("household_id", householdId)
+        .eq("id", item.canonical_item_id)
+        .maybeSingle()
+    : { data: null };
+
   return (
     <InventoryDetail
       item={item}
       entries={batches as InventoryEntry[]}
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
+      canonicalItem={
+        (canonicalResult.data ?? null) as { id: string; name: string } | null
+      }
     />
   );
 }

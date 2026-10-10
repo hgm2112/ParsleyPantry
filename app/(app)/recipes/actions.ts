@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
-import { parseQuantityText, toImperialText } from "@/lib/stock";
+import { createRootLookup } from "@/lib/canonical";
+import { parseQuantityText, splitNameAndQuantity, toImperialText } from "@/lib/stock";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -36,12 +37,18 @@ async function linkIngredientItems(
 ): Promise<Map<string, string>> {
   const { data } = await supabase
     .from("items")
-    .select("id, name")
+    .select("id, name, canonical_item_id")
     .eq("household_id", householdId);
 
+  const rows = (data ?? []) as {
+    id: string;
+    name: string;
+    canonical_item_id: string | null;
+  }[];
+  const rootOf = createRootLookup(rows);
   const byName = new Map<string, string>();
-  for (const row of ((data ?? []) as { id: string; name: string }[])) {
-    byName.set(row.name.toLowerCase(), row.id);
+  for (const row of rows) {
+    byName.set(row.name.toLowerCase(), rootOf(row.id));
   }
   return byName;
 }
@@ -251,10 +258,31 @@ export async function addRecipeToGrocery(
       if (error) return { ok: false, error: error.message };
     }
 
+    // Grocery lines link the canonical root so product + generic pushes
+    // dedupe onto one line and pantry checks resolve across the group.
+    const { data: itemRows } = await supabase
+      .from("items")
+      .select("id, name, canonical_item_id")
+      .eq("household_id", householdId);
+    const catalogRows = (itemRows ?? []) as {
+      id: string;
+      name: string;
+      canonical_item_id: string | null;
+    }[];
+    const rootOf = createRootLookup(catalogRows);
+    const nameToRoot = new Map<string, string>();
+    for (const row of catalogRows) {
+      nameToRoot.set(row.name.trim().toLowerCase(), rootOf(row.id));
+    }
+
     const inputs = picked.map((ingredient) => {
       const parsed = parseQuantityText(ingredient.quantity_text);
+      const linkedRoot = ingredient.item_id ? rootOf(ingredient.item_id) : null;
+      const byName = nameToRoot.get(
+        splitNameAndQuantity(ingredient.name).name.trim().toLowerCase(),
+      );
       return {
-        itemId: ingredient.item_id,
+        itemId: linkedRoot ?? byName ?? null,
         name: ingredient.name,
         quantity: parsed.quantity,
         unit: parsed.unit,

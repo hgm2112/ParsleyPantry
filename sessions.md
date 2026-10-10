@@ -4,6 +4,99 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 18) — Canonical: rename promotes instead of erroring, own-name clear, longer-candidate skip, Clear match + Undo
+
+**Shipped** (driven by user hitting the part-17 guard: *'An item named "Beef broth" already matches as this ingredient'*)
+- Root causes found in code: ① `Beef broth → Beef` came from a review-row misclick (leftover `broth` rates weak → suggestion buttons had no undo); ② `Cream Cheese → Cream Cheese 2 Pack` was **backfill auto-map** — `MEASURE_RE` strips "2 pack", so both names clean to `cream cheese` → rating `exact` → `high` → applied; nothing prevented a longer-named variant from capturing a shorter product. Both errors fired because the viewed item *is* named the desired target and sits **inside** the tree being renamed.
+- `renameCanonicalRoot` (inventory/actions.ts): the `targetId === root.id` error guard is gone. In-tree conflict now **promotes**: `existing.canonical := null` (promote first, so the repoint below can't self-reference), then `canonical = root.id → existing.id` (everyone follows the new generic), return `{id: existing, name, merged: true}`. Nothing deleted; old root lingers unmapped (same as the existing unrelated-name merge). Unrelated-name merge path unchanged.
+- `detail-form.tsx` `commitRename`: result equal to `item.id` → local `canonical = null` (own identity, suffix "(its own name)"); toast branches: cleared → "Match cleared", target id changed → "Matches recipes as X", same id → "Renamed to X".
+- `setItemCanonical`: **own-name pre-check** — `select id … .eq(id, itemId).ilike(name, typed)` before `resolveCanonicalRoot`; found → clear. Fixes "typing its own name re-maps because resolve chain-follows to the differently-named root" (its own name + erase-input both clear now).
+- `lib/canonical.ts` `matchCanonical`: skips any candidate whose **raw word count** exceeds the product's (`rawWordCount` helper) — never matched, never suggested. Longer product → shorter generic still works (`Cream Cheese 2 Pack` → `Cream Cheese`), which is the correct direction and what backfill now does.
+- `detail-form.tsx` match row: new **"Clear match"** ghost button next to Rename (mapped only) → `setItemCanonical(id, null)`, toast **"Match cleared" + Undo** (8s → restores previous generic by name). `commitCanonical` (mapping change) gained the same Undo; all writes funnel through new `writeCanonical(name|null)` (busy-guarded, adopts result into local state) + `undoCanonicalChange(previous|null)`. Rename toast stays without Undo (rename-back can collide with the old row; Clear covers it).
+- Review page unchanged (user chose detail-page undo over a review toast).
+
+**Gotchas**
+- Promote path only nulls `existing`'s direct parent and moves direct `root.id` pointers — chains are never created by app writes (invariant), legacy chains still resolve on read.
+- After promoting, the old root ("Beef"/"Cream Cheese 2 Pack") remains as an independent item; with the raw-word skip it will not re-capture the shorter product, and once the promoted item has children it's skipped by backfill entirely.
+- `merged` is still returned by `renameCanonicalRoot` but the UI now derives messages from target-id changes instead.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = only the 4 pre-existing problems; `npm run build` passes.
+- Manual: ① detail on "Beef broth" (mapped to Beef) → Rename → "Beef broth" → no error, row ends "(its own name)", any other products that matched `Beef` now match as `Beef broth`; ② "Cream Cheese" → Clear match → "(its own name)" + Undo restores; ③ type the item's own name into the match editor → clears; erase + Save → clears; ④ Run backfill → `Cream Cheese` not re-mapped to the 2-pack; 2-pack (if in scope) maps *down* to `Cream Cheese`; ⑤ raw-longer candidates never appear in suggestions/datalist pool matches; ⑥ mapping change toast → Undo restores previous.
+
+**Open — next session**
+- User applies no new migration for this part (code-only); both earlier migrations still apply if pending.
+- Nothing committed yet this session.
+- Android PWA scan debug overlay readings (part 9 still open).
+
+## 2026-10-10 (part 17) — Canonical: keep-as-is, generic rename, card visibility
+
+
+
+**Shipped** (follow-up to part 16, driven by user Q&A: "can I leave rows alone? does capitalization matter?")
+- Migration `supabase/migrations/20261012130000_canonical_reviewed.sql` — **run manually alongside the part 16 migration if not yet applied**: `items.canonical_reviewed boolean not null default false` (non-destructive). Means "user saw this in the review queue and chose its own identity".
+- **Keep as its own name** (closes the gap where an unmapped barcode item like "Chicken Noodle Soup" could never leave the review list — typing its own name counts as *clearing* a mapping and the row came right back):
+  - `keepCanonicalAsIs(itemId, keep: boolean)` in `inventory/actions.ts` — flips only the flag (bool so undo = `false`), returns "Item not found" on miss, revalidates /inventory + /inventory/normalize.
+  - `planCanonical` skips `canonicalReviewed` items right after mapped/target checks → counted `alreadyGeneric`, never listed, never auto-mapped by a future backfill run (select gains `canonical_reviewed`, `ItemSeed.canonicalReviewed`).
+  - `normalize-review.tsx`: per-row quiet **"Keep as its own name"** button → row leaves locally (counts shift via shared `shiftCounts`), toast with **Undo** (flag off + row re-appended, dedup-guarded); footer copy updated.
+  - Detail suffix: `(its own name)` → `(kept as its own name)` when the flag is set (`detail-form.tsx`, reads `item.canonical_reviewed`).
+- **Rename the generic itself** (`renameCanonicalRoot(canonicalId, newName)` in `inventory/actions.ts`, + `createRootLookup` import): follows chain to the true root; **exact-string** no-op check (so case-only fixes "chicken noodle soup" → "Chicken Noodle Soup" work — unique index is on `lower(name)`, same lower = no conflict); `update name` → on `23505`/duplicate-key **merge instead**: find existing by lower-equality in JS, resolve it to its root, repoint `canonical_item_id = root.id` holders to that root, old row goes empty; guard `targetId === root.id` (name held by an item already inside this tree → clear error, no destructive delete); returns `{id, name, merged}`, revalidates /inventory + /inventory/normalize. UI: pencil **Rename** button on the detail "Matches recipes as" row (only when mapped) → inline input prefilled with the target's name → local state adopts returned `{id,name}` (id changes on merge) + `item.canonical_item_id` updated; toast "Renamed to …" / "Merged into …".
+- **Generic visible on cards**: `buildCanonicalNameMap(rows)` in `lib/canonical.ts` (wraps `createRootLookup`) → `Record<itemId, rootName>` with entries only for mapped non-root items. Inventory page (`items select id,name,canonical_item_id` added to its Promise.all) and search page (5th query, full map — root may not match the needle) pass it down. `InventoryView` new `canonicalNames` prop → `InventoryItemCard` renders `as Ground Beef` (`text-xs text-muted-foreground`) between the name row and chips; search pantry cards + "Items (not in pantry)" cards render the same line after qty/barcode line. Unmapped cards and roots show nothing.
+- Detail row also gained the Rename control next to the identity-edit name button (two separate concerns: *which* generic = click the name; *what it's called* = Rename).
+
+**Gotchas**
+- Capitalization never affects matching or dedupe — matcher lowercases both sides, lookups use `toLowerCase()`/`ilike`, uniqueness is `unique (household_id, lower(name))` → **first spelling stored wins visually**; two case-variants of the same name can never coexist (later scan reuses the existing row, keeping its stored spelling).
+- Reviewed flag is left untouched by `setItemCanonical`: mapping a reviewed item is fine (suffix hidden while mapped); clearing its mapping later keeps it out of the queue (clearing = "settled on its own name").
+- Merge path repoints only **direct** `canonical_item_id = root.id` pointers (app invariant stores roots; legacy chains resolve on read).
+- Empty old root rows linger after a merge — harmless catalog entries; same as the "Other…" re-map behavior from part 16.
+- Review rows re-append at list end after Undo (plan order otherwise name-sorted) — cosmetic only.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = only the 4 pre-existing problems; `npm run build` passes.
+- Manual: ① review row → Keep → gone after reload, counted under Already generic, survives backfill re-run; Undo restores row + counts; ② detail shows "(kept as its own name)" for that item; ③ rename case-only on a stockless canonical → persists, still matches; ④ rename to an existing name → merges (siblings follow, toast "Merged into …", no chains); ⑤ rename to a name held by an item inside the same tree → clear error; ⑥ mapped inventory card shows `as Ground Beef`, unmapped/root cards show nothing; search shows the same.
+
+**Open — next session**
+- **Apply both migrations** (`20261012120000_canonical_ingredients.sql` if not yet, + `20261012130000_canonical_reviewed.sql`) before deploying this code.
+- Nothing committed yet this session (sessions.md is kept local per its header).
+- Android PWA scan debug overlay readings (part 9 still open).
+
+## 2026-10-10 (part 16) — Canonical ingredient normalization
+
+**Shipped**
+- Migration `supabase/migrations/20261012120000_canonical_ingredients.sql` — **must be run manually BEFORE deploying this code**: `items.canonical_item_id uuid references items(id) on delete set null`, `items.brand text`, index `items_canonical_idx`. Zero data migration — matching key = `coalesce(canonical_item_id, id)`, so unmapped items behave exactly as before (idempotent by construction).
+- Identity model (decided with user): the generic catalog item **is** the canonical record (self-FK on `items`, no separate table, no duplicated name to drift). App always stores the **root** (never chains): every write follows chains to the root, and changing a canonical repoints existing children to the new root (`setItemCanonical`, backfill). Deleting a canonical reverts products to self via `set null`.
+- `lib/canonical.ts` (new, pure): `brandTokenList` (splits "Great Value, Kraft"), `cleanTokens` (lowercase → strip parens/hyphens → pack/measure regex `12 oz`/`2 ct`/`x4` → punct → curated STOPWORDS marketing set `100/organic/grass/fed/pasture/raised/free/range/non/gmo/premium/reserve/family/size/value/bulk/artisan/everyday` → brand tokens), `matchCanonical(name, candidates, {brandTokens, categoryId})` → `high | suggested | ambiguous | none` + best-first candidates. Auto (`high`) only on exact-equality-after-cleanup or strict token containment where **every** leftover ∈ stopwords/brand, unique candidate, categories compatible, target is a root (`canonicalSafe`). DISTINCTIVE set (breast/thigh/salted/unsalted/sweetened/vanilla/dairy/oat/soy/ground/smoked…) in leftover always demotes to review; `salted/unsalted` strippable only when ≤1 token remains ("salted butter"→"butter"); products never match a longer candidate. Candidates skip same-name (self). `createRootLookup` (cycle-safe memoized).
+- `lib/canonical-db.ts` (new, server-only): `resolveCanonicalRoot` — find-or-create generic item by name (wildcards stripped, chain-following, unique-race re-lookup), returns `{id, name, created}`.
+- Scan/add (`addToInventory` + `add-form.tsx`): schema gains `canonicalName` + `brand` (both slice-capped at 160). Form loads candidate pool once (`listCanonicalCandidates` = items + recipe-ingredient names not colliding), computes `matchCanonical` live (brand tokens from OFF), shows **"Matches recipes as"** input with datalist: `high`/`suggested` prefill (auto until user edits — `canonicalTouchedRef` resets on name change), `ambiguous` no prefill + lists candidates in hint, `none` optional. Server resolve-or-creates root; stored **only when currently null** (never overwrites a confirmed mapping); brand stored on insert/first patch only. Repeat scans reuse the saved mapping (no recompute).
+- Detail (`detail-form.tsx` + `[id]/page.tsx`): page fetches `canonicalItem {id,name}`; header row **"Matches recipes as: X"** (own name + "(its own name)" when unmapped), click → inline input + datalist (lazy `listCanonicalCandidates`) + Save/Cancel → `setItemCanonical(itemId, name|null)` (self-name/empty = clear; repoints children; toast). Brand shown next to barcode in the Quantity subtitle.
+- Matching surfaces → root keys (qty logic `toOunces`/`stockPoolKey` untouched — only keys change): `recipes/page.tsx` + `recipes/[id]/page.tsx` (stock, `nameToItemId` values, `itemIdsByRecipe`, ingredient `item_id→rootOf`); `recipe-editor.tsx` new `itemRoots` prop + `matchingKey(raw, name)` used by coverage, per-row have/✓ and `handleAddMissing` — **also fixes the pre-existing bug where null-`item_id` ingredients were silently skipped** by "Add only the missing ones"; `recipes/actions.ts` `linkIngredientItems` now stores roots (select + `createRootLookup`), `addRecipeToGrocery` resolves root from `item_id` or cleaned name → grocery dedupe merges product+generic lines.
+- `plan/actions.ts` `planWeekToGrocery`: stock + held pools keyed `stockPoolKey(root, u)`; ingredient resolves `item_id→root` or name→root (unresolved → grocery line with null item); holds stored under root. `markMealMade`: FEFO consumption expands root hold → `.in("item_id", groupIds)` across every item in the canonical group (legacy product-keyed holds resolve the same way); hold release stays row-deletes.
+- Grocery: page catalog select adds `canonical_item_id`; `grocery-view.tsx` `rootOf` memo (inventory items + catalog), stockByItem + onListSet root-keyed, search dropdown "×N in pantry"/"on list" + `quickAdd` push root; `add-sheet.tsx` pantry pick links `canonical ?? id`. Aisle memory (`item_store_aisles`) keys grocery-row ids on both sides — self-consistent per generation, no change.
+- Home `smart-actions.tsx` low card: "already on list" now compares roots both sides (was raw id vs grocery root → would re-suggest listed items).
+- Backfill + review: `app/(app)/inventory/normalize/actions.ts` shared `planCanonical(supabase, householdId, userId, apply)` — scope = items referenced by inventory; skips settled (already mapped / canonical target); per item runs `matchCanonical` against live pool (canonicalSafe recomputed via `canonicalNow` map); `high` → apply writes CAS `.is("canonical_item_id", null)` + child repoint (chains impossible), virtual recipe-name targets create the generic row; dry run counts `readyToMatch`. Buckets: `inScope/autoMatched/readyToMatch/alreadyGeneric/needsReview/createdRoots`. Review rows = `suggested`/`ambiguous`/`none`-with-barcode. `getCanonicalReview` (read-only page load) + `runCanonicalBackfill` (idempotent, revalidates /inventory /recipes /grocery /plan).
+- `/inventory/normalize` page + `components/inventory/normalize-review.tsx`: stat cards (Ready to auto-match / Already generic / Needs review / In your pantry), **Run backfill (N)** button → toast summary, per-row suggestion buttons (✓ accept → `setItemCanonical`) + "Other…" datalist free-text (creates or picks), empty state, back link. Settings → new "Ingredient matching" section links it.
+
+**Gotchas**
+- Migration must land before deploy (columns missing otherwise).
+- Backfill is user-triggered from `/inventory/normalize` ("Run backfill") — not automatic, not SQL (spec decision: shared TS matcher, explicit press, re-run = no-op).
+- No OFF enrichment during backfill (spec decision) — unknown-brand products land in review; `brand` fills in on future scans; matcher without brand tokens only auto-matches cleanup-exact/stoplist leftovers.
+- Products with barcodes can be canonical targets only as roots; mapping is name-containment-based so brand-included candidates never steal matches. `ambiguous` never auto-applies.
+- Order dependence in backfill: pool canonicalSafe is recomputed per item, so a generic item that itself maps first is excluded as a target for later items (safe, may push a would-be auto into review — re-run after resolving).
+- Grocery/planner rows created by legacy code may hold raw product ids until touched; reads tolerate mixed generations (`rootOf` falls back to id).
+- `item_store_aisles` memory: old rows keyed raw ids, new rows root ids — per-row self-consistent, may forget a remembered aisle once per item generation.
+- `recipe_ingredients.item_id` now points at roots for newly saved recipes; existing product-id rows are resolved at read time (no data migration needed).
+- Stoplist/DISTINCTIVE live in `lib/canonical.ts` — tuning happens there; invariant: no distinctive token may ever enter STOPWORDS.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = only the 4 pre-existing problems; `npm run build` passes (`/inventory/normalize` routed).
+- Manual checklist (spec §8 mapped): ① scan "100% Grass Fed Ground Beef" with generic "Ground Beef" present → Matches-as prefilled, saves mapping, name/barcode kept; detail shows "Matches recipes as: Ground Beef"; ② ambiguous product (two candidates) → no prefill, hint lists candidates, stays unmapped until confirmed; unknown-brand yogurt → suggestion only, not auto; ③ recipe availability + ✓/missing counts + "Add only the missing ones" treat two products under one canonical as one pool; quantity partial shortfall unchanged (oz math); ④ scan same barcode again → mapping reused, no recompute; ⑤ `/inventory/normalize` → Run backfill → summary counts, second run = 0 auto-matched; re-run after manual confirm doesn't overwrite; ⑥ accept suggestion on review row updates detail + recipes; ⑦ plan "Shop this week" pools by canonical, `markMealMade` FEFO-decrements across the group, holds release as before; ⑧ grocery "×N in pantry" aggregates group; recipe push + pantry pick dedupe to one line; ⑨ delete generic item (if reachable) → products revert to own identity; ⑩ already-generic items (no barcode, no candidates) count as already generic, not review.
+
+**Open — next session**
+- **Apply migration `20261012120000_canonical_ingredients.sql`** before deploying, then open `/inventory/normalize` → Run backfill (counts land in the toast + stat cards).
+- Android PWA scan debug overlay readings (part 9 still open).
+- Tests skipped per user decision — spec §8 covered by the manual checklist above instead.
+- Optional: OFF brand enrichment pass for barcode items (deferred by decision); add-form min qty → 1.
+
 ## 2026-10-10 (part 15) — Per-batch expiration tracking (one card per item)
 
 **Shipped**

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Check,
   Loader2,
+  Pencil,
   ShoppingCart,
   Trash2,
 } from "lucide-react";
@@ -31,8 +32,12 @@ import {
   addInventoryToGrocery,
   consumeFromItem,
   deleteInventory,
+  listCanonicalCandidates,
+  renameCanonicalRoot,
   restoreBatches,
+  setItemCanonical,
   updateInventory,
+  type CanonicalCandidateView,
   type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
 import { expiryChipProps, formatFreezerQuality } from "@/lib/freezer";
@@ -50,14 +55,26 @@ export function InventoryDetail({
   item: initialItem,
   entries: initialEntries,
   subcategories,
+  canonicalItem,
 }: {
   item: ItemRow;
   entries: InventoryEntry[];
   subcategories: SubcategoryRow[];
+  canonicalItem: { id: string; name: string } | null;
 }) {
   const router = useRouter();
   const [item, setItem] = useState<ItemRow>(initialItem);
   const [entries, setEntries] = useState<InventoryEntry[]>(initialEntries);
+  const [canonical, setCanonical] = useState(canonicalItem);
+  const [editingCanonical, setEditingCanonical] = useState(false);
+  const [canonicalDraft, setCanonicalDraft] = useState(
+    canonicalItem?.name ?? initialItem.name,
+  );
+  const [canonicalOptions, setCanonicalOptions] = useState<CanonicalCandidateView[]>([]);
+  const canonicalBusyRef = useRef(false);
+  const [editingRename, setEditingRename] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(canonicalItem?.name ?? "");
+  const renameBusyRef = useRef(false);
   const [unit, setUnit] = useState(initialItem.unit ?? "oz");
   const [lowThreshold, setLowThreshold] = useState(
     initialItem.low_threshold != null ? String(initialItem.low_threshold) : "",
@@ -165,6 +182,134 @@ export function InventoryDetail({
     }
     setNameDraft(trimmed);
     setEditingName(false);
+  }
+
+  async function openCanonicalEdit() {
+    setEditingCanonical(true);
+    if (canonicalOptions.length > 0) return;
+    const result = await listCanonicalCandidates();
+    if (!result.ok) return;
+    setCanonicalOptions([
+      ...result.data.items,
+      ...result.data.recipeNames.map((name) => ({
+        id: `recipe:${name}`,
+        name,
+        categoryId: null,
+        canonicalItemId: null,
+      })),
+    ]);
+  }
+
+  /** Writes the match (null = clear) and adopts the result into local state. */
+  async function writeCanonical(
+    name: string | null,
+  ): Promise<{ ok: boolean; next: { id: string; name: string } | null }> {
+    if (canonicalBusyRef.current) return { ok: false, next: null };
+    canonicalBusyRef.current = true;
+    const result = await setItemCanonical(item.id, name);
+    canonicalBusyRef.current = false;
+    if (!result.ok) {
+      toast.error(result.error);
+      return { ok: false, next: null };
+    }
+    const next = result.data.canonicalItemId
+      ? {
+          id: result.data.canonicalItemId,
+          name: result.data.canonicalName ?? name ?? item.name,
+        }
+      : null;
+    setCanonical(next);
+    setItem((current) => ({
+      ...current,
+      canonical_item_id: result.data.canonicalItemId,
+    }));
+    setCanonicalDraft(next?.name ?? item.name);
+    return { ok: true, next };
+  }
+
+  /** Reverts a match change (null previous = clear back to own identity). */
+  async function undoCanonicalChange(
+    previous: { id: string; name: string } | null,
+  ) {
+    const { ok, next } = await writeCanonical(previous?.name ?? null);
+    if (ok) toast.success(next ? `Matches recipes as ${next.name}` : "Match cleared");
+    router.refresh();
+  }
+
+  async function commitCanonical() {
+    const trimmed = canonicalDraft.trim();
+    const previous = canonical;
+    const { ok, next } = await writeCanonical(trimmed || null);
+    if (!ok) return;
+    setEditingCanonical(false);
+    const changed = (previous?.id ?? null) !== (next?.id ?? null);
+    toast.success(
+      next ? `Matches recipes as ${next.name}` : "Match cleared",
+      changed
+        ? {
+            action: {
+              label: "Undo",
+              onClick: () => void undoCanonicalChange(previous),
+            },
+            duration: 8000,
+          }
+        : undefined,
+    );
+  }
+
+  /** One-click removal of the match — with Undo in the toast. */
+  async function clearCanonical() {
+    if (!canonical) return;
+    const previous = canonical;
+    const { ok, next } = await writeCanonical(null);
+    if (!ok || next) return;
+    toast.success("Match cleared", {
+      action: {
+        label: "Undo",
+        onClick: () => void undoCanonicalChange(previous),
+      },
+      duration: 8000,
+    });
+    router.refresh();
+  }
+
+  /**
+   * Renames the generic target itself (works even without stock). On a name
+   * conflict the target's tree absorbs or promotes — never an error.
+   */
+  async function commitRename() {
+    if (!canonical || renameBusyRef.current) return;
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === canonical.name) {
+      setRenameDraft(canonical.name);
+      setEditingRename(false);
+      return;
+    }
+    const previousId = canonical.id;
+    renameBusyRef.current = true;
+    const result = await renameCanonicalRoot(canonical.id, trimmed);
+    renameBusyRef.current = false;
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    // Promoted result can be this very item → its own identity (null).
+    const next =
+      result.data.id === item.id
+        ? null
+        : { id: result.data.id, name: result.data.name };
+    setCanonical(next);
+    setCanonicalDraft(next?.name ?? item.name);
+    setItem((current) => ({ ...current, canonical_item_id: next?.id ?? null }));
+    setEditingRename(false);
+    toast.success(
+      !next
+        ? "Match cleared"
+        : next.id !== previousId
+          ? `Matches recipes as ${next.name}`
+          : `Renamed to ${next.name}`,
+    );
+    router.refresh();
   }
 
   async function toggleAutoRestock(checked: boolean) {
@@ -321,6 +466,134 @@ export function InventoryDetail({
                 </span>
               ) : null}
             </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>Matches recipes as:</span>
+              {editingCanonical ? (
+                <form
+                  className="flex min-w-0 flex-1 items-center gap-1"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void commitCanonical();
+                  }}
+                >
+                  <Input
+                    autoFocus
+                    list="canonical-edit-options"
+                    value={canonicalDraft}
+                    aria-label="Canonical ingredient"
+                    className="h-6 w-40 text-xs"
+                    onChange={(event) => setCanonicalDraft(event.target.value)}
+                  />
+                  <datalist id="canonical-edit-options">
+                    {canonicalOptions.map((option) => (
+                      <option key={option.id} value={option.name} />
+                    ))}
+                  </datalist>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-xs"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      setCanonicalDraft(canonical?.name ?? item.name);
+                      setEditingCanonical(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              ) : editingRename ? (
+                <form
+                  className="flex min-w-0 flex-1 items-center gap-1"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void commitRename();
+                  }}
+                >
+                  <Input
+                    autoFocus
+                    value={renameDraft}
+                    aria-label="Rename generic ingredient"
+                    className="h-6 w-40 text-xs"
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-xs"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      setRenameDraft(canonical?.name ?? "");
+                      setEditingRename(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="max-w-full truncate font-medium text-foreground underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setCanonicalDraft(canonical?.name ?? item.name);
+                      void openCanonicalEdit();
+                    }}
+                  >
+                    {canonical?.name ?? item.name}
+                  </button>
+                  {canonical ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1.5 text-xs text-muted-foreground"
+                        aria-label={`Rename ${canonical.name}`}
+                        onClick={() => {
+                          setRenameDraft(canonical.name);
+                          setEditingRename(true);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Rename
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1.5 text-xs text-muted-foreground"
+                        aria-label={`Clear match for ${canonical.name}`}
+                        onClick={() => void clearCanonical()}
+                      >
+                        Clear match
+                      </Button>
+                    </>
+                  ) : null}
+                </>
+              )}
+              {!canonical && !editingCanonical && !editingRename ? (
+                <span>
+                  ({item.canonical_reviewed ? "kept as its own name" : "its own name"})
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         <Button
@@ -344,6 +617,7 @@ export function InventoryDetail({
                 ? ` · ${uniqueLocations.map(locationLabel).join(", ")}`
                 : ""}
               {item.barcode ? ` · Barcode ${item.barcode}` : ""}
+              {item.brand ? ` · ${item.brand}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -105,7 +105,7 @@ async function GroceryContent() {
       .order("name", { ascending: true }),
     supabase
       .from("items")
-      .select("id, name, unit, category_id, barcode")
+      .select("id, name, unit, category_id, barcode, canonical_item_id")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
     supabase

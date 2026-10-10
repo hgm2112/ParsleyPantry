@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { InventoryView } from "@/components/inventory/inventory-view";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildCanonicalNameMap } from "@/lib/canonical";
 import { stockPoolKey } from "@/lib/stock";
 import { compareByExpiry } from "@/lib/expiry";
 import type { InventoryEntry, StockHoldRow, SubcategoryRow } from "@/lib/types";
@@ -32,22 +33,27 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [inventoryResult, holdsResult, subsResult] = await Promise.all([
-    supabase
-      .from("inventory")
-      .select("*, item:items!inner(*)")
-      .eq("household_id", householdId)
-      .gt("quantity", 0),
-    supabase
-      .from("stock_holds")
-      .select("item_id, quantity, unit")
-      .eq("household_id", householdId),
-    supabase
-      .from("subcategories")
-      .select("*")
-      .eq("household_id", householdId)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [inventoryResult, holdsResult, subsResult, itemsResult] =
+    await Promise.all([
+      supabase
+        .from("inventory")
+        .select("*, item:items!inner(*)")
+        .eq("household_id", householdId)
+        .gt("quantity", 0),
+      supabase
+        .from("stock_holds")
+        .select("item_id, quantity, unit")
+        .eq("household_id", householdId),
+      supabase
+        .from("subcategories")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("items")
+        .select("id, name, canonical_item_id")
+        .eq("household_id", householdId),
+    ]);
 
   const rows = ((inventoryResult.data ?? []) as unknown as InventoryEntry[])
     .sort((a, b) =>
@@ -67,11 +73,20 @@ async function InventoryContent() {
     holdsByItem[key] = (holdsByItem[key] ?? 0) + hold.quantity;
   }
 
+  const canonicalNames = buildCanonicalNameMap(
+    (itemsResult.data ?? []) as {
+      id: string;
+      name: string;
+      canonical_item_id: string | null;
+    }[],
+  );
+
   return (
     <InventoryView
       rows={rows}
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       holdsByItem={holdsByItem}
+      canonicalNames={canonicalNames}
     />
   );
 }

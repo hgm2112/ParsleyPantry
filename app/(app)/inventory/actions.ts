@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
+import { createRootLookup } from "@/lib/canonical";
+import { resolveCanonicalRoot } from "@/lib/canonical-db";
 import { lookupOffProduct, type OffProduct } from "@/lib/off";
 import { ensureGroceryItem } from "@/lib/grocery";
 import {
@@ -15,7 +17,7 @@ import {
   toBatchSnapshot,
   type BatchSnapshot,
 } from "@/lib/batches";
-import { earliest, imperialFactor, isLowStock, toImperialStock } from "@/lib/stock";
+import { earliest, imperialFactor, isLowStock, splitNameAndQuantity, toImperialStock } from "@/lib/stock";
 import type {
   InventoryRow,
   InventoryWithItem,
@@ -53,6 +55,23 @@ const addInputSchema = z.object({
   lowThreshold: z.number().min(0).nullish(),
   expirationDays: z.number().int().min(0).max(3650).nullish(),
   autoRestock: z.boolean().nullish(),
+  /** Generic ingredient this product matches recipes as (resolve-or-create). */
+  canonicalName: z
+    .string()
+    .max(400)
+    .nullish()
+    .transform((value) => {
+      const trimmed = (value ?? "").trim().slice(0, 160);
+      return trimmed ? trimmed : null;
+    }),
+  brand: z
+    .string()
+    .max(400)
+    .nullish()
+    .transform((value) => {
+      const trimmed = (value ?? "").trim().slice(0, 160);
+      return trimmed ? trimmed : null;
+    }),
 });
 
 export type AddToInventoryInput = z.input<typeof addInputSchema>;
@@ -162,6 +181,19 @@ export async function addToInventory(
         ? Math.round(input.lowThreshold * thresholdFactor * 10) / 10
         : (input.lowThreshold ?? null);
 
+    const canonicalRoot = input.canonicalName
+      ? await resolveCanonicalRoot(supabase, householdId, input.canonicalName, {
+          location: input.location,
+          categoryId: input.categoryId ?? null,
+          createdBy: user.id,
+        })
+      : null;
+    const canonicalItemId =
+      canonicalRoot &&
+      canonicalRoot.name.trim().toLowerCase() !== input.name.trim().toLowerCase()
+        ? canonicalRoot.id
+        : null;
+
     let item: ItemRow | null = null;
     let createdItem = false;
 
@@ -189,6 +221,8 @@ export async function addToInventory(
           household_id: householdId,
           name: input.name,
           barcode: input.barcode ?? null,
+          brand: input.brand ?? null,
+          canonical_item_id: canonicalItemId,
           category_id: input.categoryId ?? null,
           subcategory_id: input.subcategoryId ?? null,
           default_location: input.location,
@@ -211,21 +245,24 @@ export async function addToInventory(
         item = inserted as ItemRow;
         createdItem = true;
       }
-    } else if (
-      input.lowThreshold != null ||
-      input.expirationDays != null ||
-      input.autoRestock != null ||
-      input.categoryId != null ||
-      input.subcategoryId != null
-    ) {
+    }
+
+    if (item && !createdItem) {
       const patch: Record<string, unknown> = {};
       if (lowThreshold != null) patch.low_threshold = lowThreshold;
       if (input.expirationDays != null) patch.expiration_days = input.expirationDays;
       if (input.autoRestock != null) patch.auto_restock = input.autoRestock;
       if (input.categoryId != null) patch.category_id = input.categoryId;
       if (input.subcategoryId != null) patch.subcategory_id = input.subcategoryId;
-      await supabase.from("items").update(patch).eq("id", item.id);
-      item = { ...item, ...patch } as ItemRow;
+      // Never overwrite an existing brand or a confirmed canonical mapping.
+      if (input.brand && !item.brand) patch.brand = input.brand;
+      if (canonicalItemId && !item.canonical_item_id) {
+        patch.canonical_item_id = canonicalItemId;
+      }
+      if (Object.keys(patch).length > 0) {
+        await supabase.from("items").update(patch).eq("id", item.id);
+        item = { ...item, ...patch } as ItemRow;
+      }
     }
 
     // Batch key: same item + location + expiration date + freezing history =
@@ -1126,7 +1163,7 @@ export async function addInventoryToGrocery(
     if (!inventory?.item) return { ok: false, error: "Item not found" };
 
     const result = await ensureGroceryItem(supabase, householdId, {
-      itemId: inventory.item.id,
+      itemId: inventory.item.canonical_item_id ?? inventory.item.id,
       name: inventory.item.name,
       quantity: 1,
       unit: inventory.item.unit,
@@ -1140,6 +1177,294 @@ export async function addInventoryToGrocery(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not add to list",
+    };
+  }
+}
+
+/**
+ * Points an item at the generic ingredient it matches recipes as (or clears
+ * the mapping). Never overwrites name/barcode/stock, keeps children pointing
+ * at a root (no chains), and clears when the chosen name is the item itself.
+ */
+export async function setItemCanonical(
+  itemId: string,
+  canonicalName: string | null,
+): Promise<ActionResult<{ canonicalItemId: string | null; canonicalName: string | null }>> {
+  try {
+    if (!z.string().uuid().safeParse(itemId).success) {
+      return { ok: false, error: "Invalid item" };
+    }
+    const { supabase, householdId, user } = await requireDal();
+    const { data } = await supabase
+      .from("items")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("id", itemId)
+      .maybeSingle();
+    const item = data as ItemRow | null;
+    if (!item) return { ok: false, error: "Item not found" };
+
+    const trimmed = (canonicalName ?? "").trim();
+    let root: { id: string; name: string } | null = null;
+    if (trimmed) {
+      // Typing this item's own name always clears — even when a chain-followed
+      // resolve would return a differently-named root (item "Cream Cheese"
+      // currently matching as "Cream Cheese 2 Pack").
+      const typedName = trimmed.replace(/[%_]/g, " ").replace(/\s+/g, " ").trim();
+      const { data: typedSelf } = await supabase
+        .from("items")
+        .select("id")
+        .eq("household_id", householdId)
+        .eq("id", itemId)
+        .ilike("name", typedName)
+        .maybeSingle();
+      if (!typedSelf) {
+        root = await resolveCanonicalRoot(supabase, householdId, trimmed, {
+          location: item.default_location,
+          categoryId: item.category_id,
+          createdBy: user.id,
+        });
+        if (root && (root.id === itemId || root.name.trim().toLowerCase() === item.name.trim().toLowerCase())) {
+          root = null; // mapping to itself = clear
+        }
+      }
+    }
+
+    const { error } = await supabase
+      .from("items")
+      .update({ canonical_item_id: root?.id ?? null })
+      .eq("household_id", householdId)
+      .eq("id", itemId);
+    if (error) return { ok: false, error: error.message };
+
+    if (root) {
+      // This item may be someone's canonical — keep the root invariant.
+      await supabase
+        .from("items")
+        .update({ canonical_item_id: root.id })
+        .eq("household_id", householdId)
+        .eq("canonical_item_id", itemId);
+    }
+
+    revalidatePath("/inventory");
+    return { ok: true, data: { canonicalItemId: root?.id ?? null, canonicalName: root?.name ?? null } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not update match",
+    };
+  }
+}
+
+/**
+ * Marks an item as reviewed-and-kept on its own identity (or clears the
+ * decision). Touches only canonical_reviewed — never name/barcode/stock.
+ */
+export async function keepCanonicalAsIs(
+  itemId: string,
+  keep: boolean,
+): Promise<ActionResult<{ canonicalReviewed: boolean }>> {
+  try {
+    if (!z.string().uuid().safeParse(itemId).success) {
+      return { ok: false, error: "Invalid item" };
+    }
+    const { supabase, householdId } = await requireDal();
+    const { data, error } = await supabase
+      .from("items")
+      .update({ canonical_reviewed: keep })
+      .eq("household_id", householdId)
+      .eq("id", itemId)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Item not found" };
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/normalize");
+    return { ok: true, data: { canonicalReviewed: keep } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not update item",
+    };
+  }
+}
+
+/**
+ * Renames a generic ingredient in place (everyone pointing at it follows).
+ * Name conflicts are resolved without deleting anything: an unrelated
+ * existing name absorbs this tree's pointers; a name held *inside* this tree
+ * (e.g. "Beef broth" was mapped onto "Beef") is promoted to be the generic
+ * and every pointer moves onto it. Never overwrites names or mappings.
+ */
+export async function renameCanonicalRoot(
+  canonicalId: string,
+  newName: string,
+): Promise<ActionResult<{ id: string; name: string; merged: boolean }>> {
+  try {
+    if (!z.string().uuid().safeParse(canonicalId).success) {
+      return { ok: false, error: "Invalid item" };
+    }
+    const trimmed = newName.trim();
+    if (!trimmed) return { ok: false, error: "Name cannot be empty" };
+
+    const { supabase, householdId } = await requireDal();
+    const { data: start } = await supabase
+      .from("items")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("id", canonicalId)
+      .maybeSingle();
+    if (!start) return { ok: false, error: "Item not found" };
+
+    // Follow the chain to the real root (invariant says this is already one).
+    let root = start as ItemRow;
+    for (let hop = 0; hop < 8 && root.canonical_item_id && root.canonical_item_id !== root.id; hop += 1) {
+      const { data: next } = await supabase
+        .from("items")
+        .select("*")
+        .eq("household_id", householdId)
+        .eq("id", root.canonical_item_id)
+        .maybeSingle();
+      if (!next) break;
+      root = next as ItemRow;
+    }
+    if (root.name === trimmed) {
+      return { ok: true, data: { id: root.id, name: root.name, merged: false } };
+    }
+
+    const { error } = await supabase
+      .from("items")
+      .update({ name: trimmed })
+      .eq("household_id", householdId)
+      .eq("id", root.id);
+    if (!error) {
+      revalidatePath("/inventory");
+      return { ok: true, data: { id: root.id, name: trimmed, merged: false } };
+    }
+
+    const code = (error as { code?: string }).code;
+    const duplicate = code === "23505" || error.message.includes("duplicate key");
+    if (!duplicate) return { ok: false, error: error.message };
+
+    // Another item already holds this name — merge onto its root instead.
+    const { data: allRows } = await supabase
+      .from("items")
+      .select("id, name, canonical_item_id")
+      .eq("household_id", householdId);
+    const rows = (allRows ?? []) as {
+      id: string;
+      name: string;
+      canonical_item_id: string | null;
+    }[];
+    const existing = rows.find(
+      (row) =>
+        row.id !== root.id &&
+        row.name.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (!existing) return { ok: false, error: error.message };
+    const rootOf = createRootLookup(rows);
+    const targetId = rootOf(existing.id);
+
+    if (targetId === root.id) {
+      // The name lives inside this tree (e.g. "Beef broth" was mapped onto
+      // "Beef"). Promote it to be the generic and move every pointer onto
+      // it — the rename the user asked for, with nothing lost.
+      const { error: promoteError } = await supabase
+        .from("items")
+        .update({ canonical_item_id: null })
+        .eq("household_id", householdId)
+        .eq("id", existing.id);
+      if (promoteError) return { ok: false, error: promoteError.message };
+      const { error: moveError } = await supabase
+        .from("items")
+        .update({ canonical_item_id: existing.id })
+        .eq("household_id", householdId)
+        .eq("canonical_item_id", root.id);
+      if (moveError) return { ok: false, error: moveError.message };
+      revalidatePath("/inventory");
+      revalidatePath("/inventory/normalize");
+      return { ok: true, data: { id: existing.id, name: existing.name, merged: true } };
+    }
+
+    const targetName = rows.find((row) => row.id === targetId)?.name ?? existing.name;
+
+    const { error: repointError } = await supabase
+      .from("items")
+      .update({ canonical_item_id: targetId })
+      .eq("household_id", householdId)
+      .eq("canonical_item_id", root.id);
+    if (repointError) return { ok: false, error: repointError.message };
+    if (root.canonical_item_id) {
+      await supabase
+        .from("items")
+        .update({ canonical_item_id: targetId })
+        .eq("household_id", householdId)
+        .eq("id", root.id);
+    }
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/normalize");
+    return { ok: true, data: { id: targetId, name: targetName, merged: true } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not rename item",
+    };
+  }
+}
+
+export interface CanonicalCandidateView {
+  id: string;
+  name: string;
+  categoryId: string | null;
+  canonicalItemId: string | null;
+}
+
+/** Pool the add/edit/review UIs suggest canonical identities from. */
+export async function listCanonicalCandidates(): Promise<
+  ActionResult<{ items: CanonicalCandidateView[]; recipeNames: string[] }>
+> {
+  try {
+    const { supabase, householdId } = await requireDal();
+    const [itemsResult, recipeResult] = await Promise.all([
+      supabase
+        .from("items")
+        .select("id, name, category_id, canonical_item_id")
+        .eq("household_id", householdId)
+        .order("name", { ascending: true }),
+      supabase
+        .from("recipe_ingredients")
+        .select("name")
+        .eq("household_id", householdId),
+    ]);
+
+    const items = ((itemsResult.data ?? []) as {
+      id: string;
+      name: string;
+      category_id: string | null;
+      canonical_item_id: string | null;
+    }[]).map((row) => ({
+      id: row.id,
+      name: row.name,
+      categoryId: row.category_id,
+      canonicalItemId: row.canonical_item_id,
+    }));
+
+    const itemNames = new Set(items.map((item) => item.name.trim().toLowerCase()));
+    const recipeNames: string[] = [];
+    const seen = new Set<string>();
+    for (const row of (recipeResult.data ?? []) as { name: string }[]) {
+      const name = splitNameAndQuantity(row.name || "").name.trim();
+      const key = name.toLowerCase();
+      if (!key || seen.has(key) || itemNames.has(key)) continue;
+      seen.add(key);
+      recipeNames.push(name);
+    }
+
+    return { ok: true, data: { items, recipeNames } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not load candidates",
     };
   }
 }

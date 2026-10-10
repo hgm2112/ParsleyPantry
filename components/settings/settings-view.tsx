@@ -439,6 +439,15 @@ export function SettingsView({
         </div>
       </Section>
 
+      <Section
+        title="Ingredient matching"
+        description="Keep product names exactly as scanned while recipes match them as one generic ingredient."
+      >
+        <Button variant="outline" render={<Link href="/inventory/normalize" />}>
+          Review ingredient matches
+        </Button>
+      </Section>
+
       <Section title="Account">
         <div className="space-y-2">
           <Label>Signed in as</Label>

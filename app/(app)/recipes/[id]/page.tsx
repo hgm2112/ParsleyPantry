@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeEditor } from "@/components/recipes/recipe-editor";
+import { createRootLookup } from "@/lib/canonical";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 
@@ -40,7 +41,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
       .eq("household_id", householdId),
     supabase
       .from("items")
-      .select("id, name")
+      .select("id, name, canonical_item_id")
       .eq("household_id", householdId),
   ]);
 
@@ -50,22 +51,34 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
   const ingredients = (ingredientsResult.data ?? []) as RecipeIngredientRow[];
 
   const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
+  const itemsData = (itemsResult.data ?? []) as {
+    id: string;
+    name: string;
+    canonical_item_id: string | null;
+  }[];
+  const rootOf = createRootLookup(itemsData);
+
+  // Stock pools are keyed by canonical identity so every product under one
+  // generic ingredient contributes to the same pantry check.
   const stockByItem: Record<string, number> = {};
   const stockUnitByItem: Record<string, string | null> = {};
   for (const row of inventoryData) {
-    stockByItem[row.item_id] = (stockByItem[row.item_id] ?? 0) + row.quantity;
-    if (stockUnitByItem[row.item_id] == null) {
-      stockUnitByItem[row.item_id] = row.unit;
-    } else if (stockUnitByItem[row.item_id] !== row.unit) {
-      stockUnitByItem[row.item_id] = null;
+    const key = rootOf(row.item_id);
+    stockByItem[key] = (stockByItem[key] ?? 0) + row.quantity;
+    if (stockUnitByItem[key] == null) {
+      stockUnitByItem[key] = row.unit;
+    } else if (stockUnitByItem[key] !== row.unit) {
+      stockUnitByItem[key] = null;
     }
   }
 
-  const itemsData = (itemsResult.data ?? []) as { id: string; name: string }[];
   const nameToItemId: Record<string, string> = {};
+  const itemRoots: Record<string, string> = {};
   for (const it of itemsData) {
     const k = it.name.trim().toLowerCase();
-    if (k) nameToItemId[k] = it.id;
+    const root = rootOf(it.id);
+    itemRoots[it.id] = root;
+    if (k) nameToItemId[k] = root;
   }
 
   return (
@@ -76,6 +89,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
         stockByItem={stockByItem}
         stockUnitByItem={stockUnitByItem}
         nameToItemId={nameToItemId}
+        itemRoots={itemRoots}
       />
     </div>
   );
