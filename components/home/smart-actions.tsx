@@ -19,6 +19,18 @@ import type { InventoryEntry } from "@/lib/types";
 
 const EXPIRING_DAYS = 5;
 
+/** "Milk (2d ago) · Spinach (today)" — days < 0 read as ago, 0 as today. */
+function formatExpiryList(rows: InventoryEntry[]): string {
+  return rows
+    .map((row) => {
+      const days = daysUntil(row.expiration_date);
+      if (days === null) return row.item.name;
+      const when = days < 0 ? `${-days}d ago` : days === 0 ? "today" : `${days}d`;
+      return `${row.item.name} (${when})`;
+    })
+    .join(" · ");
+}
+
 type Card = {
   key: string;
   emoji: string;
@@ -39,6 +51,8 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   const [busy, setBusy] = useState(false);
   const [addedLocal, setAddedLocal] = useState<string[]>([]);
   const [dinnerOpen, setDinnerOpen] = useState(false);
+  const [showAllExpired, setShowAllExpired] = useState(false);
+  const [showAllSoon, setShowAllSoon] = useState(false);
 
   const [ignoredRaw, setIgnoredRaw] = useLocalStorage("smart-low-ignored");
   const ignored = useMemo(() => {
@@ -52,9 +66,14 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   }, [ignoredRaw]);
   const setIgnored = (ids: string[]) => setIgnoredRaw(JSON.stringify(ids));
 
+  const expired = pantry.filter((row) => {
+    const days = daysUntil(row.expiration_date);
+    return days !== null && days < 0;
+  });
+
   const expiring = pantry.filter((row) => {
     const days = daysUntil(row.expiration_date);
-    return days !== null && days <= EXPIRING_DAYS;
+    return days !== null && days >= 0 && days <= EXPIRING_DAYS;
   });
 
   const unchecked = grocery.filter((item) => !item.checked).length;
@@ -97,29 +116,67 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
 
   const cards: Card[] = [];
 
-  if (expiring.length > 0) {
-    const count = expiring.length;
-    const sortedExpiring = [...expiring].sort((a, b) =>
-      compareByExpiry(
-        a.expiration_date,
-        a.item.name,
-        b.expiration_date,
-        b.item.name,
-      ),
+  const expiredSorted = [...expired].sort((a, b) =>
+    compareByExpiry(
+      a.expiration_date,
+      a.item.name,
+      b.expiration_date,
+      b.item.name,
+    ),
+  );
+  const soonSorted = [...expiring].sort((a, b) =>
+    compareByExpiry(
+      a.expiration_date,
+      a.item.name,
+      b.expiration_date,
+      b.item.name,
+    ),
+  );
+
+  function listAction(
+    sorted: InventoryEntry[],
+    expanded: boolean,
+    toggle: () => void,
+  ): ReactNode {
+    const shown = expanded ? sorted : sorted.slice(0, 2);
+    const hidden = sorted.length - shown.length;
+    return (
+      <span>
+        {formatExpiryList(shown)}
+        {sorted.length > 2 ? (
+          <>
+            {" · "}
+            <button type="button" onClick={toggle}>
+              {expanded ? "Show less" : `+${hidden} more →`}
+            </button>
+          </>
+        ) : null}
+      </span>
     );
-    const list = sortedExpiring
-      .map((row) => {
-        const days = daysUntil(row.expiration_date);
-        const when =
-          days === null ? "" : days < 0 ? "expired" : days === 0 ? "today" : `${days}d`;
-        return when ? `${row.item.name} (${when})` : row.item.name;
-      })
-      .join(" · ");
+  }
+
+  if (expiredSorted.length > 0) {
+    const count = expiredSorted.length;
+    cards.push({
+      key: "expired",
+      emoji: "🥀",
+      line: `${count} food${count === 1 ? "" : "s"} ${count === 1 ? "has" : "have"} expired`,
+      action: listAction(expiredSorted, showAllExpired, () =>
+        setShowAllExpired((value) => !value),
+      ),
+      tint: "border-red-200 bg-red-50 text-red-900",
+    });
+  }
+
+  if (soonSorted.length > 0) {
+    const count = soonSorted.length;
     cards.push({
       key: "expiring",
       emoji: "🥑",
       line: `${count} food${count === 1 ? "" : "s"} expire${count === 1 ? "s" : ""} soon`,
-      action: list,
+      action: listAction(soonSorted, showAllSoon, () =>
+        setShowAllSoon((value) => !value),
+      ),
       tint: "border-amber-200 bg-amber-50 text-amber-900",
     });
   }

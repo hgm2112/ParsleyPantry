@@ -4,6 +4,21 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 12) — Home Smart Actions: split expired vs expiring soon cards
+
+**Shipped**
+- `smart-actions.tsx`: single "expiring" card split into two — 🥀 "N foods have/had expired" (red tint, `Nd ago` labels, oldest first) and 🥑 "N foods expire soon" (amber, `today`/`Nd`, soonest first; 0–5 days only). Expired card renders first.
+- Filters: `expired` = `daysUntil < 0`, `expiring` = `0…5` (they were lumped by `days <= 5` before).
+- Lists show **2 items max** with a `+N more →` action-slot toggle expanding in place (`Show less` collapses); independent `showAllExpired`/`showAllSoon` state; headline count always shows the total. No links (plain text, per user).
+- Shared `formatExpiryList()` helper for suffix formatting.
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` — only pre-existing lint issues.
+
+**Open — next session**
+- Android PWA scan debug overlay readings (part 9 still open).
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-09 (part 11) — Home Smart Actions: expiring card lists the foods
 
 **Shipped**
