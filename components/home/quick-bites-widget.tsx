@@ -161,17 +161,19 @@ export function QuickBitesWidget({
         {availableRecipes.map((recipe) => (
           <Link
             key={recipe.id}
-            href={`/recipes?id=${recipe.id}`}
+            href={`/recipes/${recipe.id}`}
             className="group block rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
           >
-            <p className="truncate text-sm font-semibold group-hover:text-primary">
-              {recipe.name}
-            </p>
-            {recipe.time > 0 && (
-              <span className="mt-0.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
-                {recipe.time}m
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-semibold group-hover:text-primary">
+                {recipe.name}
+              </p>
+              {recipe.time > 0 && (
+                <span className="mt-0.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                  {recipe.time}m
+                </span>
+              )}
+            </div>
           </Link>
         ))}
       </div>
