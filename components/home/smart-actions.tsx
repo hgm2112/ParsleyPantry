@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { daysUntil } from "@/lib/expiry";
+import { compareByExpiry, daysUntil } from "@/lib/expiry";
 import { isLowStock } from "@/lib/stock";
 import { foodEmoji } from "@/lib/tiles";
 import { mondayOf } from "@/lib/plan";
@@ -99,15 +99,27 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
 
   if (expiring.length > 0) {
     const count = expiring.length;
+    const sortedExpiring = [...expiring].sort((a, b) =>
+      compareByExpiry(
+        a.expiration_date,
+        a.item.name,
+        b.expiration_date,
+        b.item.name,
+      ),
+    );
+    const list = sortedExpiring
+      .map((row) => {
+        const days = daysUntil(row.expiration_date);
+        const when =
+          days === null ? "" : days < 0 ? "expired" : days === 0 ? "today" : `${days}d`;
+        return when ? `${row.item.name} (${when})` : row.item.name;
+      })
+      .join(" · ");
     cards.push({
       key: "expiring",
       emoji: "🥑",
       line: `${count} food${count === 1 ? "" : "s"} expire${count === 1 ? "s" : ""} soon`,
-      action: (
-        <Link href={`/recipes?items=${expiring.map((row) => row.item_id).join(",")}`}>
-          Plan a meal using them →
-        </Link>
-      ),
+      action: list,
       tint: "border-amber-200 bg-amber-50 text-amber-900",
     });
   }

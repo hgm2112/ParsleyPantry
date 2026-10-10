@@ -4,6 +4,22 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 11) — Home Smart Actions: expiring card lists the foods
+
+**Shipped**
+- `smart-actions.tsx`: expiring card action replaced "Plan a meal using them →" (and its `/recipes?items=` link) with a plain-text list sorted soonest-first via `compareByExpiry`: `Milk (today) · Spinach (2d) · Chicken (expired)`. Days from `daysUntil` (0 → "today", <0 → "expired", null → name only). Headline/count line unchanged.
+
+**Gotchas**
+- `/recipes?items=` deep-link no longer used from Home; recipes page param handling untouched.
+- `recipes` prop/`DayDialog` still used by the dinner card.
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` — only pre-existing lint issues.
+
+**Open — next session**
+- Android PWA scan debug overlay readings (part 9 still open).
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-09 (part 10) — Inventory: quantity hitting 0 removes the stock row
 
 **Shipped**
