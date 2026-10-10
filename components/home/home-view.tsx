@@ -12,12 +12,14 @@ import { SmartActions } from "@/components/home/smart-actions";
 import { SnackWidget } from "@/components/home/snack-widget";
 import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
+import { QuickBitesWidget } from "@/components/home/quick-bites-widget";
 import type { RecipeOption } from "@/components/plan/day-dialog";
 import type {
   CategoryRow,
   HomeMeal,
   HouseholdSettingsRow,
   InventoryEntry,
+  RecipeRow,
   StoreAisleRow,
   StoreRow,
   SubcategoryRow,
@@ -53,6 +55,7 @@ export function HomeView({
   itemStores,
   settings,
   recipes,
+  recipeIngredients,
 }: {
   meals: HomeMeal[];
   pantry: InventoryEntry[];
@@ -66,6 +69,13 @@ export function HomeView({
   itemStores: { grocery_item_id: string; store_id: string }[];
   settings: HouseholdSettingsRow | null;
   recipes: RecipeOption[];
+  recipeIngredients: Array<{
+    recipe_id: string;
+    item_id: string;
+    name: string;
+    quantity_text: string;
+    optional: boolean;
+  }>;
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -83,6 +93,11 @@ export function HomeView({
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
         <SnackWidget rows={pantry} subcategories={subcategories} />
+        <QuickBitesWidget
+          recipes={recipes}
+          recipeIngredients={recipeIngredients}
+          pantry={pantry}
+        />
         <PantryInsights rows={pantry} subcategories={subcategories} />
         <MiniCalendar meals={meals} recipes={recipes} />
         <PromoCard />

@@ -97,7 +97,9 @@ async function HomeContent() {
       .maybeSingle(),
     supabase
       .from("recipes")
-      .select("id, name, time, tags, recipe_ingredients(id)")
+      .select(
+        `id, name, time, tags, recipe_ingredients(id, item_id, name, quantity_text, optional, sort_order)`,
+      )
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
     supabase
@@ -132,15 +134,26 @@ async function HomeContent() {
     grocery_item_id: string;
     store_id: string;
   }[];
-  const recipes = (
-    (recipesResult.data ?? []) as (Pick<
-      RecipeRow,
-      "id" | "name" | "time" | "tags"
-    > & { recipe_ingredients: { id: string }[] })[]
-  ).map(({ recipe_ingredients, ...recipe }) => ({
-    ...recipe,
-    hasIngredients: recipe_ingredients.length > 0,
-  }));
+const recipes = (recipesResult.data ?? []).map(
+    (recipe: any) => ({
+      id: recipe.id,
+      name: recipe.name,
+      time: recipe.time,
+      tags: recipe.tags,
+      hasIngredients: !!(recipe.recipe_ingredients?.length ?? 0),
+    })
+  );
+
+const recipeIngredients = (recipesResult.data ?? [])
+  .flatMap((recipe: any) =>
+    (recipe.recipe_ingredients ?? []).map((ig: any) => ({
+      recipe_id: recipe.id,
+      item_id: ig.item_id,
+      name: ig.name,
+      quantity_text: ig.quantity_text,
+      optional: ig.optional ?? false,
+    })),
+  );
 
   return (
     <HomeView
@@ -156,6 +169,7 @@ async function HomeContent() {
       itemStores={itemStores}
       settings={settings}
       recipes={recipes}
+      recipeIngredients={recipeIngredients}
     />
   );
 }
