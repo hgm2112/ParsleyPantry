@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { locationLabel } from "@/components/location-badge";
 import {
+  addToInventory,
   consumeInventory,
   updateInventory,
 } from "@/app/(app)/inventory/actions";
@@ -71,6 +72,19 @@ export function ConsumeDialog({
       action: {
         label: "Undo",
         onClick: () => {
+          if (result.data.deleted) {
+            // The stock row is gone — re-create it via addToInventory.
+            if (!inventory.item) return;
+            void addToInventory({
+              itemId: inventory.item.id,
+              name: inventory.item.name,
+              location: inventory.location,
+              quantity: previousQuantity,
+              unit: inventory.unit ?? undefined,
+              expirationDate: inventory.expiration_date ?? undefined,
+            });
+            return;
+          }
           void updateInventory({
             inventoryId: inventory.id,
             quantity: previousQuantity,
@@ -116,7 +130,7 @@ export function ConsumeDialog({
           </div>
         ) : (
           <p className="text-center text-sm text-muted-foreground">
-            Quantity goes to 0 and stays on your pantry list.
+            Removes it from your pantry list.
           </p>
         )}
 

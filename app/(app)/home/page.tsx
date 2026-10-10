@@ -59,7 +59,8 @@ async function HomeContent() {
     supabase
       .from("inventory")
       .select("*, item:items!inner(*)")
-      .eq("household_id", householdId),
+      .eq("household_id", householdId)
+      .gt("quantity", 0),
     supabase
       .from("categories")
       .select("*")

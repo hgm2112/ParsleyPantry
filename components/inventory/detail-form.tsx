@@ -23,10 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ExpiryChip } from "@/components/expiry-chip";
-import { LocationBadge } from "@/components/location-badge";
+import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import {
+  addToInventory,
   addInventoryToGrocery,
   deleteInventory,
   updateInventory,
@@ -57,6 +58,7 @@ export function InventoryDetail({
   );
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [useLastOpen, setUseLastOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(initial.item.name);
@@ -231,7 +233,10 @@ export function InventoryDetail({
               size="icon"
               aria-label="Decrease quantity"
               disabled={entry.quantity <= 0}
-              onClick={() => void patch({ quantity: Math.max(0, entry.quantity - 1) })}
+              onClick={() => {
+                if (entry.quantity <= 1) setUseLastOpen(true);
+                else void patch({ quantity: entry.quantity - 1 });
+              }}
             >
               −
             </Button>
@@ -387,11 +392,49 @@ export function InventoryDetail({
           onOpenChange={(open) => {
             if (!open) setConsumeMode(null);
           }}
-          onConsumed={(quantity) =>
-            setEntry((current) => ({ ...current, quantity }))
-          }
+          onConsumed={(quantity) => {
+            if (quantity <= 0) {
+              router.push("/inventory");
+              router.refresh();
+              return;
+            }
+            setEntry((current) => ({ ...current, quantity }));
+          }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={useLastOpen}
+        onOpenChange={setUseLastOpen}
+        title={`Use the last ${entry.item.name}?`}
+        description={`${locationLabel(entry.location)} stock will be removed from your pantry. The catalog item stays for next time.`}
+        confirmLabel="Used the last one"
+        onConfirm={async () => {
+          const previousQuantity = entry.quantity;
+          const result = await deleteInventory(entry.id);
+          if (!result.ok) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success(`Used the last ${entry.item.name} · removed from pantry`, {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                void addToInventory({
+                  itemId: entry.item.id,
+                  name: entry.item.name,
+                  location: entry.location,
+                  quantity: previousQuantity,
+                  unit: entry.unit ?? undefined,
+                  expirationDate: entry.expiration_date ?? undefined,
+                }),
+            },
+            duration: 8000,
+          });
+          router.push("/inventory");
+          router.refresh();
+        }}
+      />
 
       <ConfirmDialog
         open={deleteOpen}

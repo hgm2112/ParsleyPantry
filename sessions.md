@@ -4,6 +4,27 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 10) — Inventory: quantity hitting 0 removes the stock row
+
+**Shipped**
+- `consumeInventory` (`actions.ts`): when the resulting quantity would be ≤ 0 the stock row is **deleted** instead of updated to 0; result gains `deleted: boolean`. Catalog item always stays.
+- Pantry list minus (`inventory-view.tsx`): at qty 1 opens a **ConfirmDialog** ("Use the last …?") → `consumeInventory` deletes → toast "Used the last X · removed from pantry" with **Undo** (re-creates row via `addToInventory`; old "Add to list" action would have failed on the deleted row id). Qty > 1 still quick-consumes 1 with Undo.
+- Detail page minus (`detail-form.tsx`): at qty 1 same confirm → `deleteInventory` + Undo toast → `router.push("/inventory")`. After "Used the last one" dialog reports 0 → navigates back to `/inventory`.
+- `consume-dialog.tsx`: "last" copy now "Removes it from your pantry list."; Undo after delete re-creates via `addToInventory` (partial keeps `updateInventory`).
+- Legacy 0-qty ghosts hidden (not deleted): `.gt("quantity", 0)` on inventory page + home pantry fetch.
+- Removed dead 0-qty UI: line-through name, red "Out" badge, disabled minus/"Used the last one".
+
+**Gotchas**
+- Re-adding a removed item matches the catalog item by barcode/name and revives stock — expected.
+- Undo after delete re-creates the row (new row id; old detail URL won't resolve).
+- `updateInventory` still accepts quantity 0 (no callers pass it anymore); display filter catches strays.
+- Recipes/search still treat 0-qty rows as "in pantry" (pre-existing; not filtered).
+- Pre-existing lint: settings-view setState-in-effect (2) + smart-actions `Don't` apostrophe (c52557a) — untouched.
+
+**Open — next session**
+- Android PWA scan debug overlay readings (part 9 still open).
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-09 (part 9) — Android PWA barcode scan fix (diagnostics + native hardening + ZXing fallback + lookup toasts)
 
 **Shipped**

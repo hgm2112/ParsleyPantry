@@ -318,11 +318,16 @@ const consumeSchema = z.object({
   addToGrocery: z.boolean(),
 });
 
-/** Decrements stock (0 = "used the last one") and offers a grocery re-add. */
+/** Decrements stock; hitting 0 deletes the row and offers a grocery re-add. */
 export async function consumeInventory(
   rawInput: ConsumeInput,
 ): Promise<
-  ActionResult<{ quantity: number; low: boolean; groceryAdded: boolean }>
+  ActionResult<{
+    quantity: number;
+    low: boolean;
+    groceryAdded: boolean;
+    deleted: boolean;
+  }>
 > {
   try {
     const parsed = consumeSchema.safeParse(rawInput);
@@ -334,15 +339,24 @@ export async function consumeInventory(
     if (!inventory) return { ok: false, error: "Item not found in inventory" };
 
     const quantity = Math.max(0, inventory.quantity - input.amount);
+    const deleted = quantity <= 0;
 
-    const { error: updateError } = await supabase
-      .from("inventory")
-      .update({ quantity, added_by: user.id })
-      .eq("id", input.inventoryId);
-    if (updateError) return { ok: false, error: updateError.message };
+    if (deleted) {
+      const { error: deleteError } = await supabase
+        .from("inventory")
+        .delete()
+        .eq("id", input.inventoryId);
+      if (deleteError) return { ok: false, error: deleteError.message };
+    } else {
+      const { error: updateError } = await supabase
+        .from("inventory")
+        .update({ quantity, added_by: user.id })
+        .eq("id", input.inventoryId);
+      if (updateError) return { ok: false, error: updateError.message };
+    }
 
     const updated: InventoryWithItem = { ...inventory, quantity };
-    const low = isLowStock(updated, inventory.item);
+    const low = deleted || isLowStock(updated, inventory.item);
 
     let groceryAdded = false;
     if (input.addToGrocery && inventory.item) {
@@ -369,7 +383,7 @@ export async function consumeInventory(
 
     revalidatePath("/inventory");
     revalidatePath("/grocery");
-    return { ok: true, data: { quantity, low, groceryAdded } };
+    return { ok: true, data: { quantity, low, groceryAdded, deleted } };
   } catch (error) {
     return {
       ok: false,

@@ -36,7 +36,8 @@ async function InventoryContent() {
     supabase
       .from("inventory")
       .select("*, item:items!inner(*)")
-      .eq("household_id", householdId),
+      .eq("household_id", householdId)
+      .gt("quantity", 0),
     supabase
       .from("stock_holds")
       .select("item_id, quantity, unit")

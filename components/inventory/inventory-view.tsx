@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { ScanSheet } from "@/components/scan-sheet";
 import {
+  addToInventory,
   addInventoryToGrocery,
   consumeInventory,
   deleteInventory,
@@ -353,6 +354,7 @@ function InventoryRow({
 }) {
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [useLastOpen, setUseLastOpen] = useState(false);
   const low = isLowStock(entry, entry.item);
   const quantity = entry.quantity;
   const { unitText } = displayQtyUnit(entry.quantity, entry.unit);
@@ -369,26 +371,47 @@ function InventoryRow({
       toast.error(result.error);
       return;
     }
-    if (result.data.quantity <= 0) {
-      toast.success(`Used the last ${name}`, {
-        action: {
-          label: "Add to list",
-          onClick: () => void addInventoryToGrocery(entry.id),
-        },
-        duration: 8000,
-      });
-    } else {
-      toast.success(`Used 1 ${name}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            void updateInventory({
-              inventoryId: entry.id,
-              quantity: previousQuantity,
-            }),
-        },
-      });
+    toast.success(`Used 1 ${name}`, {
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void updateInventory({
+            inventoryId: entry.id,
+            quantity: previousQuantity,
+          }),
+      },
+    });
+    router.refresh();
+  }
+
+  async function confirmUseLast() {
+    const name = entry.item.name;
+    const previousQuantity = entry.quantity;
+    const result = await consumeInventory({
+      inventoryId: entry.id,
+      amount: entry.quantity,
+      addToGrocery: false,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
     }
+    toast.success(`Used the last ${name} · removed from pantry`, {
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void addToInventory({
+            itemId: entry.item.id,
+            name: entry.item.name,
+            location: entry.location,
+            quantity: previousQuantity,
+            unit: entry.unit ?? undefined,
+            expirationDate: entry.expiration_date ?? undefined,
+          }),
+      },
+      duration: 8000,
+    });
+    router.refresh();
   }
 
   async function quickAdd() {
@@ -417,12 +440,7 @@ function InventoryRow({
             prefetch
             className="flex min-w-0 flex-1 items-center gap-1.5"
           >
-            <span
-              className={cn(
-                "truncate text-sm font-semibold",
-                quantity <= 0 && "text-muted-foreground line-through",
-              )}
-            >
+            <span className="truncate text-sm font-semibold">
               {entry.item.name}
             </span>
             {low ? (
@@ -446,8 +464,10 @@ function InventoryRow({
               variant="outline"
               size="icon-sm"
               aria-label={`Use one ${entry.item.name}`}
-              disabled={quantity <= 0}
-              onClick={quickUse}
+              onClick={() => {
+                if (quantity <= 1) setUseLastOpen(true);
+                else void quickUse();
+              }}
             >
               <Minus className="h-3.5 w-3.5" />
             </Button>
@@ -471,7 +491,6 @@ function InventoryRow({
               onSelect={() => {
                 onConsume("last");
               }}
-              disabled={quantity <= 0}
             >
               Used the last one
             </DropdownMenuItem>
@@ -531,13 +550,17 @@ function InventoryRow({
               {onHold % 1 === 0 ? onHold : onHold.toFixed(1)} on hold
             </span>
           ) : null}
-          {quantity <= 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
-              Out
-            </span>
-          ) : null}
         </Link>
       </div>
+
+      <ConfirmDialog
+        open={useLastOpen}
+        onOpenChange={setUseLastOpen}
+        title={`Use the last ${entry.item.name}?`}
+        description={`${locationLabel(entry.location)} stock will be removed from your pantry. The catalog item stays for next time.`}
+        confirmLabel="Used the last one"
+        onConfirm={confirmUseLast}
+      />
 
       <ConfirmDialog
         open={deleteOpen}
