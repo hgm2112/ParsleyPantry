@@ -31,7 +31,7 @@ import {
   resolveBarcode,
   searchCatalog,
 } from "@/app/(app)/inventory/actions";
-import type { CategoryRow, ItemRow, Location, SubcategoryRow } from "@/lib/types";
+import type { ItemRow, Location, SubcategoryRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LOCATIONS: { value: Location; label: string }[] = [
@@ -40,17 +40,13 @@ const LOCATIONS: { value: Location; label: string }[] = [
   { value: "freezer", label: "Freezer" },
 ];
 
-const SOURCES = ["Meijer", "Kroger", "Amazon", "Costco", "Trader Joe's", "Aldi"];
-
 type Props = {
-  categories: CategoryRow[];
   subcategories: SubcategoryRow[];
   defaultLocation: Location;
   initialBarcode: string | null;
 };
 
 export function AddForm({
-  categories,
   subcategories,
   defaultLocation,
   initialBarcode,
@@ -68,8 +64,6 @@ export function AddForm({
   const [expiryTouched, setExpiryTouched] = useState(false);
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
-  const [source, setSource] = useState("");
-  const [notes, setNotes] = useState("");
   const [lowThreshold, setLowThreshold] = useState("");
   const [autoRestock, setAutoRestock] = useState(false);
   const [off, setOff] = useState<OffProduct | null>(null);
@@ -196,8 +190,6 @@ export function AddForm({
       quantity,
       unit: unit.trim() || null,
       expirationDate: effectiveExpiry || null,
-      source: source.trim() || null,
-      notes: notes.trim() || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
       autoRestock,
     });
@@ -212,14 +204,17 @@ export function AddForm({
       `${result.data.inventory.item?.name ?? trimmedName} added to ${location}`,
     );
 
-    // Keep location + source for rapid entry of a shopping trip.
+    // Keep location for rapid entry of a shopping trip.
     setBarcode("");
     setSelectedItem(null);
     setName("");
     setMatches([]);
     setQuantity(1);
-    setUnit("");
-    setNotes("");
+    setUnit("oz");
+    setSubcategoryId("");
+    setCategoryId("");
+    setLowThreshold("");
+    setAutoRestock(false);
     setOff(null);
     setExpiryTouched(false);
     setExpirationDate("");
@@ -257,45 +252,6 @@ export function AddForm({
 
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <div className="flex gap-2">
-            <Input
-              id="barcode"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="Scan or type a barcode"
-              value={barcode}
-              onChange={(event) => setBarcode(event.target.value)}
-              onBlur={() => void lookupBarcode(barcode)}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setScanOpen(true)}
-              disabled={lookupBusy}
-            >
-              {lookupBusy ? <Loader2 className="animate-spin" /> : <ScanBarcode />}
-              Scan
-            </Button>
-          </div>
-          {off ? (
-            <p className="text-xs text-muted-foreground">
-              {off.name}
-              {off.brands ? ` · ${off.brands}` : ""}
-              {" · "}
-              <a
-                href={`https://world.openfoodfacts.org/product/${barcode}`}
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-              >
-                via Open Food Facts (ODbL)
-              </a>
-            </p>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -330,7 +286,46 @@ export function AddForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <section className="space-y-3 rounded-xl border bg-background p-4">
+          <div className="space-y-2">
+            <Label htmlFor="barcode">Barcode</Label>
+            <div className="flex gap-2">
+              <Input
+                id="barcode"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Scan or type a barcode"
+                value={barcode}
+                onChange={(event) => setBarcode(event.target.value)}
+                onBlur={() => void lookupBarcode(barcode)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setScanOpen(true)}
+                disabled={lookupBusy}
+              >
+                {lookupBusy ? <Loader2 className="animate-spin" /> : <ScanBarcode />}
+                Scan
+              </Button>
+            </div>
+            {off ? (
+              <p className="text-xs text-muted-foreground">
+                {off.name}
+                {off.brands ? ` · ${off.brands}` : ""}
+                {" · "}
+                <a
+                  href={`https://world.openfoodfacts.org/product/${barcode}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  via Open Food Facts (ODbL)
+                </a>
+              </p>
+            ) : null}
+          </div>
+
           <div className="space-y-2">
             <Label>Quantity</Label>
             <div className="flex items-center gap-2">
@@ -364,99 +359,90 @@ export function AddForm({
               </Button>
             </div>
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="unit">Unit (optional)</Label>
+            <Label>Location</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {LOCATIONS.map((entry) => (
+                <button
+                  key={entry.value}
+                  type="button"
+                  onClick={() => setLocation(entry.value)}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
+                    location === entry.value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="expiry">Expiration</Label>
             <Input
-              id="unit"
-              placeholder="ea, lb, oz…"
-              value={unit}
-              onChange={(event) => setUnit(event.target.value)}
+              id="expiry"
+              type="date"
+              value={expirationDate}
+              onChange={(event) => {
+                setExpiryTouched(true);
+                setExpirationDate(event.target.value);
+              }}
             />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Location</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {LOCATIONS.map((entry) => (
-              <button
-                key={entry.value}
-                type="button"
-                onClick={() => setLocation(entry.value)}
-                className={cn(
-                  "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
-                  location === entry.value
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent",
-                )}
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="expiry">Expiration</Label>
-          <Input
-            id="expiry"
-            type="date"
-            value={expirationDate}
-            onChange={(event) => {
-              setExpiryTouched(true);
-              setExpirationDate(event.target.value);
-            }}
-          />
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {suggestion ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {suggestion ? (
+                <button
+                  type="button"
+                  className="rounded-full border border-primary px-2 py-0.5 font-semibold text-primary"
+                  onClick={() => {
+                    setExpiryTouched(true);
+                    setExpirationDate(addDays(suggestion.days));
+                  }}
+                >
+                  Suggested: {suggestion.days}d ({suggestion.reason})
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="rounded-full border border-primary px-2 py-0.5 font-semibold text-primary"
+                className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
                 onClick={() => {
                   setExpiryTouched(true);
-                  setExpirationDate(addDays(suggestion.days));
+                  setExpirationDate("");
                 }}
               >
-                Suggested: {suggestion.days}d ({suggestion.reason})
+                No expiry
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
-              onClick={() => {
-                setExpiryTouched(true);
-                setExpirationDate("");
-              }}
-            >
-              No expiry
-            </button>
-            <button
-              type="button"
-              className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
-              onClick={() => {
-                setExpiryTouched(true);
-                setExpirationDate(addDays(7));
-              }}
-            >
-              +7 days
-            </button>
+              <button
+                type="button"
+                className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
+                onClick={() => {
+                  setExpiryTouched(true);
+                  setExpirationDate(addDays(7));
+                }}
+              >
+                +7 days
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-2 gap-3">
+        <section className="space-y-3 rounded-xl border bg-background p-4">
           <div className="space-y-2">
-            <Label>Category</Label>
+            <Label>Sub-category</Label>
             <Select
-              value={categoryId || "__none"}
+              value={subcategoryId || "__none"}
               items={[
                 { value: "__none", label: "None" },
-                ...categories.map((category) => ({
-                  value: category.id,
-                  label: category.name,
+                ...subcategories.map((subcategory) => ({
+                  value: subcategory.id,
+                  label: subcategory.name,
                 })),
               ]}
               onValueChange={(value) =>
-                setCategoryId(value && value !== "__none" ? value : "")
+                setSubcategoryId(value && value !== "__none" ? value : "")
               }
             >
               <SelectTrigger className="w-full">
@@ -464,78 +450,37 @@ export function AddForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none">None</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
+                {subcategories.map((subcategory) => (
+                  <SelectItem key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="source">Source</Label>
+            <Label htmlFor="unit">Unit</Label>
             <Input
-              id="source"
-              list="source-options"
-              placeholder="Meijer…"
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
+              id="unit"
+              placeholder="ea, lb, oz…"
+              value={unit}
+              onChange={(event) => setUnit(event.target.value)}
             />
-            <datalist id="source-options">
-              {SOURCES.map((entry) => (
-                <option key={entry} value={entry} />
-              ))}
-            </datalist>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label>Sub-category</Label>
-          <Select
-            value={subcategoryId || "__none"}
-            items={[
-              { value: "__none", label: "None" },
-              ...subcategories.map((subcategory) => ({
-                value: subcategory.id,
-                label: subcategory.name,
-              })),
-            ]}
-            onValueChange={(value) =>
-              setSubcategoryId(value && value !== "__none" ? value : "")
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="None" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">None</SelectItem>
-              {subcategories.map((subcategory) => (
-                <SelectItem key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <details className="rounded-lg border px-3 py-2 text-sm">
-          <summary className="cursor-pointer font-semibold">
-            Low-stock options
-          </summary>
-          <div className="mt-3 space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="threshold">Running low at or below</Label>
-              <Input
-                id="threshold"
-                type="number"
-                min={0}
-                step="any"
-                placeholder="e.g. 1"
-                value={lowThreshold}
-                onChange={(event) => setLowThreshold(event.target.value)}
-              />
-            </div>
-            <label className="flex items-center gap-2">
+          <div className="space-y-2">
+            <Label htmlFor="threshold">Running low at or below</Label>
+            <Input
+              id="threshold"
+              type="number"
+              min={0}
+              step="any"
+              placeholder="e.g. 1"
+              value={lowThreshold}
+              onChange={(event) => setLowThreshold(event.target.value)}
+            />
+            <label className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={autoRestock}
                 onCheckedChange={(checked) => setAutoRestock(checked === true)}
@@ -543,17 +488,7 @@ export function AddForm({
               Auto-add to grocery list when it gets low
             </label>
           </div>
-        </details>
-
-        <div className="space-y-2">
-          <Label htmlFor="notes">Notes (optional)</Label>
-          <Input
-            id="notes"
-            placeholder="Bottom shelf, baking stash…"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
-        </div>
+        </section>
 
         <div className="flex gap-2">
           <Button type="submit" className="flex-1" disabled={busy}>
