@@ -155,17 +155,21 @@ export function QuickBitesWidget({
         {availableRecipes.map((recipe) => (
           <div
             key={recipe.id}
-            className="rounded-border bg-card p-3 hover:bg-card/80 transition-colors"
+            className="rounded-lg border-border bg-card p-3 hover:bg-card/80 transition-colors shadow-sm"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-start gap-2">
               <span className="text-sm font-medium">{recipe.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {recipe.time > 0 ? `${recipe.time} min` : ""}
-              </span>
+              {recipe.time > 0 && (
+                <span
+                  className="mt-0.5 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                >
+                  {recipe.time} min
+                </span>
+              )}
             </div>
             <Link
               href={`/recipes?id=${recipe.id}`}
-              className="text-xs text-primary hover:underline mt-1 block"
+              className="mt-2 text-sm text-primary underline"
             >
               Open recipe
             </Link>
