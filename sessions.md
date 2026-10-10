@@ -1,7 +1,7 @@
 # Sessions
 
 Rolling journal of dev sessions — newest at top. Append an entry when wrapping
-up. Kept local on purpose (not committed); git history is the source of truth
+up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
 ## 2026-10-10 (part 18) — Canonical: rename promotes instead of erroring, own-name clear, longer-candidate skip, Clear match + Undo
@@ -19,14 +19,16 @@ for "what changed", this is for "what's true now / what's next".
 - Promote path only nulls `existing`'s direct parent and moves direct `root.id` pointers — chains are never created by app writes (invariant), legacy chains still resolve on read.
 - After promoting, the old root ("Beef"/"Cream Cheese 2 Pack") remains as an independent item; with the raw-word skip it will not re-capture the shorter product, and once the promoted item has children it's skipped by backfill entirely.
 - `merged` is still returned by `renameCanonicalRoot` but the UI now derives messages from target-id changes instead.
+- A long-running `next dev` (started before the changes, with `next build` writing the same `.next`) kept serving stale UI until restarted — if new component code doesn't appear, restart the dev server and hard-refresh.
 
 **Verify**
 - `npx tsc --noEmit` clean; `npm run lint` = only the 4 pre-existing problems; `npm run build` passes.
 - Manual: ① detail on "Beef broth" (mapped to Beef) → Rename → "Beef broth" → no error, row ends "(its own name)", any other products that matched `Beef` now match as `Beef broth`; ② "Cream Cheese" → Clear match → "(its own name)" + Undo restores; ③ type the item's own name into the match editor → clears; erase + Save → clears; ④ Run backfill → `Cream Cheese` not re-mapped to the 2-pack; 2-pack (if in scope) maps *down* to `Cream Cheese`; ⑤ raw-longer candidates never appear in suggestions/datalist pool matches; ⑥ mapping change toast → Undo restores previous.
 
 **Open — next session**
-- User applies no new migration for this part (code-only); both earlier migrations still apply if pending.
-- Nothing committed yet this session.
+- Parts 16–18 shipped as **`baca76c`** (pushed; Vercel auto-deploys). Part 18 itself is code-only — no new migration.
+- **Apply both canonical migrations manually before the deploy serves traffic**: `20261012120000_canonical_ingredients.sql` (if not yet) then `20261012130000_canonical_reviewed.sql` — the code selects/inserts those columns and breaks without them.
+- Post-deploy checklist: `/inventory/normalize` → Run backfill → fix the "Beef broth" / "Cream Cheese" rows via **Clear match** or **Rename** → scan inventory `as …` subtitles for other backfill-era wrong pairs.
 - Android PWA scan debug overlay readings (part 9 still open).
 
 ## 2026-10-10 (part 17) — Canonical: keep-as-is, generic rename, card visibility
