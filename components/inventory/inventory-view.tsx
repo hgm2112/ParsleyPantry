@@ -37,6 +37,7 @@ import {
   updateInventory,
 } from "@/app/(app)/inventory/actions";
 import { compareByExpiry, expiryBucket } from "@/lib/expiry";
+import { effectiveExpiryDate, expiryChipProps } from "@/lib/freezer";
 import { displayQtyUnit, isLowStock, stockPoolKey } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
@@ -88,7 +89,8 @@ export function InventoryView({
       if (tab !== "all" && row.location !== tab) return false;
       if (subFilter && row.item.subcategory_id !== subFilter) return false;
       if (useSoon) {
-        const bucket = expiryBucket(row.expiration_date);
+        // Storage-aware: frozen rows count down by best-quality date.
+        const bucket = expiryBucket(effectiveExpiryDate(row));
         if (bucket !== "expired" && bucket !== "urgent" && bucket !== "soon") {
           return false;
         }
@@ -104,9 +106,9 @@ export function InventoryView({
 
     result = [...result].sort((a, b) =>
       compareByExpiry(
-        a.expiration_date,
+        effectiveExpiryDate(a),
         a.item.name,
-        b.expiration_date,
+        effectiveExpiryDate(b),
         b.item.name,
       ),
     );
@@ -538,7 +540,7 @@ function InventoryRow({
               {unitText}
             </span>
           ) : null}
-          <ExpiryChip date={entry.expiration_date} className="uppercase" />
+          <ExpiryChip {...expiryChipProps(entry)} className="uppercase" />
           <LocationBadge location={entry.location} className="uppercase" />
           {subcategoryName ? (
             <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase text-emerald-800">

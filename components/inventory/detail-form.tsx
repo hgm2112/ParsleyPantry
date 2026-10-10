@@ -26,13 +26,15 @@ import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
+import { FreezeDialog } from "@/components/inventory/freeze-dialog";
 import {
   addToInventory,
   addInventoryToGrocery,
   deleteInventory,
   updateInventory,
 } from "@/app/(app)/inventory/actions";
-import { addDays } from "@/lib/expiry";
+import { addDays, parseDate } from "@/lib/expiry";
+import { expiryChipProps, formatFreezerQuality } from "@/lib/freezer";
 import { isLowStock } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
@@ -59,6 +61,7 @@ export function InventoryDetail({
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [useLastOpen, setUseLastOpen] = useState(false);
+  const [freezeOpen, setFreezeOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(initial.item.name);
@@ -197,7 +200,7 @@ export function InventoryDetail({
             )}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <LocationBadge location={entry.location} />
-              <ExpiryChip date={entry.expiration_date} />
+              <ExpiryChip {...expiryChipProps(entry)} />
               {low ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   Running low
@@ -261,7 +264,14 @@ export function InventoryDetail({
               <button
                 key={location.value}
                 type="button"
-                onClick={() => void patch({ location: location.value })}
+                onClick={() => {
+                  // Freezing collects a date + food type first.
+                  if (location.value === "freezer" && entry.location !== "freezer") {
+                    setFreezeOpen(true);
+                    return;
+                  }
+                  void patch({ location: location.value });
+                }}
                 className={cn(
                   "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
                   entry.location === location.value
@@ -275,25 +285,65 @@ export function InventoryDetail({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="expiry">Expiration</Label>
-          <div className="flex gap-2">
-            <Input
-              id="expiry"
-              type="date"
-              value={entry.expiration_date ?? ""}
-              onChange={(event) =>
-                void patch({ expirationDate: event.target.value || null })
-              }
-            />
+        {entry.location === "freezer" ? (
+          <div className="space-y-2">
+            <Label>Freezer</Label>
+            <p className="text-sm font-semibold">
+              {entry.frozen_at
+                ? `❄️ Frozen on ${parseDate(entry.frozen_at).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}`
+                : "❄️ Frozen — date not tracked"}
+            </p>
+            <p className="text-sm">
+              {entry.freezer_quality_date
+                ? formatFreezerQuality(entry.freezer_quality_date)
+                : "No quality date tracked"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Original refrigerated date:{" "}
+              {entry.expiration_date
+                ? parseDate(entry.expiration_date).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "none"}{" "}
+              — kept while frozen.
+            </p>
             <Button
               variant="outline"
-              onClick={() => void patch({ expirationDate: addDays(7) })}
+              size="sm"
+              onClick={() => setFreezeOpen(true)}
             >
-              +7d
+              {entry.frozen_at || entry.item.freezer_food_type
+                ? "Edit freezer details"
+                : "Record freezer date"}
             </Button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="expiry">Expiration</Label>
+            <div className="flex gap-2">
+              <Input
+                id="expiry"
+                type="date"
+                value={entry.expiration_date ?? ""}
+                onChange={(event) =>
+                  void patch({ expirationDate: event.target.value || null })
+                }
+              />
+              <Button
+                variant="outline"
+                onClick={() => void patch({ expirationDate: addDays(7) })}
+              >
+                +7d
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
@@ -399,6 +449,26 @@ export function InventoryDetail({
               return;
             }
             setEntry((current) => ({ ...current, quantity }));
+          }}
+        />
+      ) : null}
+
+      {freezeOpen ? (
+        <FreezeDialog
+          inventory={entry}
+          subcategoryName={
+            entry.item.subcategory_id
+              ? (subcategories.find(
+                  (subcategory) => subcategory.id === entry.item.subcategory_id,
+                )?.name ?? null)
+              : null
+          }
+          open
+          onOpenChange={(open) => {
+            if (!open) setFreezeOpen(false);
+          }}
+          onSaved={(inventory) => {
+            if (inventory.item) setEntry(inventory as InventoryEntry);
           }}
         />
       ) : null}

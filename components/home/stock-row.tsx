@@ -4,6 +4,7 @@ import Link from "next/link";
 import { displayQtyUnit } from "@/lib/stock";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
+import { expiryChipProps } from "@/lib/freezer";
 import type { InventoryEntry } from "@/lib/types";
 
 /** Shared home-widget row: name + QTY/weight/expiry/location pills. */
@@ -27,7 +28,7 @@ export function StockRow({ row }: { row: InventoryEntry }) {
               {unitText}
             </span>
           ) : null}
-          <ExpiryChip date={row.expiration_date} className="uppercase" />
+          <ExpiryChip {...expiryChipProps(row)} className="uppercase" />
           <LocationBadge location={row.location} className="uppercase" />
         </div>
       </Link>

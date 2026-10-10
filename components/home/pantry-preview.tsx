@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compareByExpiry } from "@/lib/expiry";
+import { effectiveExpiryDate } from "@/lib/freezer";
 import { StockRow } from "@/components/home/stock-row";
 import { Input } from "@/components/ui/input";
 import type { InventoryEntry, Location } from "@/lib/types";
@@ -29,7 +30,12 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
         return row.item.name.toLowerCase().includes(needle);
       })
       .sort((a, b) =>
-        compareByExpiry(a.expiration_date, a.item.name, b.expiration_date, b.item.name),
+        compareByExpiry(
+          effectiveExpiryDate(a),
+          a.item.name,
+          effectiveExpiryDate(b),
+          b.item.name,
+        ),
       );
   }, [rows, query, activeLocation]);
 

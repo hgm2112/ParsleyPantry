@@ -31,6 +31,18 @@ function formatExpiryList(rows: InventoryEntry[]): string {
     .join(" · ");
 }
 
+/** "Chicken (3d) · Soup (passed)" — best-quality countdown, never "expired". */
+function formatFreezerList(rows: InventoryEntry[]): string {
+  return rows
+    .map((row) => {
+      const days = daysUntil(row.freezer_quality_date);
+      if (days === null) return row.item.name;
+      const when = days < 0 ? "passed" : days === 0 ? "best today" : `${days}d`;
+      return `${row.item.name} (${when})`;
+    })
+    .join(" · ");
+}
+
 type Card = {
   key: string;
   emoji: string;
@@ -53,6 +65,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   const [dinnerOpen, setDinnerOpen] = useState(false);
   const [showAllExpired, setShowAllExpired] = useState(false);
   const [showAllSoon, setShowAllSoon] = useState(false);
+  const [showAllFreezer, setShowAllFreezer] = useState(false);
 
   const [ignoredRaw, setIgnoredRaw] = useLocalStorage("smart-low-ignored");
   const ignored = useMemo(() => {
@@ -66,14 +79,24 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   }, [ignoredRaw]);
   const setIgnored = (ids: string[]) => setIgnoredRaw(JSON.stringify(ids));
 
-  const expired = pantry.filter((row) => {
+  // Fridge/pantry alerts only — frozen rows countdown on quality dates below.
+  const refrigerated = pantry.filter((row) => row.location !== "freezer");
+
+  const expired = refrigerated.filter((row) => {
     const days = daysUntil(row.expiration_date);
     return days !== null && days < 0;
   });
 
-  const expiring = pantry.filter((row) => {
+  const expiring = refrigerated.filter((row) => {
     const days = daysUntil(row.expiration_date);
     return days !== null && days >= 0 && days <= EXPIRING_DAYS;
+  });
+
+  // Quality reminders: tracked frozen rows within 7 days of (or past) best quality.
+  const freezerNear = pantry.filter((row) => {
+    if (row.location !== "freezer" || !row.freezer_quality_date) return false;
+    const days = daysUntil(row.freezer_quality_date);
+    return days !== null && days <= 7;
   });
 
   const unchecked = grocery.filter((item) => !item.checked).length;
@@ -137,12 +160,13 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
     sorted: InventoryEntry[],
     expanded: boolean,
     toggle: () => void,
+    label: (rows: InventoryEntry[]) => string = formatExpiryList,
   ): ReactNode {
     const shown = expanded ? sorted : sorted.slice(0, 2);
     const hidden = sorted.length - shown.length;
     return (
       <span>
-        {formatExpiryList(shown)}
+        {label(shown)}
         {sorted.length > 2 ? (
           <>
             {" · "}
@@ -178,6 +202,31 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
         setShowAllSoon((value) => !value),
       ),
       tint: "border-amber-200 bg-amber-50 text-amber-900",
+    });
+  }
+
+  const freezerSorted = [...freezerNear].sort((a, b) =>
+    compareByExpiry(
+      a.freezer_quality_date,
+      a.item.name,
+      b.freezer_quality_date,
+      b.item.name,
+    ),
+  );
+
+  if (freezerSorted.length > 0) {
+    const count = freezerSorted.length;
+    cards.push({
+      key: "freezer",
+      emoji: "❄️",
+      line: `${count} frozen item${count === 1 ? "" : "s"} near freezer quality date`,
+      action: listAction(
+        freezerSorted,
+        showAllFreezer,
+        () => setShowAllFreezer((value) => !value),
+        formatFreezerList,
+      ),
+      tint: "border-sky-200 bg-sky-50 text-sky-900",
     });
   }
 

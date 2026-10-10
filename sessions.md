@@ -4,6 +4,33 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 14) — Freezer-aware expiration tracking
+
+**Shipped**
+- Migration `supabase/migrations/20261010120000_freezer_tracking.sql` — **must be run manually** (SQL Editor / `supabase db push`): `inventory.frozen_at`, `inventory.freezer_duration_months`, `inventory.freezer_quality_date`, `items.freezer_food_type`.
+- `lib/types.ts`: the four new fields on `InventoryRow`/`ItemRow`.
+- `lib/freezer.ts` (new): `FREEZER_FOOD_TYPES` (22 keys, USDA-style ranges using the **longer** end; cream cheese `months: null` + texture warning), `FREEZER_GROUPS`, `guessFreezerFoodType` (conservative ordered regex prefill, unmatched → `FREEZER_UNKNOWN_KEY` "Not sure", never invents a duration), `computeFreezerQualityDate` (`date-fns addMonths` from `frozen_at` — month-end clamped, **never chained**), `effectiveExpiryDate`, `expiryChipProps`, `formatFreezerQuality` ("Best quality by Feb 10" / "Quality date passed"), `freezerStatus`.
+- `actions.ts` `updateInventory`: `frozenAt` / `freezerDurationMonths` / `freezerFoodType` in `patchSchema`; quality date recomputed whenever `frozenAt` provided; move **into** freezer spreads freeze patch, move **out** clears all three freeze fields (thaw; `expiration_date` untouched = preserved refrigerated date); `freezerFoodType` validated against `FREEZER_FOOD_TYPES` (items patch).
+- `components/inventory/freeze-dialog.tsx` (new): date frozen (default today, max today) / purchased-frozen checkbox (hides date → `frozen_at: null`), grouped food-type Select + "Not sure", cream-cheese optional personal-months reminder (labeled *not a validated food-safety date*), live preview line, original refrigerated date shown, **already-past refrigerated date → amber warning + required "I reviewed it" checkbox** before confirm. Confirm always sends `location: "freezer"`.
+- `detail-form.tsx`: Freezer location button intercepted → dialog (unless already frozen); frozen rows show read-only freezer block (frozen-on, quality line, original date, "Edit/Record freezer details" button) instead of the editable expiration; header chip via `expiryChipProps`.
+- `expiry-chip.tsx`: modes `refrigerated` (unchanged red/orange/amber/green) / `freezer` (sky = fine, orange ≤7d, amber = quality passed — **never red**) / `freezer-untracked` ("Frozen (no date)", sky).
+- Surfaces storage-aware: `inventory-view` (use-soon filter + sort via `effectiveExpiryDate`, row chip), `smart-actions` (expired/expiring filtered to non-freezer; new ❄️ card "N frozen items near freezer quality date", sky tint, ≤7d incl. passed, 2-item + `+N more →` expand, `formatFreezerList` uses `passed`/`best today`), `pantry-insights` (frozen rows own ❄️ Frozen counter, out of fresh/low/expiring), `stock-row`/`pantry-preview`/`snack-widget` (chip/sort effective dates).
+
+**Gotchas**
+- Unique `(household_id,item_id,location)`: first-time freeze that collides with an existing freezer row **merges** and early-returns — the dialog's freeze data is dropped (target keeps its own freeze data). Rare; documented per plan.
+- Merge path also skips the items patch (pre-existing early return), so `freezerFoodType` isn't saved in that case.
+- Catalog items can be added straight to Freezer (add-form) → `frozen_at` null = "purchased frozen / untracked" by design.
+- Fridge→freezer is the only freeze entry point; server accepts `frozenAt` only with the move or on an already-frozen row.
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` — all pass; only the 4 pre-existing lint problems (settings-view setState-in-effect, smart-actions "Don't add" apostrophe + exhaustive-deps, scanner unused `setDebugOn`).
+
+**Open — next session**
+- **Apply the migration** before deploying (Vercel build won't).
+- Android PWA scan debug overlay readings (part 9 still open).
+- Tests skipped per user decision — spec §9 remains a documented gap.
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-09 (part 13) — Grocery: mobile header toggle moves into button cluster
 
 **Shipped**

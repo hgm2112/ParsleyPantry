@@ -60,6 +60,8 @@ export interface ItemRow {
   low_threshold: number | null;
   auto_restock: boolean;
   unit: string | null;
+  /** Last freezer food type chosen for this item (key from lib/freezer.ts). */
+  freezer_food_type: string | null;
   created_by: string | null;
 }
 
@@ -71,6 +73,12 @@ export interface InventoryRow {
   quantity: number;
   unit: string | null;
   expiration_date: string | null;
+  /** Date stock entered the freezer; null while frozen = unknown / purchased frozen. */
+  frozen_at: string | null;
+  /** Months from frozen_at to the best-quality date; null = not tracked. */
+  freezer_duration_months: number | null;
+  /** Computed best-quality-by date while frozen; cleared on thaw. */
+  freezer_quality_date: string | null;
   is_low: boolean;
   source: string | null;
   notes: string | null;

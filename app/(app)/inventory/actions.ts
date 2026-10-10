@@ -5,6 +5,10 @@ import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { lookupOffProduct, type OffProduct } from "@/lib/off";
 import { ensureGroceryItem } from "@/lib/grocery";
+import {
+  FREEZER_FOOD_TYPES,
+  computeFreezerQualityDate,
+} from "@/lib/freezer";
 import { earliest, imperialFactor, isLowStock, toImperialStock } from "@/lib/stock";
 import type {
   InventoryRow,
@@ -409,6 +413,16 @@ const patchSchema = z.object({
   isLow: z.boolean().optional(),
   lowThreshold: z.number().min(0).nullish(),
   autoRestock: z.boolean().optional(),
+  /** Freeze date (YYYY-MM-DD); null = frozen with unknown date. */
+  frozenAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .transform((value) => (value === undefined ? undefined : (value ?? null))),
+  /** Months from frozen_at to the best-quality date; null = not tracked. */
+  freezerDurationMonths: z.number().int().min(0).max(120).nullish(),
+  /** Food type key from lib/freezer.ts; null = "not sure". */
+  freezerFoodType: z.string().trim().max(64).nullish(),
 });
 
 export type UpdateInventoryInput = z.input<typeof patchSchema>;
@@ -437,6 +451,25 @@ export async function updateInventory(
         lowThreshold = Math.round(lowThreshold * factor * 10) / 10;
       }
     }
+
+    // Freeze fields: quality date computed once from frozen_at + months
+    // (never chained through a previous quality date).
+    const freezePatch: Record<string, unknown> = {};
+    if (input.frozenAt !== undefined) {
+      freezePatch.frozen_at = input.frozenAt;
+      freezePatch.freezer_duration_months = input.freezerDurationMonths ?? null;
+      freezePatch.freezer_quality_date =
+        input.frozenAt !== null && input.freezerDurationMonths != null
+          ? computeFreezerQualityDate(input.frozenAt, input.freezerDurationMonths)
+          : null;
+    }
+    // Leaving the freezer thaws: freeze fields are cleared, the original
+    // expiration_date stays as the refrigerated date.
+    const thawPatch = {
+      frozen_at: null,
+      freezer_duration_months: null,
+      freezer_quality_date: null,
+    };
 
     // Moving locations may collide with an existing row for the target.
     if (input.location && input.location !== current.location) {
@@ -483,6 +516,7 @@ export async function updateInventory(
           source: input.source ?? undefined,
           notes: input.notes ?? undefined,
           is_low: input.isLow ?? undefined,
+          ...(input.location === "freezer" ? freezePatch : thawPatch),
         })
         .eq("id", current.id);
       if (moveError) return { ok: false, error: moveError.message };
@@ -494,6 +528,7 @@ export async function updateInventory(
       if (input.source !== undefined) patch.source = input.source;
       if (input.notes !== undefined) patch.notes = input.notes;
       if (input.isLow !== undefined) patch.is_low = input.isLow;
+      Object.assign(patch, freezePatch);
 
       if (Object.keys(patch).length > 0) {
         const { error: updateError } = await supabase
@@ -508,13 +543,23 @@ export async function updateInventory(
       input.lowThreshold !== undefined ||
       input.autoRestock !== undefined ||
       input.itemName !== undefined ||
-      input.subcategoryId !== undefined
+      input.subcategoryId !== undefined ||
+      input.freezerFoodType !== undefined
     ) {
       const itemPatch: Record<string, unknown> = {};
       if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
       if (input.itemName !== undefined) itemPatch.name = input.itemName;
       if (input.subcategoryId !== undefined) itemPatch.subcategory_id = input.subcategoryId;
+      if (input.freezerFoodType !== undefined) {
+        if (
+          input.freezerFoodType !== null &&
+          !FREEZER_FOOD_TYPES[input.freezerFoodType]
+        ) {
+          return { ok: false, error: "Unknown freezer food type" };
+        }
+        itemPatch.freezer_food_type = input.freezerFoodType;
+      }
       const { error: itemError } = await supabase
         .from("items")
         .update(itemPatch)

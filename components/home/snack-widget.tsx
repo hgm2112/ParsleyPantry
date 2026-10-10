@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 import { compareByExpiry } from "@/lib/expiry";
+import { effectiveExpiryDate } from "@/lib/freezer";
 import { StockRow } from "@/components/home/stock-row";
 import type { InventoryEntry, SubcategoryRow } from "@/lib/types";
 
@@ -26,7 +27,12 @@ export function SnackWidget({
         return (names.get(id) ?? "").includes("snack");
       })
       .sort((a, b) =>
-        compareByExpiry(a.expiration_date, a.item.name, b.expiration_date, b.item.name),
+        compareByExpiry(
+          effectiveExpiryDate(a),
+          a.item.name,
+          effectiveExpiryDate(b),
+          b.item.name,
+        ),
       )
       .slice(0, 5);
   }, [rows, subcategories]);

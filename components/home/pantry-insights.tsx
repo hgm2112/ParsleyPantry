@@ -23,17 +23,23 @@ export function PantryInsights({
   let fresh = 0;
   let low = 0;
   let expiring = 0;
+  let frozen = 0;
   let snacks = 0;
   let candy = 0;
 
   for (const row of rows) {
-    const days = daysUntil(row.expiration_date);
-    if (days !== null && days <= EXPIRING_DAYS) {
-      expiring += 1;
-    } else if (isLowStock(row, row.item)) {
-      low += 1;
+    if (row.location === "freezer") {
+      // Frozen stock gets its own bucket — quality dates are not "expiring".
+      frozen += 1;
     } else {
-      fresh += 1;
+      const days = daysUntil(row.expiration_date);
+      if (days !== null && days <= EXPIRING_DAYS) {
+        expiring += 1;
+      } else if (isLowStock(row, row.item)) {
+        low += 1;
+      } else {
+        fresh += 1;
+      }
     }
     const subName = subNames.get(row.item.subcategory_id ?? "");
     if (subName?.includes("snack")) snacks += 1;
@@ -45,6 +51,7 @@ export function PantryInsights({
     { emoji: "🟢", label: "Fresh", count: fresh },
     { emoji: "🟡", label: "Running Low", count: low },
     { emoji: "🔴", label: "Expiring", count: expiring },
+    { emoji: "❄️", label: "Frozen", count: frozen },
     { emoji: "🍿", label: "Snacks", count: snacks },
     { emoji: "🍬", label: "Candy", count: candy },
   ];
