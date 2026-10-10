@@ -151,28 +151,22 @@ export function QuickBitesWidget({
         <Clock className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-extrabold">Quick Bites</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
         {availableRecipes.map((recipe) => (
           <div
             key={recipe.id}
             className="rounded-lg border-border bg-card p-3 hover:bg-card/80 transition-colors shadow-sm"
           >
             <div className="flex items-start gap-2">
-              <span className="text-sm font-medium">{recipe.name}</span>
+              <span className="text-sm font-semibold">{recipe.name}</span>
               {recipe.time > 0 && (
                 <span
                   className="mt-0.5 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs text-primary"
                 >
-                  {recipe.time} min
+                  {recipe.time}m
                 </span>
               )}
             </div>
-            <Link
-              href={`/recipes?id=${recipe.id}`}
-              className="mt-2 text-sm text-primary underline"
-            >
-              Open recipe
-            </Link>
           </div>
         ))}
       </div>
