@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CircleAlert,
+  Info,
   Minus,
   MoreHorizontal,
   Plus,
@@ -23,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -504,19 +506,54 @@ function InventoryItemCard({
   return (
     <li className="rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5">
           <Link
             href={`/inventory/${item.id}`}
             prefetch
-            className="flex min-w-0 flex-1 items-center gap-1.5"
+            className="flex min-w-0 flex-1 items-center"
           >
             <span className="truncate text-sm font-semibold">
               {item.name}
             </span>
-            {low ? (
-              <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-            ) : null}
           </Link>
+          {canonicalName ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Info className="h-3.5 w-3.5 shrink-0 cursor-pointer text-muted-foreground hover:text-foreground" />
+                }
+              />
+              <PopoverContent align="start" sideOffset={4} className="max-w-xs">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    readOnly
+                    value={canonicalName}
+                    className="text-sm"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+          {low ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 cursor-pointer" />
+                }
+              />
+              <PopoverContent align="start" sideOffset={4} className="max-w-xs">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    readOnly
+                    value="Running low"
+                    className="text-sm"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
 
           <div className="flex shrink-0 items-center gap-1">
             <Button
@@ -598,9 +635,6 @@ function InventoryItemCard({
         </div>
         </div>
 
-        {canonicalName ? (
-          <p className="text-xs text-muted-foreground">as {canonicalName}</p>
-        ) : null}
 
         <Link
           href={`/inventory/${item.id}`}
