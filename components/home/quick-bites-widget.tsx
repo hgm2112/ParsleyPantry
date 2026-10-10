@@ -150,33 +150,30 @@ export function QuickBitesWidget({
       <div className="mb-3 flex items-center gap-2">
         <Clock className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-extrabold">Quick Bites</h2>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
-        {availableRecipes.map((recipe) => (
-          <div
-            key={recipe.id}
-            className="rounded-lg border-border bg-card p-3 hover:bg-card/80 transition-colors shadow-sm"
-          >
-            <div className="flex items-start gap-2">
-              <span className="text-sm font-semibold">{recipe.name}</span>
-              {recipe.time > 0 && (
-                <span
-                  className="mt-0.5 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs text-primary"
-                >
-                  {recipe.time}m
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3">
         <Link
           href="/recipes"
-          className="text-sm font-semibold text-primary hover:underline"
+          className="ml-auto text-sm font-semibold text-primary hover:underline"
         >
           View all →
         </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
+        {availableRecipes.map((recipe) => (
+          <Link
+            key={recipe.id}
+            href={`/recipes?id=${recipe.id}`}
+            className="group block rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
+          >
+            <p className="truncate text-sm font-semibold group-hover:text-primary">
+              {recipe.name}
+            </p>
+            {recipe.time > 0 && (
+              <span className="mt-0.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
+                {recipe.time}m
+              </span>
+            )}
+          </Link>
+        ))}
       </div>
     </section>
   );
