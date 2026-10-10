@@ -5,9 +5,13 @@ import { useMemo, useState } from "react";
 import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compareByExpiry } from "@/lib/expiry";
-import { effectiveExpiryDate } from "@/lib/freezer";
 import { StockRow } from "@/components/home/stock-row";
 import { Input } from "@/components/ui/input";
+import {
+  earliestEffective,
+  groupByItem,
+  scopedBatches,
+} from "@/lib/batches";
 import type { InventoryEntry, Location } from "@/lib/types";
 
 const LOCATION_FILTERS: { value: Location | null; label: string }[] = [
@@ -21,23 +25,30 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
   const [query, setQuery] = useState("");
   const [activeLocation, setActiveLocation] = useState<Location | null>(null);
 
+  const groups = useMemo(() => groupByItem(rows), [rows]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return rows
-      .filter((row) => {
-        if (activeLocation && row.location !== activeLocation) return false;
+    return groups
+      .filter((group) => {
+        if (
+          activeLocation &&
+          !group.batches.some((batch) => batch.location === activeLocation)
+        ) {
+          return false;
+        }
         if (!needle) return true;
-        return row.item.name.toLowerCase().includes(needle);
+        return group.item.name.toLowerCase().includes(needle);
       })
       .sort((a, b) =>
         compareByExpiry(
-          effectiveExpiryDate(a),
+          earliestEffective(scopedBatches(a.batches, activeLocation ?? "all")),
           a.item.name,
-          effectiveExpiryDate(b),
+          earliestEffective(scopedBatches(b.batches, activeLocation ?? "all")),
           b.item.name,
         ),
       );
-  }, [rows, query, activeLocation]);
+  }, [groups, query, activeLocation]);
 
   const visible = filtered.slice(0, 7);
 
@@ -90,8 +101,8 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
         </p>
       ) : (
         <ul className="space-y-2">
-          {visible.map((row) => (
-            <StockRow key={row.id} row={row} />
+          {visible.map((group) => (
+            <StockRow key={group.item.id} group={group} />
           ))}
         </ul>
       )}

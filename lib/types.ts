@@ -83,6 +83,7 @@ export interface InventoryRow {
   source: string | null;
   notes: string | null;
   added_by: string | null;
+  created_at: string;
 }
 
 export interface InventoryWithItem extends InventoryRow {

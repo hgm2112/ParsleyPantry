@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InventoryDetail } from "@/components/inventory/detail-form";
-import type { InventoryEntry, SubcategoryRow } from "@/lib/types";
+import type { InventoryEntry, ItemRow, SubcategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Item" };
 
@@ -17,15 +17,15 @@ function DetailSkeleton() {
   );
 }
 
-async function DetailContent({ inventoryId }: { inventoryId: string }) {
+async function DetailContent({ id }: { id: string }) {
   const { supabase, householdId } = await requireDal();
 
-  const [entryResult, subsResult] = await Promise.all([
+  const [itemResult, subsResult] = await Promise.all([
     supabase
-      .from("inventory")
-      .select("*, item:items!inner(*)")
+      .from("items")
+      .select("*")
       .eq("household_id", householdId)
-      .eq("id", inventoryId)
+      .eq("id", id)
       .maybeSingle(),
     supabase
       .from("subcategories")
@@ -34,12 +34,31 @@ async function DetailContent({ inventoryId }: { inventoryId: string }) {
       .order("sort_order", { ascending: true }),
   ]);
 
-  const entry = entryResult.data as InventoryEntry | null;
-  if (!entry || !entry.item) notFound();
+  const item = itemResult.data as ItemRow | null;
+
+  if (!item) {
+    // Older links point at a single inventory row — follow them to the item.
+    const { data: row } = await supabase
+      .from("inventory")
+      .select("item_id")
+      .eq("household_id", householdId)
+      .eq("id", id)
+      .maybeSingle();
+    if (row) redirect(`/inventory/${row.item_id}`);
+    notFound();
+  }
+
+  const { data: batches } = await supabase
+    .from("inventory")
+    .select("*, item:items!inner(*)")
+    .eq("household_id", householdId)
+    .eq("item_id", item.id);
+  if (!batches || batches.length === 0) redirect("/inventory");
 
   return (
     <InventoryDetail
-      entry={entry}
+      item={item}
+      entries={batches as InventoryEntry[]}
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
     />
   );
@@ -61,5 +80,5 @@ async function DetailWrapper({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <DetailContent inventoryId={id} />;
+  return <DetailContent id={id} />;
 }

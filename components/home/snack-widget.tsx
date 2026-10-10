@@ -4,8 +4,8 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 import { compareByExpiry } from "@/lib/expiry";
-import { effectiveExpiryDate } from "@/lib/freezer";
 import { StockRow } from "@/components/home/stock-row";
+import { earliestEffective, groupByItem } from "@/lib/batches";
 import type { InventoryEntry, SubcategoryRow } from "@/lib/types";
 
 /** Items whose sub-category name contains "snack", soonest-expiring first. */
@@ -20,17 +20,17 @@ export function SnackWidget({
     const names = new Map(
       subcategories.map((entry) => [entry.id, entry.name.toLowerCase()]),
     );
-    return rows
-      .filter((row) => {
-        const id = row.item.subcategory_id;
+    return groupByItem(rows)
+      .filter((group) => {
+        const id = group.item.subcategory_id;
         if (!id) return false;
         return (names.get(id) ?? "").includes("snack");
       })
       .sort((a, b) =>
         compareByExpiry(
-          effectiveExpiryDate(a),
+          earliestEffective(a.batches),
           a.item.name,
-          effectiveExpiryDate(b),
+          earliestEffective(b.batches),
           b.item.name,
         ),
       )
@@ -56,8 +56,8 @@ export function SnackWidget({
         </p>
       ) : (
         <ul className="space-y-2">
-          {snacks.map((row) => (
-            <StockRow key={row.id} row={row} />
+          {snacks.map((group) => (
+            <StockRow key={group.item.id} group={group} />
           ))}
         </ul>
       )}

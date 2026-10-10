@@ -9,6 +9,12 @@ import {
   FREEZER_FOOD_TYPES,
   computeFreezerQualityDate,
 } from "@/lib/freezer";
+import {
+  fefoSort,
+  isItemLow,
+  toBatchSnapshot,
+  type BatchSnapshot,
+} from "@/lib/batches";
 import { earliest, imperialFactor, isLowStock, toImperialStock } from "@/lib/stock";
 import type {
   InventoryRow,
@@ -222,15 +228,24 @@ export async function addToInventory(
       item = { ...item, ...patch } as ItemRow;
     }
 
+    // Batch key: same item + location + expiration date + freezing history =
+    // the same batch (quantities merge). Anything else starts a new batch.
     const { data: existingRows } = await supabase
       .from("inventory")
       .select("*")
       .eq("household_id", householdId)
       .eq("item_id", item.id)
-      .eq("location", input.location)
-      .limit(1);
+      .eq("location", input.location);
 
-    const existing = ((existingRows ?? [])[0] as InventoryRow | undefined) ?? null;
+    const findExisting = (rows: InventoryRow[]) =>
+      rows.find(
+        (row) =>
+          row.expiration_date === input.expirationDate &&
+          row.frozen_at === null &&
+          row.freezer_duration_months === null,
+      ) ?? null;
+
+    const existing = findExisting((existingRows ?? []) as InventoryRow[]);
     let inventoryId: string;
 
     if (existing) {
@@ -269,12 +284,45 @@ export async function addToInventory(
         .select("id")
         .single();
       if (insertRowError || !insertedRow) {
-        return {
-          ok: false,
-          error: insertRowError?.message ?? "Could not add to inventory",
-        };
+        if (insertRowError?.code === "23505") {
+          // A concurrent identical batch won the race — merge into it.
+          const { data: raceRows } = await supabase
+            .from("inventory")
+            .select("*")
+            .eq("household_id", householdId)
+            .eq("item_id", item.id)
+            .eq("location", input.location);
+          const raced = findExisting((raceRows ?? []) as InventoryRow[]);
+          if (raced) {
+            const { data: merged, error: mergeError } = await supabase
+              .from("inventory")
+              .update({
+                quantity: raced.quantity + quantity,
+                unit: unit ?? raced.unit,
+                source: input.source ?? raced.source,
+                notes: input.notes ?? raced.notes,
+                added_by: user.id,
+              })
+              .eq("id", raced.id)
+              .select("id")
+              .single();
+            if (!mergeError && merged) {
+              inventoryId = (merged as { id: string }).id;
+            } else {
+              return { ok: false, error: mergeError?.message ?? insertRowError.message };
+            }
+          } else {
+            return { ok: false, error: insertRowError.message };
+          }
+        } else {
+          return {
+            ok: false,
+            error: insertRowError?.message ?? "Could not add to inventory",
+          };
+        }
+      } else {
+        inventoryId = (insertedRow as { id: string }).id;
       }
-      inventoryId = (insertedRow as { id: string }).id;
     }
 
     const result = await loadInventory(supabase, householdId, inventoryId);
@@ -331,6 +379,7 @@ export async function consumeInventory(
     low: boolean;
     groceryAdded: boolean;
     deleted: boolean;
+    inventoryId: string;
   }>
 > {
   try {
@@ -387,11 +436,277 @@ export async function consumeInventory(
 
     revalidatePath("/inventory");
     revalidatePath("/grocery");
-    return { ok: true, data: { quantity, low, groceryAdded, deleted } };
+    return {
+      ok: true,
+      data: { quantity, low, groceryAdded, deleted, inventoryId: input.inventoryId },
+    };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not update quantity",
+    };
+  }
+}
+
+const consumeItemSchema = z.object({
+  itemId: z.string().uuid(),
+  amount: z.number().min(0.01).max(9999),
+  location: locationSchema.optional(),
+  addToGrocery: z.boolean(),
+});
+
+export type ConsumeItemInput = z.input<typeof consumeItemSchema>;
+
+export type ConsumeItemData = {
+  affected: { inventoryId: string; deleted: boolean; quantity: number }[];
+  snapshots: BatchSnapshot[];
+  remaining: number;
+  low: boolean;
+  groceryAdded: boolean;
+};
+
+/**
+ * Item-level consume: decrements batches FEFO (effective date first) within an
+ * optional location scope. Each touched row's pre-consume snapshot is returned
+ * so the client can undo via restoreBatches.
+ */
+export async function consumeFromItem(
+  rawInput: ConsumeItemInput,
+): Promise<ActionResult<ConsumeItemData>> {
+  try {
+    const parsed = consumeItemSchema.safeParse(rawInput);
+    if (!parsed.success) return { ok: false, error: "Invalid input" };
+    const input = parsed.data;
+    const { supabase, householdId } = await requireDal();
+
+    const { data: itemData, error: itemError } = await supabase
+      .from("items")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("id", input.itemId)
+      .maybeSingle();
+    if (itemError) return { ok: false, error: itemError.message };
+    const item = (itemData ?? null) as ItemRow | null;
+
+    const { data: rowsData, error: rowsError } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("item_id", input.itemId);
+    if (rowsError) return { ok: false, error: rowsError.message };
+
+    let rows = ((rowsData ?? []) as InventoryRow[]).filter((row) => row.quantity > 0);
+    if (input.location) rows = rows.filter((row) => row.location === input.location);
+    rows = fefoSort(rows);
+
+    const snapshots: BatchSnapshot[] = [];
+    const affected: { inventoryId: string; deleted: boolean; quantity: number }[] = [];
+    let remaining = input.amount;
+    for (const row of rows) {
+      if (remaining <= 0) break;
+      const take = Math.min(row.quantity, remaining);
+      if (take <= 0) continue;
+      const nextQuantity = row.quantity - take;
+      snapshots.push(toBatchSnapshot(row));
+      if (nextQuantity <= 0) {
+        const { error } = await supabase.from("inventory").delete().eq("id", row.id);
+        if (error) return { ok: false, error: error.message };
+        affected.push({ inventoryId: row.id, deleted: true, quantity: 0 });
+      } else {
+        const { error } = await supabase
+          .from("inventory")
+          .update({ quantity: nextQuantity })
+          .eq("id", row.id);
+        if (error) return { ok: false, error: error.message };
+        affected.push({ inventoryId: row.id, deleted: false, quantity: nextQuantity });
+      }
+      remaining -= take;
+    }
+
+    const { data: afterData, error: afterError } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("item_id", input.itemId);
+    if (afterError) return { ok: false, error: afterError.message };
+    const after = (afterData ?? []) as InventoryRow[];
+    const afterTotal = after.reduce((sum, row) => sum + row.quantity, 0);
+    const low = after.length === 0 || isItemLow(afterTotal, after, item);
+
+    let groceryAdded = false;
+    if (item) {
+      if (input.addToGrocery) {
+        const result = await ensureGroceryItem(supabase, householdId, {
+          itemId: item.id,
+          name: item.name,
+          quantity: 1,
+          unit: item.unit,
+          categoryId: item.category_id,
+          source: "consume",
+        });
+        groceryAdded = result.created;
+      } else if (item.auto_restock && low) {
+        const result = await ensureGroceryItem(supabase, householdId, {
+          itemId: item.id,
+          name: item.name,
+          quantity: 1,
+          unit: item.unit,
+          categoryId: item.category_id,
+          source: "low_stock",
+        });
+        groceryAdded = result.created;
+      }
+    }
+
+    revalidatePath("/inventory");
+    revalidatePath("/grocery");
+    return {
+      ok: true,
+      data: { affected, snapshots, remaining: Math.max(0, remaining), low, groceryAdded },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not consume item",
+    };
+  }
+}
+
+const batchSnapshotSchema = z.object({
+  id: z.string().uuid(),
+  item_id: z.string().uuid(),
+  location: locationSchema,
+  quantity: z.number().min(0).max(9999),
+  unit: z
+    .string()
+    .trim()
+    .max(32)
+    .nullish()
+    .transform((value) => value ?? null),
+  expiration_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .transform((value) => value ?? null),
+  frozen_at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .transform((value) => value ?? null),
+  freezer_duration_months: z
+    .number()
+    .int()
+    .min(0)
+    .max(120)
+    .nullish()
+    .transform((value) => value ?? null),
+  freezer_quality_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .transform((value) => value ?? null),
+  is_low: z.boolean(),
+  source: z
+    .string()
+    .trim()
+    .max(60)
+    .nullish()
+    .transform((value) => value ?? null),
+  notes: z
+    .string()
+    .trim()
+    .max(500)
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+const restoreSchema = z.object({
+  snapshots: z.array(batchSnapshotSchema).min(1).max(60),
+});
+
+/** Undo for consumeFromItem: re-inserts deleted rows (same ids) or tops back up survivors. */
+export async function restoreBatches(
+  rawInput: { snapshots: BatchSnapshot[] },
+): Promise<ActionResult<{ restored: number }>> {
+  try {
+    const parsed = restoreSchema.safeParse(rawInput);
+    if (!parsed.success) return { ok: false, error: "Invalid input" };
+    const { supabase, householdId, user } = await requireDal();
+
+    let restored = 0;
+    for (const snap of parsed.data.snapshots) {
+      const { data: existing, error: checkError } = await supabase
+        .from("inventory")
+        .select("id, quantity")
+        .eq("household_id", householdId)
+        .eq("id", snap.id)
+        .maybeSingle();
+      if (checkError) return { ok: false, error: checkError.message };
+
+      if (existing) {
+        // Row survived the consume (partial decrement) — restore its quantity.
+        const { error: updateError } = await supabase
+          .from("inventory")
+          .update({ quantity: snap.quantity })
+          .eq("id", snap.id)
+          .eq("household_id", householdId);
+        if (updateError) return { ok: false, error: updateError.message };
+        restored += 1;
+        continue;
+      }
+
+      const { error: insertError } = await supabase.from("inventory").insert({
+        id: snap.id,
+        household_id: householdId,
+        item_id: snap.item_id,
+        location: snap.location,
+        quantity: snap.quantity,
+        unit: snap.unit,
+        expiration_date: snap.expiration_date,
+        frozen_at: snap.frozen_at,
+        freezer_duration_months: snap.freezer_duration_months,
+        freezer_quality_date: snap.freezer_quality_date,
+        is_low: snap.is_low,
+        source: snap.source,
+        notes: snap.notes,
+        added_by: user.id,
+      });
+      if (insertError) {
+        if (insertError.code === "23505") {
+          // An identical batch exists now — top its quantity back up.
+          const { data: siblingRows } = await supabase
+            .from("inventory")
+            .select("*")
+            .eq("household_id", householdId)
+            .eq("item_id", snap.item_id)
+            .eq("location", snap.location);
+          const sibling = ((siblingRows ?? []) as InventoryRow[]).find(
+            (row) =>
+              row.expiration_date === snap.expiration_date &&
+              row.frozen_at === snap.frozen_at &&
+              row.freezer_duration_months === snap.freezer_duration_months,
+          );
+          if (!sibling) return { ok: false, error: insertError.message };
+          const { error: mergeError } = await supabase
+            .from("inventory")
+            .update({ quantity: sibling.quantity + snap.quantity })
+            .eq("id", sibling.id);
+          if (mergeError) return { ok: false, error: mergeError.message };
+          restored += 1;
+          continue;
+        }
+        return { ok: false, error: insertError.message };
+      }
+      restored += 1;
+    }
+
+    revalidatePath("/inventory");
+    revalidatePath("/home");
+    return { ok: true, data: { restored } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not restore batches",
     };
   }
 }
@@ -427,6 +742,51 @@ const patchSchema = z.object({
 
 export type UpdateInventoryInput = z.input<typeof patchSchema>;
 
+type FreezeColumns = {
+  frozen_at: string | null;
+  freezer_duration_months: number | null;
+  freezer_quality_date: string | null;
+};
+
+/**
+ * Freeze columns a row should end up with after a move/patch: thawed to null
+ * outside the freezer; inside, recomputed from frozen_at + months when the
+ * input touches them (never chained through a previous quality date).
+ */
+function resultingFreezeColumns(
+  current: Pick<
+    InventoryRow,
+    "frozen_at" | "freezer_duration_months" | "freezer_quality_date"
+  >,
+  input: { frozenAt?: string | null; freezerDurationMonths?: number | null },
+  targetLocation: Location,
+): FreezeColumns {
+  if (targetLocation !== "freezer") {
+    return {
+      frozen_at: null,
+      freezer_duration_months: null,
+      freezer_quality_date: null,
+    };
+  }
+  const frozenAt = input.frozenAt !== undefined ? input.frozenAt : current.frozen_at;
+  const months =
+    input.freezerDurationMonths !== undefined
+      ? input.freezerDurationMonths
+      : current.freezer_duration_months;
+  let quality: string | null;
+  if (input.frozenAt !== undefined || input.freezerDurationMonths !== undefined) {
+    quality =
+      frozenAt && months != null ? computeFreezerQualityDate(frozenAt, months) : null;
+  } else {
+    quality = current.freezer_quality_date;
+  }
+  return {
+    frozen_at: frozenAt,
+    freezer_duration_months: months,
+    freezer_quality_date: quality,
+  };
+}
+
 export async function updateInventory(
   rawInput: UpdateInventoryInput,
 ): Promise<ActionResult<{ inventory: InventoryWithItem }>> {
@@ -452,45 +812,40 @@ export async function updateInventory(
       }
     }
 
-    // Freeze fields: quality date computed once from frozen_at + months
-    // (never chained through a previous quality date).
-    const freezePatch: Record<string, unknown> = {};
-    if (input.frozenAt !== undefined) {
-      freezePatch.frozen_at = input.frozenAt;
-      freezePatch.freezer_duration_months = input.freezerDurationMonths ?? null;
-      freezePatch.freezer_quality_date =
-        input.frozenAt !== null && input.freezerDurationMonths != null
-          ? computeFreezerQualityDate(input.frozenAt, input.freezerDurationMonths)
-          : null;
-    }
-    // Leaving the freezer thaws: freeze fields are cleared, the original
-    // expiration_date stays as the refrigerated date.
-    const thawPatch = {
-      frozen_at: null,
-      freezer_duration_months: null,
-      freezer_quality_date: null,
-    };
-
-    // Moving locations may collide with an existing row for the target.
+    // Moving locations may collide with an existing batch at the target
+    // (same date + storage history) — only then do quantities merge.
     if (input.location && input.location !== current.location) {
+      const freezeColumns = resultingFreezeColumns(current, input, input.location);
+      const resultExpiration =
+        input.expirationDate === undefined
+          ? current.expiration_date
+          : input.expirationDate;
+
       const { data: targetRows } = await supabase
         .from("inventory")
         .select("*")
         .eq("household_id", householdId)
         .eq("item_id", current.item_id)
-        .eq("location", input.location)
-        .limit(1);
+        .eq("location", input.location);
 
-      const target = ((targetRows ?? [])[0] as InventoryRow | undefined) ?? null;
-      const nextQuantity = quantity ?? current.quantity + (target?.quantity ?? 0);
+      const findTarget = (rows: InventoryRow[]) =>
+        rows.find(
+          (row) =>
+            row.expiration_date === resultExpiration &&
+            row.frozen_at === freezeColumns.frozen_at &&
+            row.freezer_duration_months === freezeColumns.freezer_duration_months,
+        ) ?? null;
 
-      if (target) {
+      const mergeIntoTarget = async (
+        target: InventoryRow,
+      ): Promise<ActionResult<{ inventory: InventoryWithItem }>> => {
+        const nextQuantity = quantity ?? current.quantity + target.quantity;
         await supabase.from("inventory").delete().eq("id", current.id);
         await supabase
           .from("inventory")
           .update({
             quantity: nextQuantity,
-            expiration_date: earliest(target.expiration_date, current.expiration_date),
+            expiration_date: earliest(target.expiration_date, resultExpiration),
             unit: unit ?? target.unit,
             source: input.source ?? target.source,
             notes: input.notes ?? target.notes,
@@ -503,7 +858,10 @@ export async function updateInventory(
         return merged
           ? { ok: true, data: { inventory: merged } }
           : { ok: false, error: "Could not move item" };
-      }
+      };
+
+      const target = findTarget((targetRows ?? []) as InventoryRow[]);
+      if (target) return mergeIntoTarget(target);
 
       const { error: moveError } = await supabase
         .from("inventory")
@@ -516,10 +874,23 @@ export async function updateInventory(
           source: input.source ?? undefined,
           notes: input.notes ?? undefined,
           is_low: input.isLow ?? undefined,
-          ...(input.location === "freezer" ? freezePatch : thawPatch),
+          ...freezeColumns,
         })
         .eq("id", current.id);
-      if (moveError) return { ok: false, error: moveError.message };
+      if (moveError) {
+        if (moveError.code === "23505") {
+          // An identical batch appeared meanwhile — merge into it.
+          const { data: raceRows } = await supabase
+            .from("inventory")
+            .select("*")
+            .eq("household_id", householdId)
+            .eq("item_id", current.item_id)
+            .eq("location", input.location);
+          const raced = findTarget((raceRows ?? []) as InventoryRow[]);
+          if (raced) return mergeIntoTarget(raced);
+        }
+        return { ok: false, error: moveError.message };
+      }
     } else {
       const patch: Record<string, unknown> = {};
       if (quantity !== undefined) patch.quantity = quantity;
@@ -528,14 +899,67 @@ export async function updateInventory(
       if (input.source !== undefined) patch.source = input.source;
       if (input.notes !== undefined) patch.notes = input.notes;
       if (input.isLow !== undefined) patch.is_low = input.isLow;
-      Object.assign(patch, freezePatch);
+
+      const freezeTouched =
+        input.frozenAt !== undefined || input.freezerDurationMonths !== undefined;
+      const freezeColumns = freezeTouched
+        ? resultingFreezeColumns(current, input, input.location ?? current.location)
+        : null;
+      if (freezeColumns) Object.assign(patch, freezeColumns);
 
       if (Object.keys(patch).length > 0) {
         const { error: updateError } = await supabase
           .from("inventory")
           .update(patch)
           .eq("id", current.id);
-        if (updateError) return { ok: false, error: updateError.message };
+        if (updateError) {
+          if (updateError.code === "23505") {
+            // The edited date/storage history matches a sibling batch — merge.
+            const cols: FreezeColumns = freezeColumns ?? {
+              frozen_at: current.frozen_at,
+              freezer_duration_months: current.freezer_duration_months,
+              freezer_quality_date: current.freezer_quality_date,
+            };
+            const resultExpiration =
+              input.expirationDate === undefined
+                ? current.expiration_date
+                : input.expirationDate;
+            const { data: siblingRows } = await supabase
+              .from("inventory")
+              .select("*")
+              .eq("household_id", householdId)
+              .eq("item_id", current.item_id)
+              .eq("location", current.location);
+            const sibling = ((siblingRows ?? []) as InventoryRow[]).find(
+              (row) =>
+                row.id !== current.id &&
+                row.expiration_date === resultExpiration &&
+                row.frozen_at === cols.frozen_at &&
+                row.freezer_duration_months === cols.freezer_duration_months,
+            );
+            if (sibling) {
+              await supabase.from("inventory").delete().eq("id", current.id);
+              const { error: mergeError } = await supabase
+                .from("inventory")
+                .update({
+                  quantity: (quantity ?? current.quantity) + sibling.quantity,
+                  unit: unit ?? sibling.unit,
+                  source: input.source ?? sibling.source,
+                  notes: input.notes ?? sibling.notes,
+                  is_low: input.isLow ?? sibling.is_low,
+                })
+                .eq("id", sibling.id);
+              if (mergeError) return { ok: false, error: mergeError.message };
+              const merged = await loadInventory(supabase, householdId, sibling.id);
+              if (merged) await maybeAutoRestock(supabase, householdId, merged);
+              revalidatePath("/inventory");
+              return merged
+                ? { ok: true, data: { inventory: merged } }
+                : { ok: false, error: "Could not save batch" };
+            }
+          }
+          return { ok: false, error: updateError.message };
+        }
       }
     }
 
@@ -592,13 +1016,14 @@ export async function updateInventory(
 
     const updated = await loadInventory(supabase, householdId, input.inventoryId);
     if (!updated) {
-      // Row moved to a different id (merged) — reload by item+location.
+      // Row moved/merged away — reload any row of the same batch key.
       const merged = await supabase
         .from("inventory")
         .select("*, item:items(*)")
         .eq("household_id", householdId)
         .eq("item_id", current.item_id)
         .eq("location", input.location ?? current.location)
+        .limit(1)
         .maybeSingle();
       const row = merged.data as unknown as InventoryWithItem | null;
       if (row) {

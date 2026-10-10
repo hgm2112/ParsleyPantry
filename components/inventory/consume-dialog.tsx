@@ -14,43 +14,49 @@ import {
 } from "@/components/ui/dialog";
 import { locationLabel } from "@/components/location-badge";
 import {
-  addToInventory,
-  consumeInventory,
-  updateInventory,
+  consumeFromItem,
+  restoreBatches,
+  type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
-import type { InventoryWithItem } from "@/lib/types";
+import type { ItemRow, Location } from "@/lib/types";
 
 type ConsumeDialogProps = {
-  inventory: InventoryWithItem;
+  item: ItemRow;
+  /** Quantity shown: grand total, or the location subtotal on a location tab. */
+  totalQuantity: number;
+  /** Where batches are consumed from: "all" or the active location tab. */
+  scope: Location | "all";
   mode: "partial" | "last";
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called with the new quantity after a successful consume. */
-  onConsumed?: (quantity: number) => void;
+  /** Called after a successful consume with totals + affected batches. */
+  onConsumed?: (remaining: number, data: ConsumeItemData) => void;
 };
 
 export function ConsumeDialog({
-  inventory,
+  item,
+  totalQuantity,
+  scope,
   mode,
   open,
   onOpenChange,
   onConsumed,
 }: ConsumeDialogProps) {
-  const name = inventory.item?.name ?? "Item";
+  const name = item.name;
   const [amount, setAmount] = useState(1);
   const [addToGrocery, setAddToGrocery] = useState(mode === "last");
   const [busy, setBusy] = useState(false);
 
-  const max = Math.max(1, inventory.quantity);
-  const requested = mode === "last" ? inventory.quantity : Math.min(amount, max);
-  const remaining = Math.max(0, inventory.quantity - requested);
+  const max = Math.max(1, totalQuantity);
+  const requested = mode === "last" ? totalQuantity : Math.min(amount, max);
+  const remaining = Math.max(0, totalQuantity - requested);
 
   async function confirm() {
     setBusy(true);
-    const previousQuantity = inventory.quantity;
-    const result = await consumeInventory({
-      inventoryId: inventory.id,
+    const result = await consumeFromItem({
+      itemId: item.id,
       amount: requested,
+      location: scope === "all" ? undefined : scope,
       addToGrocery,
     });
     setBusy(false);
@@ -62,33 +68,17 @@ export function ConsumeDialog({
 
     onOpenChange(false);
     setAmount(1);
-    onConsumed?.(result.data.quantity);
+    onConsumed?.(remaining, result.data);
 
     const message =
-      requested >= inventory.quantity
+      requested >= totalQuantity
         ? `Used the last ${name}`
         : `Used ${requested} ${name}`;
     toast.success(result.data.groceryAdded ? `${message} · added to grocery list` : message, {
       action: {
         label: "Undo",
         onClick: () => {
-          if (result.data.deleted) {
-            // The stock row is gone — re-create it via addToInventory.
-            if (!inventory.item) return;
-            void addToInventory({
-              itemId: inventory.item.id,
-              name: inventory.item.name,
-              location: inventory.location,
-              quantity: previousQuantity,
-              unit: inventory.unit ?? undefined,
-              expirationDate: inventory.expiration_date ?? undefined,
-            });
-            return;
-          }
-          void updateInventory({
-            inventoryId: inventory.id,
-            quantity: previousQuantity,
-          });
+          void restoreBatches({ snapshots: result.data.snapshots });
         },
       },
     });
@@ -102,7 +92,8 @@ export function ConsumeDialog({
             {mode === "last" ? "Used the last one" : "Use some"}
           </DialogTitle>
           <DialogDescription>
-            {name} · {inventory.quantity} left · {locationLabel(inventory.location)}
+            {name} · {totalQuantity} left
+            {scope === "all" ? "" : ` · ${locationLabel(scope)}`}
           </DialogDescription>
         </DialogHeader>
 

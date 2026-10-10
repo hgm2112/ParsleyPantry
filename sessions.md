@@ -4,6 +4,41 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 15) — Per-batch expiration tracking (one card per item)
+
+**Shipped**
+- Migration `supabase/migrations/20261011120000_batch_tracking.sql` — **must be run manually BEFORE deploying this code** (SQL Editor / `supabase db push`): drops `inventory_household_item_location_key`, creates unique index `inventory_batch_key (household_id, item_id, location, coalesce(expiration_date, '0001-01-01'), coalesce(frozen_at, '0001-01-01'), coalesce(freezer_duration_months, -1))`. Zero data migration — existing rows become each item's initial batch. Batch identity = item + location + expiration date + freezing history; identical batches always merge.
+- `lib/types.ts`: `InventoryRow.created_at` (FEFO tiebreak).
+- `lib/batches.ts` (new): `compareFefo`/`fefoSort` (effective date asc → undated last → created_at), `scopedBatches`, `earliestEffective`, `distinctEffectiveDates`/`multiDate` (effective dates only, undated excluded), `isItemLow` (total ≤ threshold **OR** any `is_low` flag), `groupByItem` → `ItemGroup { item, batches(FEFO), totalQuantity, locationTotals, locations, low }`, `anyBatchUrgent`, `pickFefoBatch`, `BatchSnapshot`/`toBatchSnapshot` (undo payloads).
+- `actions.ts`: `addToInventory` matches a batch only on `expiration_date` equal **and** `frozen_at === null && freezer_duration_months === null` (add sends no freeze fields) else inserts a new row; insert `23505` → re-select + merge (same pattern as name race). `updateInventory` gained `resultingFreezeColumns(current, input, targetLocation)` (thaw nulls on leaving freezer; recomputed from input when `frozenAt`/months touched, never chained); move branch loads **all** target-location rows and matches the resulting key, `23505` → merge fallback; non-move date/months/`23505` → merge into sibling (early-return sibling row); final reload fallback got `.limit(1)` before `maybeSingle`. `consumeInventory` result gains `inventoryId`. New `consumeFromItem({itemId, amount, addToGrocery, location?})` — FEFO decrement/delete loop over scoped batches, returns `affected[] + snapshots + remaining + item-level low`, handles consume/auto-restock grocery adds. New `restoreBatches({snapshots})` — undo: insert by original id (else top up surviving row; `23505` → merge quantity).
+- `plan/actions.ts` FEFO hold release: batch hitting 0 is **deleted** (was left as a 0-qty ghost).
+- `consume-dialog.tsx`: item-level — props `{item, totalQuantity, scope: Location|"all", mode}`; calls `consumeFromItem`, undo via `restoreBatches`, `onConsumed(remaining, data)` carries `affected` for the detail mirror.
+- `batch-dialog.tsx` (new): add/edit one batch (qty stepper, date + `+7d`, 3 location buttons, remove-with-undo). Selecting Freezer (or "Edit freezer details" on a frozen batch) hands off to the existing `FreezeDialog`; add-with-freezer inserts the row first (untracked-freezer state) then opens FreezeDialog — cancelling leaves it untracked by design. Merges surface as "Merged into an existing X batch".
+- `detail-form.tsx`: now `{item, entries, subcategories}` (item-level). Header = location badges + earliest ExpiryChip + "Multiple dates" chip + low; total section (barcode, batch count, FEFO −/+ with undo); **Batches section always visible** (list w/ LocationBadge, qty, chip, freezer quality line, Edit → BatchDialog, "+ Add batch") — single batch stays compact; location/expiry/freezer editing moved out of the main form entirely; details/subcat/threshold/auto-restock patch via the first batch as anchor; item-level low toggle loops all batches; header trash + "Use the last" remove/restore **all** batches (undo = `restoreBatches`). Local entries mirror updated from action results (no prop-sync effect — lint).
+- `[id]/page.tsx`: resolves **item id first** (fetches all batches), falls back to inventory-row id → `redirect(/inventory/{item_id})` — also fixes the latent barcode deep-link bug (`inventory-view` pushes `/inventory/{item.id}`). 0 batches → redirect `/inventory`.
+- `inventory-view.tsx`: `groupByItem` — one card per item; header/tab counts = items; qty = grand total (All) / location subtotal (tab); chips + "Multiple dates" scoped to tab; card href → item id; −1/+1 scoped FEFO (`consumeFromItem` / +1 to soonest-expiring dated batch in scope); menu: consume dialogs (scope=tab), grocery (any batch), item-level low toggle (all batches), Remove = all batches w/ undo; filters (query/sub/use-soon/low) applied at group level, sorted by scoped earliest effective.
+- Grouped surfaces: `smart-actions` (🥀/🥑/❄️ pick one representative batch per item — refrigerated ref batch for 🥀/🥑, earliest-quality frozen batch for ❄️, never labels freezer "expired"; low card uses `group.low` + total), `pantry-insights` (one bucket per item, priority expiring > low > all-frozen > fresh), `stock-row` (props now `{group}`, href → item id, locations badges), `pantry-preview` (groups; location filter + sort scoped), `snack-widget` (groups), `search/page.tsx` (one pantry card per item w/ total + locations — fixes duplicate cards per batch), `grocery/add-sheet.tsx` picker dedupes by item (`groupByItem`).
+
+**Gotchas**
+- Two migrations pending — **batch migration must land before this code deploys** (with the old per-location unique constraint, adding a second batch would error).
+- Same-key batches always merge on add (no way to keep two identical-date batches); to "split", edit one row's date first. No batch history/archive — removes are gone after the 8s undo toast.
+- "Multiple dates" = distinct **effective** dates (frozen = quality date; undated batches don't count).
+- `is_low` is still stored per row but every UI toggle flips all batches together; item low = threshold breached **or** any flag.
+- Detail/local mirrors: batch-dialog/FreezeDialog upsert the row returned by the action (`replacedId` handles merges changing the id); after a merge the old row id disappears from local state.
+- Item-level patches (name/unit/threshold/auto-restock/subcat) anchor on the first batch row; they never touch batch fields.
+- `restoreBatches` caps 60 snapshots/call — plenty (items hold a handful of batches).
+- Plan hold release now deletes empty batches (FEFO order still by `expiration_date` only — frozen quality dates not considered there; pre-existing).
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = only the 4 pre-existing problems (settings-view setState-in-effect, smart-actions "Don't add" + exhaustive-deps, scanner `setDebugOn`); `npm run build` passes.
+- Manual checklist: ① list shows one card per item, totals across locations, location badges, "Multiple dates" chip, tab counts = items; ② location tab scopes qty/chips and −1/+1; ③ −1 undo restores a deleted batch (same id); at qty 1 → confirm; "Used the last one" via dialog; ④ detail opens by item id, old row-id links redirect; batches add/edit/move/merge/remove w/ undo; ⑤ add batch → Freezer → FreezeDialog; cancel leaves untracked freezer; thaw by moving out (quality fields cleared); ⑥ consume dialog FEFO across batches + grocery checkbox + auto-restock; ⑦ home smart-actions/insights/preview/snacks/search/add-sheet grouped, no duplicate cards; ⑧ plan hold release deletes emptied batches; ⑨ low flag toggles all batches.
+
+**Open — next session**
+- **Apply both migrations** (`20261010120000_freezer_tracking.sql`, `20261011120000_batch_tracking.sql`) before deploying.
+- Android PWA scan debug overlay readings (part 9 still open).
+- Tests skipped per user decision — spec §9 remains a documented gap.
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-10 (part 14) — Freezer-aware expiration tracking
 
 **Shipped**

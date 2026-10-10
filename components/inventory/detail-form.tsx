@@ -26,53 +26,95 @@ import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
-import { FreezeDialog } from "@/components/inventory/freeze-dialog";
+import { BatchDialog } from "@/components/inventory/batch-dialog";
 import {
-  addToInventory,
   addInventoryToGrocery,
+  consumeFromItem,
   deleteInventory,
+  restoreBatches,
   updateInventory,
+  type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
-import { addDays, parseDate } from "@/lib/expiry";
 import { expiryChipProps, formatFreezerQuality } from "@/lib/freezer";
-import { isLowStock } from "@/lib/stock";
-import { cn } from "@/lib/utils";
-import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
-
-const LOCATIONS: { value: Location; label: string }[] = [
-  { value: "pantry", label: "Pantry" },
-  { value: "fridge", label: "Fridge" },
-  { value: "freezer", label: "Freezer" },
-];
+import {
+  fefoSort,
+  isItemLow,
+  multiDate,
+  pickFefoBatch,
+  toBatchSnapshot,
+} from "@/lib/batches";
+import { displayQtyUnit } from "@/lib/stock";
+import type { InventoryEntry, ItemRow, SubcategoryRow } from "@/lib/types";
 
 export function InventoryDetail({
-  entry: initial,
+  item: initialItem,
+  entries: initialEntries,
   subcategories,
 }: {
-  entry: InventoryEntry;
+  item: ItemRow;
+  entries: InventoryEntry[];
   subcategories: SubcategoryRow[];
 }) {
   const router = useRouter();
-  const [entry, setEntry] = useState<InventoryEntry>(initial);
-  const [unit, setUnit] = useState(initial.unit ?? "oz");
+  const [item, setItem] = useState<ItemRow>(initialItem);
+  const [entries, setEntries] = useState<InventoryEntry[]>(initialEntries);
+  const [unit, setUnit] = useState(initialItem.unit ?? "oz");
   const [lowThreshold, setLowThreshold] = useState(
-    initial.item.low_threshold != null ? String(initial.item.low_threshold) : "",
+    initialItem.low_threshold != null ? String(initialItem.low_threshold) : "",
   );
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [useLastOpen, setUseLastOpen] = useState(false);
-  const [freezeOpen, setFreezeOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
+  const [batchDialog, setBatchDialog] = useState<{
+    batch: InventoryEntry | null;
+  } | null>(null);
   const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState(initial.item.name);
+  const [nameDraft, setNameDraft] = useState(initialItem.name);
   const nameBusyRef = useRef(false);
   const nameCancelRef = useRef(false);
 
-  const low = isLowStock(entry, entry.item);
+  const batches = fefoSort(entries);
+  const total = entries.reduce((sum, row) => sum + row.quantity, 0);
+  const low = isItemLow(total, entries, item);
+  const earliest = pickFefoBatch(entries);
+  const multi = multiDate(entries);
+  const locations = batches.map((row) => row.location);
+  const uniqueLocations = [...new Set(locations)];
+  const anchorId = batches[0]?.id ?? null;
+  const subcategoryName = item.subcategory_id
+    ? (subcategories.find((sub) => sub.id === item.subcategory_id)?.name ?? null)
+    : null;
 
-  async function patch(changes: Partial<Parameters<typeof updateInventory>[0]>) {
+  function applySaved(row: InventoryEntry, replacedId?: string) {
+    setEntries((current) => {
+      const drop = new Set<string>([row.id]);
+      if (replacedId) drop.add(replacedId);
+      return [...current.filter((entry) => !drop.has(entry.id)), row];
+    });
+    setItem(row.item);
+  }
+
+  function applyAffected(affected: ConsumeItemData["affected"]) {
+    setEntries((current) => {
+      let next = current;
+      for (const change of affected) {
+        next = change.deleted
+          ? next.filter((entry) => entry.id !== change.inventoryId)
+          : next.map((entry) =>
+              entry.id === change.inventoryId
+                ? { ...entry, quantity: change.quantity }
+                : entry,
+            );
+      }
+      return next;
+    });
+  }
+
+  async function patchItem(changes: Partial<Parameters<typeof updateInventory>[0]>) {
+    if (!anchorId) return false;
     const result = await updateInventory({
-      inventoryId: entry.id,
+      inventoryId: anchorId,
       ...changes,
     });
     if (!result.ok) {
@@ -80,17 +122,17 @@ export function InventoryDetail({
       return false;
     }
     if (result.data.inventory.item) {
-      setEntry(result.data.inventory as InventoryEntry);
+      applySaved(result.data.inventory as InventoryEntry, anchorId);
     }
     return true;
   }
 
   async function saveDetails() {
     setSaveBusy(true);
-    const ok = await patch({
+    const ok = await patchItem({
       unit: unit.trim() || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
-      autoRestock: entry.item.auto_restock,
+      autoRestock: item.auto_restock,
     });
     setSaveBusy(false);
     toast[ok ? "success" : "error"](ok ? "Saved" : "Could not save");
@@ -102,14 +144,15 @@ export function InventoryDetail({
       return;
     }
     const trimmed = nameDraft.trim();
-    if (!trimmed || trimmed === entry.item.name) {
-      setNameDraft(entry.item.name);
+    if (!trimmed || trimmed === item.name) {
+      setNameDraft(item.name);
       setEditingName(false);
       return;
     }
+    if (!anchorId) return;
     nameBusyRef.current = true;
     const result = await updateInventory({
-      inventoryId: entry.id,
+      inventoryId: anchorId,
       itemName: trimmed,
     });
     nameBusyRef.current = false;
@@ -117,33 +160,95 @@ export function InventoryDetail({
       toast.error(result.error);
       return;
     }
-    setEntry(result.data.inventory as InventoryEntry);
+    if (result.data.inventory.item) {
+      applySaved(result.data.inventory as InventoryEntry, anchorId ?? undefined);
+    }
+    setNameDraft(trimmed);
     setEditingName(false);
   }
 
   async function toggleAutoRestock(checked: boolean) {
-    setEntry((current) => ({
-      ...current,
-      item: { ...current.item, auto_restock: checked },
-    }));
+    if (!anchorId) return;
+    setItem((current) => ({ ...current, auto_restock: checked }));
     const result = await updateInventory({
-      inventoryId: entry.id,
+      inventoryId: anchorId,
       autoRestock: checked,
     });
     if (!result.ok) toast.error(result.error);
   }
 
   async function addToGrocery() {
-    const result = await addInventoryToGrocery(entry.id);
+    if (!anchorId) return;
+    const result = await addInventoryToGrocery(anchorId);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     toast.success(
       result.data.created
-        ? `${entry.item.name} added to grocery list`
+        ? `${item.name} added to grocery list`
         : "Already on the grocery list",
     );
+  }
+
+  /** −1 on the total: FEFO within all batches, undo restores each row. */
+  async function quickUse() {
+    const result = await consumeFromItem({
+      itemId: item.id,
+      amount: 1,
+      addToGrocery: false,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    applyAffected(result.data.affected);
+    toast.success(`Used 1 ${item.name}`, {
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void restoreBatches({ snapshots: result.data.snapshots }),
+      },
+    });
+  }
+
+  /** +1 on the total: tops up the soonest-expiring batch (never invents dates). */
+  async function quickAdd() {
+    const target = batches[0];
+    if (!target) {
+      setBatchDialog({ batch: null });
+      return;
+    }
+    const result = await updateInventory({
+      inventoryId: target.id,
+      quantity: target.quantity + 1,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    if (result.data.inventory.item) {
+      applySaved(result.data.inventory as InventoryEntry, target.id);
+    }
+  }
+
+  async function toggleLow() {
+    const target = !entries.some((entry) => entry.is_low);
+    for (const entry of batches) {
+      if (entry.is_low === target) continue;
+      const result = await updateInventory({
+        inventoryId: entry.id,
+        isLow: target,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.data.inventory.item) {
+        applySaved(result.data.inventory as InventoryEntry, entry.id);
+      }
+    }
+    if (target) toast.success(`${item.name} flagged as running low`);
   }
 
   return (
@@ -177,7 +282,7 @@ export function InventoryDetail({
                     if (event.key === "Escape") {
                       event.preventDefault();
                       nameCancelRef.current = true;
-                      setNameDraft(entry.item.name);
+                      setNameDraft(item.name);
                       setEditingName(false);
                     }
                   }}
@@ -189,18 +294,27 @@ export function InventoryDetail({
                   type="button"
                   className="block w-full max-w-full truncate cursor-text text-lg font-extrabold hover:text-primary"
                   onClick={() => {
-                    setNameDraft(entry.item.name);
+                    setNameDraft(item.name);
                     nameCancelRef.current = false;
                     setEditingName(true);
                   }}
                 >
-                  {entry.item.name}
+                  {item.name}
                 </button>
               </h1>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <LocationBadge location={entry.location} />
-              <ExpiryChip {...expiryChipProps(entry)} />
+              {uniqueLocations.map((location) => (
+                <LocationBadge key={location} location={location} />
+              ))}
+              {earliest ? (
+                <ExpiryChip {...expiryChipProps(earliest)} />
+              ) : null}
+              {multi ? (
+                <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+                  Multiple dates
+                </span>
+              ) : null}
               {low ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   Running low
@@ -221,13 +335,15 @@ export function InventoryDetail({
       </div>
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div>
             <Label>Quantity</Label>
             <p className="text-xs text-muted-foreground">
-              {entry.item.barcode
-                ? `Barcode ${entry.item.barcode}`
-                : "No barcode saved"}
+              {batches.length} {batches.length === 1 ? "batch" : "batches"}
+              {uniqueLocations.length > 1
+                ? ` · ${uniqueLocations.map(locationLabel).join(", ")}`
+                : ""}
+              {item.barcode ? ` · Barcode ${item.barcode}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -235,122 +351,104 @@ export function InventoryDetail({
               variant="outline"
               size="icon"
               aria-label="Decrease quantity"
-              disabled={entry.quantity <= 0}
+              disabled={total <= 0}
               onClick={() => {
-                if (entry.quantity <= 1) setUseLastOpen(true);
-                else void patch({ quantity: entry.quantity - 1 });
+                if (total <= 1) setUseLastOpen(true);
+                else void quickUse();
               }}
             >
               −
             </Button>
             <span className="w-12 text-center text-xl font-extrabold tabular-nums">
-              {entry.quantity % 1 === 0 ? entry.quantity : entry.quantity.toFixed(1)}
+              {total % 1 === 0 ? total : total.toFixed(1)}
             </span>
             <Button
               variant="outline"
               size="icon"
               aria-label="Increase quantity"
-              onClick={() => void patch({ quantity: entry.quantity + 1 })}
+              onClick={() => void quickAdd()}
             >
               +
             </Button>
           </div>
         </div>
+      </section>
 
-        <div className="space-y-2">
-          <Label>Location</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {LOCATIONS.map((location) => (
-              <button
-                key={location.value}
-                type="button"
-                onClick={() => {
-                  // Freezing collects a date + food type first.
-                  if (location.value === "freezer" && entry.location !== "freezer") {
-                    setFreezeOpen(true);
-                    return;
-                  }
-                  void patch({ location: location.value });
-                }}
-                className={cn(
-                  "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
-                  entry.location === location.value
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent",
-                )}
-              >
-                {location.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {entry.location === "freezer" ? (
-          <div className="space-y-2">
-            <Label>Freezer</Label>
-            <p className="text-sm font-semibold">
-              {entry.frozen_at
-                ? `❄️ Frozen on ${parseDate(entry.frozen_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}`
-                : "❄️ Frozen — date not tracked"}
-            </p>
-            <p className="text-sm">
-              {entry.freezer_quality_date
-                ? formatFreezerQuality(entry.freezer_quality_date)
-                : "No quality date tracked"}
-            </p>
+      <section className="space-y-3 rounded-xl border bg-background p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <Label>Batches</Label>
             <p className="text-xs text-muted-foreground">
-              Original refrigerated date:{" "}
-              {entry.expiration_date
-                ? parseDate(entry.expiration_date).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "none"}{" "}
-              — kept while frozen.
+              Quantity and dates are tracked per batch.
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFreezeOpen(true)}
-            >
-              {entry.frozen_at || entry.item.freezer_food_type
-                ? "Edit freezer details"
-                : "Record freezer date"}
-            </Button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="expiry">Expiration</Label>
-            <div className="flex gap-2">
-              <Input
-                id="expiry"
-                type="date"
-                value={entry.expiration_date ?? ""}
-                onChange={(event) =>
-                  void patch({ expirationDate: event.target.value || null })
-                }
-              />
-              <Button
-                variant="outline"
-                onClick={() => void patch({ expirationDate: addDays(7) })}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBatchDialog({ batch: null })}
+          >
+            Add batch
+          </Button>
+        </div>
+        <ul className="space-y-2">
+          {batches.map((batch) => {
+            const { unitText } = displayQtyUnit(batch.quantity, batch.unit);
+            return (
+              <li
+                key={batch.id}
+                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
               >
-                +7d
-              </Button>
-            </div>
-          </div>
-        )}
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <LocationBadge
+                      location={batch.location}
+                      className="uppercase"
+                    />
+                    <span className="text-sm font-extrabold tabular-nums">
+                      {batch.quantity % 1 === 0
+                        ? batch.quantity
+                        : batch.quantity.toFixed(2).replace(/0$/, "")}
+                    </span>
+                    {unitText ? (
+                      <span className="text-xs font-semibold uppercase text-muted-foreground">
+                        {unitText}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ExpiryChip
+                      {...expiryChipProps(batch)}
+                      className="uppercase"
+                    />
+                    {batch.location === "freezer" ? (
+                      <span className="text-xs text-muted-foreground">
+                        {batch.freezer_quality_date
+                          ? formatFreezerQuality(batch.freezer_quality_date)
+                          : batch.frozen_at
+                            ? "No quality date tracked"
+                            : "Date not tracked"}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBatchDialog({ batch })}
+                >
+                  Edit
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
         <div className="space-y-2">
           <Label>Sub-category</Label>
           <Select
-            value={entry.item.subcategory_id ?? "__none"}
+            value={item.subcategory_id ?? "__none"}
             items={[
               { value: "__none", label: "None" },
               ...subcategories.map((subcategory) => ({
@@ -359,7 +457,7 @@ export function InventoryDetail({
               })),
             ]}
             onValueChange={(value) =>
-              void patch({
+              void patchItem({
                 subcategoryId: value && value !== "__none" ? value : null,
               })
             }
@@ -401,7 +499,7 @@ export function InventoryDetail({
           />
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
-              checked={entry.item.auto_restock}
+              checked={item.auto_restock}
               onCheckedChange={(checked) => void toggleAutoRestock(checked === true)}
             />
             Auto-add to grocery list when it gets low
@@ -417,14 +515,14 @@ export function InventoryDetail({
       <section className="grid grid-cols-2 gap-2">
         <Button
           variant="outline"
-          disabled={entry.quantity <= 0}
+          disabled={total <= 0}
           onClick={() => setConsumeMode("partial")}
         >
           Use some…
         </Button>
         <Button
           variant="outline"
-          disabled={entry.quantity <= 0}
+          disabled={total <= 0}
           onClick={() => setConsumeMode("last")}
         >
           Used the last one
@@ -432,43 +530,52 @@ export function InventoryDetail({
         <Button variant="outline" className="col-span-2" onClick={addToGrocery}>
           <ShoppingCart /> Add to grocery list
         </Button>
+        <Button variant="outline" className="col-span-2" onClick={toggleLow}>
+          {low ? "Clear low flag" : "Mark running low"}
+        </Button>
       </section>
 
       {consumeMode ? (
         <ConsumeDialog
-          inventory={entry}
+          key={consumeMode}
+          item={item}
+          totalQuantity={total}
+          scope="all"
           mode={consumeMode}
           open
           onOpenChange={(open) => {
             if (!open) setConsumeMode(null);
           }}
-          onConsumed={(quantity) => {
-            if (quantity <= 0) {
+          onConsumed={(remaining, data) => {
+            if (remaining <= 0) {
               router.push("/inventory");
               router.refresh();
               return;
             }
-            setEntry((current) => ({ ...current, quantity }));
+            applyAffected(data.affected);
+            router.refresh();
           }}
         />
       ) : null}
 
-      {freezeOpen ? (
-        <FreezeDialog
-          inventory={entry}
-          subcategoryName={
-            entry.item.subcategory_id
-              ? (subcategories.find(
-                  (subcategory) => subcategory.id === entry.item.subcategory_id,
-                )?.name ?? null)
-              : null
-          }
+      {batchDialog ? (
+        <BatchDialog
+          item={item}
+          subcategoryName={subcategoryName}
+          batch={batchDialog.batch}
           open
           onOpenChange={(open) => {
-            if (!open) setFreezeOpen(false);
+            if (!open) setBatchDialog(null);
           }}
-          onSaved={(inventory) => {
-            if (inventory.item) setEntry(inventory as InventoryEntry);
+          onSaved={(row, replacedId) => {
+            applySaved(row, replacedId);
+            router.refresh();
+          }}
+          onRemoved={(id) => {
+            setEntries((current) =>
+              current.filter((entry) => entry.id !== id),
+            );
+            router.refresh();
           }}
         />
       ) : null}
@@ -476,31 +583,34 @@ export function InventoryDetail({
       <ConfirmDialog
         open={useLastOpen}
         onOpenChange={setUseLastOpen}
-        title={`Use the last ${entry.item.name}?`}
-        description={`${locationLabel(entry.location)} stock will be removed from your pantry. The catalog item stays for next time.`}
+        title={`Use the last ${item.name}?`}
+        description={`All ${batches.length} ${
+          batches.length === 1 ? "batch" : "batches"
+        } (${uniqueLocations.map(locationLabel).join(", ")}) will be removed from your pantry. The catalog item stays for next time.`}
         confirmLabel="Used the last one"
         onConfirm={async () => {
-          const previousQuantity = entry.quantity;
-          const result = await deleteInventory(entry.id);
+          const result = await consumeFromItem({
+            itemId: item.id,
+            amount: total,
+            addToGrocery: false,
+          });
           if (!result.ok) {
             toast.error(result.error);
             return;
           }
-          toast.success(`Used the last ${entry.item.name} · removed from pantry`, {
-            action: {
-              label: "Undo",
-              onClick: () =>
-                void addToInventory({
-                  itemId: entry.item.id,
-                  name: entry.item.name,
-                  location: entry.location,
-                  quantity: previousQuantity,
-                  unit: entry.unit ?? undefined,
-                  expirationDate: entry.expiration_date ?? undefined,
-                }),
+          toast.success(
+            `Used the last ${item.name} · removed from pantry`,
+            {
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  void restoreBatches({
+                    snapshots: result.data.snapshots,
+                  }),
+              },
+              duration: 8000,
             },
-            duration: 8000,
-          });
+          );
           router.push("/inventory");
           router.refresh();
         }}
@@ -509,17 +619,28 @@ export function InventoryDetail({
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={`Remove ${entry.item.name}?`}
-        description="This deletes the stock row. The catalog item stays for next time."
+        title={`Remove ${item.name}?`}
+        description={`This deletes all ${batches.length} ${
+          batches.length === 1 ? "batch" : "batches"
+        }. The catalog item stays for next time.`}
         confirmLabel="Remove"
         destructive
         onConfirm={async () => {
-          const result = await deleteInventory(entry.id);
-          if (!result.ok) {
-            toast.error(result.error);
-            return;
+          const snapshots = batches.map(toBatchSnapshot);
+          for (const batch of batches) {
+            const result = await deleteInventory(batch.id);
+            if (!result.ok) {
+              toast.error(result.error);
+              return;
+            }
           }
-          toast.success(`${entry.item.name} removed`);
+          toast.success(`${item.name} removed`, {
+            action: {
+              label: "Undo",
+              onClick: () => void restoreBatches({ snapshots }),
+            },
+            duration: 8000,
+          });
           router.push("/inventory");
           router.refresh();
         }}

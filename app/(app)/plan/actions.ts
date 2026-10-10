@@ -415,11 +415,21 @@ export async function markMealMade(
         if (remaining <= 0) break;
         const take = Math.min(row.quantity, remaining);
         if (take <= 0) continue;
-        const { error: updateError } = await supabase
-          .from("inventory")
-          .update({ quantity: row.quantity - take })
-          .eq("id", row.id);
-        if (updateError) return { ok: false, error: updateError.message };
+        const nextQuantity = row.quantity - take;
+        if (nextQuantity <= 0) {
+          // Empty batches are removed, not kept as 0-qty rows.
+          const { error: deleteError } = await supabase
+            .from("inventory")
+            .delete()
+            .eq("id", row.id);
+          if (deleteError) return { ok: false, error: deleteError.message };
+        } else {
+          const { error: updateError } = await supabase
+            .from("inventory")
+            .update({ quantity: nextQuantity })
+            .eq("id", row.id);
+          if (updateError) return { ok: false, error: updateError.message };
+        }
         remaining -= take;
       }
     }

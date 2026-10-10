@@ -5,7 +5,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compareByExpiry, daysUntil } from "@/lib/expiry";
-import { isLowStock } from "@/lib/stock";
 import { foodEmoji } from "@/lib/tiles";
 import { mondayOf } from "@/lib/plan";
 import { isPlanned } from "@/lib/meal-kind";
@@ -16,6 +15,7 @@ import { useLocalStorage } from "@/lib/use-local-storage";
 import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type { InventoryEntry } from "@/lib/types";
+import { groupByItem } from "@/lib/batches";
 
 const EXPIRING_DAYS = 5;
 
@@ -79,52 +79,58 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
   }, [ignoredRaw]);
   const setIgnored = (ids: string[]) => setIgnoredRaw(JSON.stringify(ids));
 
-  // Fridge/pantry alerts only — frozen rows countdown on quality dates below.
-  const refrigerated = pantry.filter((row) => row.location !== "freezer");
+  const groups = useMemo(() => groupByItem(pantry), [pantry]);
 
-  const expired = refrigerated.filter((row) => {
-    const days = daysUntil(row.expiration_date);
-    return days !== null && days < 0;
-  });
-
-  const expiring = refrigerated.filter((row) => {
-    const days = daysUntil(row.expiration_date);
-    return days !== null && days >= 0 && days <= EXPIRING_DAYS;
-  });
-
-  // Quality reminders: tracked frozen rows within 7 days of (or past) best quality.
-  const freezerNear = pantry.filter((row) => {
-    if (row.location !== "freezer" || !row.freezer_quality_date) return false;
-    const days = daysUntil(row.freezer_quality_date);
-    return days !== null && days <= 7;
-  });
+  // One representative batch per item: earliest refrigerated date for
+  // 🥀/🥑 cards (freezer rows never count as expired), earliest quality date
+  // for ❄️. Batches are already FEFO-sorted inside each group.
+  const expiredReps: InventoryEntry[] = [];
+  const soonReps: InventoryEntry[] = [];
+  const freezerReps: InventoryEntry[] = [];
+  for (const group of groups) {
+    const refBatch = group.batches.find((row) => row.location !== "freezer");
+    if (refBatch) {
+      const days = daysUntil(refBatch.expiration_date);
+      if (days !== null && days < 0) expiredReps.push(refBatch);
+      else if (days !== null && days >= 0 && days <= EXPIRING_DAYS) {
+        soonReps.push(refBatch);
+      }
+    }
+    const qualityBatch = group.batches.find(
+      (row) => row.location === "freezer" && row.freezer_quality_date,
+    );
+    if (qualityBatch) {
+      const days = daysUntil(qualityBatch.freezer_quality_date);
+      if (days !== null && days <= 7) freezerReps.push(qualityBatch);
+    }
+  }
 
   const unchecked = grocery.filter((item) => !item.checked).length;
 
-  const lowRow = useMemo(() => {
+  const lowGroup = useMemo(() => {
     const listedIds = new Set([
       ...grocery.filter((g) => !g.checked).map((g) => g.item_id).filter(Boolean) as string[],
       ...addedLocal,
     ]);
-    return [...pantry]
-      .filter((row) =>
-        isLowStock(row, row.item) &&
-        !listedIds.has(row.item_id) &&
-        !ignored.includes(row.item_id)
+    return groups
+      .filter(
+        (group) =>
+          !listedIds.has(group.item.id) && !ignored.includes(group.item.id),
       )
-      .sort((a, b) => a.quantity - b.quantity)[0] ?? null;
-  }, [pantry, grocery, addedLocal, ignored]);
+      .filter((group) => group.low)
+      .sort((a, b) => a.totalQuantity - b.totalQuantity)[0] ?? null;
+  }, [groups, grocery, addedLocal, ignored]);
 
   // Auto-clean persisted ignores for items that are no longer low
   useEffect(() => {
     const currentLowIds = new Set(
-      pantry.filter((row) => isLowStock(row, row.item)).map((row) => row.item_id)
+      groups.filter((group) => group.low).map((group) => group.item.id),
     );
     const cleaned = ignored.filter((id) => currentLowIds.has(id));
     if (cleaned.length !== ignored.length) {
       setIgnored(cleaned);
     }
-  }, [pantry, ignored]);
+  }, [groups, ignored]);
 
   const weekStart = mondayOf(new Date(`${today}T00:00:00Z`));
   const todayIndex = Math.round(
@@ -139,7 +145,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
 
   const cards: Card[] = [];
 
-  const expiredSorted = [...expired].sort((a, b) =>
+  const expiredSorted = [...expiredReps].sort((a, b) =>
     compareByExpiry(
       a.expiration_date,
       a.item.name,
@@ -147,7 +153,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       b.item.name,
     ),
   );
-  const soonSorted = [...expiring].sort((a, b) =>
+  const soonSorted = [...soonReps].sort((a, b) =>
     compareByExpiry(
       a.expiration_date,
       a.item.name,
@@ -205,7 +211,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
     });
   }
 
-  const freezerSorted = [...freezerNear].sort((a, b) =>
+  const freezerSorted = [...freezerReps].sort((a, b) =>
     compareByExpiry(
       a.freezer_quality_date,
       a.item.name,
@@ -240,17 +246,17 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
     });
   }
 
-  if (lowRow) {
-    const out = lowRow.quantity <= 0;
+  if (lowGroup) {
+    const out = lowGroup.totalQuantity <= 0;
     async function addToList() {
-      if (!lowRow) return;
+      if (!lowGroup) return;
       setBusy(true);
       const result = await addGroceryItem({
-        name: lowRow.item.name,
-        itemId: lowRow.item_id,
-        categoryId: lowRow.item.category_id,
+        name: lowGroup.item.name,
+        itemId: lowGroup.item.id,
+        categoryId: lowGroup.item.category_id,
         quantity: 1,
-        unit: lowRow.unit ?? lowRow.item.unit,
+        unit: lowGroup.batches[0]?.unit ?? lowGroup.item.unit,
         source: "low_stock",
       });
       setBusy(false);
@@ -258,23 +264,23 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
         toast.error(result.error);
         return;
       }
-      setAddedLocal((prev) => [...new Set([...prev, lowRow.item_id])]);
+      setAddedLocal((prev) => [...new Set([...prev, lowGroup.item.id])]);
       if (result.data.created) {
-        toast.success(`${lowRow.item.name} added to your shopping list`);
+        toast.success(`${lowGroup.item.name} added to your shopping list`);
       } else {
-        toast.message(`${lowRow.item.name} is already on your list`);
+        toast.message(`${lowGroup.item.name} is already on your list`);
       }
     }
     const handleIgnore = () => {
-      if (!lowRow) return;
-      setIgnored([...new Set([...ignored, lowRow.item_id])]);
+      if (!lowGroup) return;
+      setIgnored([...new Set([...ignored, lowGroup.item.id])]);
     };
     cards.push({
       key: "low",
-      emoji: foodEmoji(lowRow.item.name),
+      emoji: foodEmoji(lowGroup.item.name),
       line: out
-        ? `${lowRow.item.name} is out of stock`
-        : `${lowRow.item.name} is running low`,
+        ? `${lowGroup.item.name} is out of stock`
+        : `${lowGroup.item.name} is running low`,
       action: (
         <span>
           <button

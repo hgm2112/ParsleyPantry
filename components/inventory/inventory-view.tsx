@@ -29,16 +29,25 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { ScanSheet } from "@/components/scan-sheet";
 import {
-  addToInventory,
   addInventoryToGrocery,
-  consumeInventory,
+  consumeFromItem,
   deleteInventory,
+  restoreBatches,
   resolveBarcode,
   updateInventory,
 } from "@/app/(app)/inventory/actions";
 import { compareByExpiry, expiryBucket } from "@/lib/expiry";
 import { effectiveExpiryDate, expiryChipProps } from "@/lib/freezer";
-import { displayQtyUnit, isLowStock, stockPoolKey } from "@/lib/stock";
+import {
+  earliestEffective,
+  groupByItem,
+  multiDate,
+  pickFefoBatch,
+  scopedBatches,
+  toBatchSnapshot,
+  type ItemGroup,
+} from "@/lib/batches";
+import { displayQtyUnit, stockPoolKey } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
 
@@ -68,54 +77,59 @@ export function InventoryView({
   const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [consumeTarget, setConsumeTarget] = useState<{
-    entry: InventoryEntry;
+    item: ItemGroup["item"];
     mode: "partial" | "last";
   } | null>(null);
 
+  const groups = useMemo(() => groupByItem(rows), [rows]);
+
   const counts = useMemo(() => {
     const byLocation: Record<Tab, number> = {
-      all: rows.length,
+      all: groups.length,
       pantry: 0,
       fridge: 0,
       freezer: 0,
     };
-    for (const row of rows) byLocation[row.location] += 1;
+    for (const group of groups) {
+      for (const location of group.locations) byLocation[location] += 1;
+    }
     return byLocation;
-  }, [rows]);
+  }, [groups]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    let result = rows.filter((row) => {
-      if (tab !== "all" && row.location !== tab) return false;
-      if (subFilter && row.item.subcategory_id !== subFilter) return false;
+    const result = groups.filter((group) => {
+      const scoped = scopedBatches(group.batches, tab);
+      if (scoped.length === 0) return false;
+      if (subFilter && group.item.subcategory_id !== subFilter) return false;
       if (useSoon) {
-        // Storage-aware: frozen rows count down by best-quality date.
-        const bucket = expiryBucket(effectiveExpiryDate(row));
-        if (bucket !== "expired" && bucket !== "urgent" && bucket !== "soon") {
-          return false;
-        }
+        // Storage-aware: frozen batches count down by best-quality date.
+        const soon = scoped.some((row) => {
+          const bucket = expiryBucket(effectiveExpiryDate(row));
+          return bucket === "expired" || bucket === "urgent" || bucket === "soon";
+        });
+        if (!soon) return false;
       }
-      if (lowOnly && !isLowStock(row, row.item)) return false;
+      if (lowOnly && !group.low) return false;
       if (needle) {
-        const name = row.item.name.toLowerCase();
-        const barcode = row.item.barcode ?? "";
+        const name = group.item.name.toLowerCase();
+        const barcode = group.item.barcode ?? "";
         if (!name.includes(needle) && !barcode.includes(needle)) return false;
       }
       return true;
     });
 
-    result = [...result].sort((a, b) =>
+    return [...result].sort((a, b) =>
       compareByExpiry(
-        effectiveExpiryDate(a),
+        earliestEffective(scopedBatches(a.batches, tab)),
         a.item.name,
-        effectiveExpiryDate(b),
+        earliestEffective(scopedBatches(b.batches, tab)),
         b.item.name,
       ),
     );
-    return result;
-  }, [rows, tab, query, useSoon, lowOnly, subFilter]);
+  }, [groups, tab, query, useSoon, lowOnly, subFilter]);
 
-  const lowCount = rows.filter((row) => isLowStock(row, row.item)).length;
+  const lowCount = groups.filter((group) => group.low).length;
 
   const subNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -152,7 +166,8 @@ export function InventoryView({
           <div>
             <h1 className="text-lg font-extrabold">Pantry</h1>
             <p className="text-xs text-muted-foreground">
-              {rows.length} tracked
+              {groups.length} {groups.length === 1 ? "item" : "items"} ·{" "}
+              {rows.length} {rows.length === 1 ? "batch" : "batches"}
               {lowCount > 0 ? (
                 <span className="text-orange-600"> · {lowCount} running low</span>
               ) : null}
@@ -260,20 +275,23 @@ export function InventoryView({
         />
       ) : (
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((row) => (
-            <InventoryRow
-              key={row.id}
-              entry={row}
+          {visible.map((group) => (
+            <InventoryItemCard
+              key={group.item.id}
+              group={group}
+              tab={tab}
               subcategoryName={
-                row.item.subcategory_id
-                  ? (subNameById.get(row.item.subcategory_id) ?? null)
+                group.item.subcategory_id
+                  ? (subNameById.get(group.item.subcategory_id) ?? null)
                   : null
               }
               onHold={
-                holdsByItem[stockPoolKey(row.item_id, row.unit)] ?? 0
+                holdsByItem[
+                  stockPoolKey(group.item.id, group.batches[0]?.unit ?? null)
+                ] ?? 0
               }
               onConsume={(mode) =>
-                setConsumeTarget({ entry: row, mode })
+                setConsumeTarget({ item: group.item, mode })
               }
             />
           ))}
@@ -290,8 +308,15 @@ export function InventoryView({
 
       {consumeTarget ? (
         <ConsumeDialog
-          key={`${consumeTarget.entry.id}-${consumeTarget.mode}`}
-          inventory={consumeTarget.entry}
+          key={`${consumeTarget.item.id}-${tab}-${consumeTarget.mode}`}
+          item={consumeTarget.item}
+          totalQuantity={
+            scopedQuantity(
+              groups.find((group) => group.item.id === consumeTarget.item.id),
+              tab,
+            )
+          }
+          scope={tab}
           mode={consumeTarget.mode}
           open
           onOpenChange={(open) => {
@@ -301,6 +326,12 @@ export function InventoryView({
       ) : null}
     </div>
   );
+}
+
+function scopedQuantity(group: ItemGroup | undefined, tab: Tab): number {
+  if (!group) return 0;
+  if (tab === "all") return group.totalQuantity;
+  return group.locationTotals[tab] ?? 0;
 }
 
 function EmptyState({
@@ -343,13 +374,15 @@ function EmptyState({
   );
 }
 
-function InventoryRow({
-  entry,
+function InventoryItemCard({
+  group,
+  tab,
   subcategoryName,
   onHold,
   onConsume,
 }: {
-  entry: InventoryEntry;
+  group: ItemGroup;
+  tab: Tab;
   subcategoryName: string | null;
   onHold: number;
   onConsume: (mode: "partial" | "last") => void;
@@ -357,80 +390,108 @@ function InventoryRow({
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [useLastOpen, setUseLastOpen] = useState(false);
-  const low = isLowStock(entry, entry.item);
-  const quantity = entry.quantity;
-  const { unitText } = displayQtyUnit(entry.quantity, entry.unit);
+
+  const { item, batches } = group;
+  const scoped = scopedBatches(batches, tab);
+  const quantity =
+    tab === "all" ? group.totalQuantity : (group.locationTotals[tab] ?? 0);
+  const chipEntry = pickFefoBatch(scoped) ?? batches[0];
+  const unit = scoped[0]?.unit ?? batches[0]?.unit ?? item.unit;
+  const { unitText } = displayQtyUnit(quantity, unit);
+  const scopedLocations = tab === "all" ? group.locations : [tab];
+  const multi = multiDate(scoped);
+  const low = group.low;
 
   async function quickUse() {
-    const name = entry.item.name;
-    const previousQuantity = entry.quantity;
-    const result = await consumeInventory({
-      inventoryId: entry.id,
+    const result = await consumeFromItem({
+      itemId: item.id,
       amount: 1,
+      location: tab === "all" ? undefined : tab,
       addToGrocery: false,
     });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success(`Used 1 ${name}`, {
+    toast.success(`Used 1 ${item.name}`, {
       action: {
         label: "Undo",
-        onClick: () =>
-          void updateInventory({
-            inventoryId: entry.id,
-            quantity: previousQuantity,
-          }),
+        onClick: () => void restoreBatches({ snapshots: result.data.snapshots }),
       },
     });
     router.refresh();
   }
 
   async function confirmUseLast() {
-    const name = entry.item.name;
-    const previousQuantity = entry.quantity;
-    const result = await consumeInventory({
-      inventoryId: entry.id,
-      amount: entry.quantity,
+    const result = await consumeFromItem({
+      itemId: item.id,
+      amount: quantity,
+      location: tab === "all" ? undefined : tab,
       addToGrocery: false,
     });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success(`Used the last ${name} · removed from pantry`, {
-      action: {
-        label: "Undo",
-        onClick: () =>
-          void addToInventory({
-            itemId: entry.item.id,
-            name: entry.item.name,
-            location: entry.location,
-            quantity: previousQuantity,
-            unit: entry.unit ?? undefined,
-            expirationDate: entry.expiration_date ?? undefined,
-          }),
+    toast.success(
+      `Used the last ${item.name} · removed from pantry`,
+      {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void restoreBatches({ snapshots: result.data.snapshots }),
+        },
+        duration: 8000,
       },
-      duration: 8000,
-    });
+    );
     router.refresh();
   }
 
   async function quickAdd() {
+    const target = pickFefoBatch(scoped);
+    if (!target) return;
     const result = await updateInventory({
-      inventoryId: entry.id,
-      quantity: quantity + 1,
+      inventoryId: target.id,
+      quantity: target.quantity + 1,
     });
     if (!result.ok) toast.error(result.error);
+    else router.refresh();
   }
 
   async function toggleLow() {
-    const result = await updateInventory({
-      inventoryId: entry.id,
-      isLow: !entry.is_low,
+    const target = !batches.some((row) => row.is_low);
+    for (const row of batches) {
+      if (row.is_low === target) continue;
+      const result = await updateInventory({
+        inventoryId: row.id,
+        isLow: target,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+    }
+    if (target) toast.success(`${item.name} flagged as running low`);
+    router.refresh();
+  }
+
+  async function removeItem() {
+    const snapshots = batches.map(toBatchSnapshot);
+    for (const row of batches) {
+      const result = await deleteInventory(row.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+    }
+    toast.success(`${item.name} removed`, {
+      action: {
+        label: "Undo",
+        onClick: () => void restoreBatches({ snapshots }),
+      },
+      duration: 8000,
     });
-    if (!result.ok) toast.error(result.error);
-    else if (!entry.is_low) toast.success(`${entry.item.name} flagged as running low`);
+    router.refresh();
   }
 
   return (
@@ -438,12 +499,12 @@ function InventoryRow({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <Link
-            href={`/inventory/${entry.id}`}
+            href={`/inventory/${item.id}`}
             prefetch
             className="flex min-w-0 flex-1 items-center gap-1.5"
           >
             <span className="truncate text-sm font-semibold">
-              {entry.item.name}
+              {item.name}
             </span>
             {low ? (
               <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
@@ -454,7 +515,7 @@ function InventoryRow({
             <Button
               variant="outline"
               size="icon-sm"
-              aria-label={`Add one ${entry.item.name}`}
+              aria-label={`Add one ${item.name}`}
               onClick={quickAdd}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -465,7 +526,7 @@ function InventoryRow({
             <Button
               variant="outline"
               size="icon-sm"
-              aria-label={`Use one ${entry.item.name}`}
+              aria-label={`Use one ${item.name}`}
               onClick={() => {
                 if (quantity <= 1) setUseLastOpen(true);
                 else void quickUse();
@@ -498,10 +559,10 @@ function InventoryRow({
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
-                void addInventoryToGrocery(entry.id).then((result) => {
+                void addInventoryToGrocery(batches[0].id).then((result) => {
                   toast.success(
                     result.ok && result.data.created
-                      ? `${entry.item.name} added to grocery list`
+                      ? `${item.name} added to grocery list`
                       : result.ok
                         ? "Already on the grocery list"
                         : result.error,
@@ -516,7 +577,7 @@ function InventoryRow({
                 void toggleLow();
               }}
             >
-              <CircleAlert /> {entry.is_low ? "Clear low flag" : "Mark running low"}
+              <CircleAlert /> {low ? "Clear low flag" : "Mark running low"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -531,7 +592,7 @@ function InventoryRow({
         </div>
 
         <Link
-          href={`/inventory/${entry.id}`}
+          href={`/inventory/${item.id}`}
           prefetch
           className="flex flex-wrap items-center gap-1.5"
         >
@@ -540,8 +601,21 @@ function InventoryRow({
               {unitText}
             </span>
           ) : null}
-          <ExpiryChip {...expiryChipProps(entry)} className="uppercase" />
-          <LocationBadge location={entry.location} className="uppercase" />
+          {chipEntry ? (
+            <ExpiryChip {...expiryChipProps(chipEntry)} className="uppercase" />
+          ) : null}
+          {multi ? (
+            <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold uppercase text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+              Multiple dates
+            </span>
+          ) : null}
+          {scopedLocations.map((location) => (
+            <LocationBadge
+              key={location}
+              location={location}
+              className="uppercase"
+            />
+          ))}
           {subcategoryName ? (
             <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase text-emerald-800">
               {subcategoryName}
@@ -558,8 +632,8 @@ function InventoryRow({
       <ConfirmDialog
         open={useLastOpen}
         onOpenChange={setUseLastOpen}
-        title={`Use the last ${entry.item.name}?`}
-        description={`${locationLabel(entry.location)} stock will be removed from your pantry. The catalog item stays for next time.`}
+        title={`Use the last ${item.name}?`}
+        description={`${scopedLocations.map(locationLabel).join(", ")} stock will be removed from your pantry. The catalog item stays for next time.`}
         confirmLabel="Used the last one"
         onConfirm={confirmUseLast}
       />
@@ -567,19 +641,13 @@ function InventoryRow({
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={`Remove ${entry.item.name}?`}
-        description={`${locationLabel(entry.location)} stock of ${quantity} will be deleted. The catalog item stays.`}
+        title={`Remove ${item.name}?`}
+        description={`All ${batches.length} ${
+          batches.length === 1 ? "batch" : "batches"
+        } (${quantity} total) will be deleted. The catalog item stays.`}
         confirmLabel="Remove"
         destructive
-        onConfirm={async () => {
-          const result = await deleteInventory(entry.id);
-          if (!result.ok) {
-            toast.error(result.error);
-            return;
-          }
-          toast.success(`${entry.item.name} removed`);
-          router.refresh();
-        }}
+        onConfirm={removeItem}
       />
     </li>
   );

@@ -9,6 +9,7 @@ import {
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { groupByItem } from "@/lib/batches";
 import { cn } from "@/lib/utils";
 import type { CategoryRow, InventoryEntry, ItemRow, RecipeRow } from "@/lib/types";
 
@@ -121,11 +122,13 @@ async function SearchContent({ query }: { query: string }) {
     .order("sort_order", { ascending: true });
   const categories = (categoriesResult.data ?? []) as CategoryRow[];
 
-  const inventoryItemIds = new Set(inventory.map((row) => row.item_id));
+  // One card per item — batches (locations/dates) are shown as totals.
+  const inventoryGroups = groupByItem(inventory);
+  const inventoryItemIds = new Set(inventoryGroups.map((group) => group.item.id));
   const catalogOnly = items.filter((item) => !inventoryItemIds.has(item.id));
 
   const total =
-    recipes.length + inventory.length + catalogOnly.length + grocery.length;
+    recipes.length + inventoryGroups.length + catalogOnly.length + grocery.length;
 
   if (total === 0) {
     return <EmptySearch query={query} />;
@@ -136,36 +139,39 @@ async function SearchContent({ query }: { query: string }) {
 
   return (
     <div className="space-y-2">
-      {inventory.length > 0 ? (
+      {inventoryGroups.length > 0 ? (
         <section>
           <SectionHeader
             icon={Package}
             title="In your pantry"
-            count={inventory.length}
+            count={inventoryGroups.length}
           />
           <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {inventory.map((row) => (
-              <li key={row.id}>
+            {inventoryGroups.map((group) => (
+              <li key={group.item.id}>
                 <Link
-                  href={`/inventory/${row.id}`}
+                  href={`/inventory/${group.item.id}`}
                   className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
                 >
                   <span
                     className={cn(
                       "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
-                      tileGradient(row.item.name),
+                      tileGradient(group.item.name),
                     )}
                     aria-hidden
                   >
-                    {row.item.icon ?? foodEmoji(row.item.name)}
+                    {group.item.icon ?? foodEmoji(group.item.name)}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">
-                      {row.item.name}
+                      {group.item.name}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {row.quantity}
-                      {row.unit ? ` ${row.unit}` : ""} · {row.location}
+                      {group.totalQuantity}
+                      {group.batches[0]?.unit ?? group.item.unit
+                        ? ` ${group.batches[0]?.unit ?? group.item.unit}`
+                        : ""}{" "}
+                      · {group.locations.join(", ")}
                     </span>
                   </span>
                 </Link>

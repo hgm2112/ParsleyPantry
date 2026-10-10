@@ -27,6 +27,7 @@ import {
 } from "@/app/(app)/grocery/actions";
 import type { AddGroceryInput } from "@/app/(app)/grocery/actions";
 import { parseQuantityText } from "@/lib/stock";
+import { groupByItem, type ItemGroup } from "@/lib/batches";
 import type { CategoryRow, InventoryEntry } from "@/lib/types";
 import type { GroceryRecipe } from "@/components/grocery/grocery-view";
 
@@ -57,22 +58,22 @@ export function AddGrocerySheet({
 
   const filteredInventory = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const rows = inventory.filter((entry) => {
+    const groups = groupByItem(inventory).filter((group) => {
       if (!needle) return true;
       return (
-        entry.item.name.toLowerCase().includes(needle) ||
-        (entry.item.barcode ?? "").includes(needle)
+        group.item.name.toLowerCase().includes(needle) ||
+        (group.item.barcode ?? "").includes(needle)
       );
     });
-    return rows.sort((a, b) => a.item.name.localeCompare(b.item.name));
+    return groups.sort((a, b) => a.item.name.localeCompare(b.item.name));
   }, [inventory, search]);
 
-  async function addFromInventory(entry: InventoryEntry) {
+  async function addFromInventory(group: ItemGroup) {
     const result = await addGroceryItem({
-      itemId: entry.item.id,
-      name: entry.item.name,
+      itemId: group.item.id,
+      name: group.item.name,
       quantity: 1,
-      unit: entry.item.unit,
+      unit: group.item.unit,
       source: "manual",
     });
     if (!result.ok) {
@@ -81,8 +82,8 @@ export function AddGrocerySheet({
     }
     toast.success(
       result.data.created
-        ? `${entry.item.name} added to list`
-        : `${entry.item.name} is already on the list`,
+        ? `${group.item.name} added to list`
+        : `${group.item.name} is already on the list`,
     );
     onAdded();
   }
@@ -176,23 +177,23 @@ export function AddGrocerySheet({
                   No pantry items match.
                 </li>
               ) : (
-                filteredInventory.map((entry) => (
+                filteredInventory.map((group) => (
                   <li
-                    key={entry.id}
+                    key={group.item.id}
                     className="flex items-center gap-2 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">
-                        {entry.item.name}
+                        {group.item.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {entry.quantity} left · {entry.location}
+                        {group.totalQuantity} left · {group.locations.join(", ")}
                       </p>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => void addFromInventory(entry)}
+                      onClick={() => void addFromInventory(group)}
                     >
                       <Plus /> Add
                     </Button>
