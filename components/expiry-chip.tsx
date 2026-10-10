@@ -10,10 +10,12 @@ export function ExpiryChip({
   date,
   mode = "refrigerated",
   className,
+  short,
 }: {
   date: string | null;
   mode?: ExpiryChipMode;
   className?: string;
+  short?: boolean;
 }) {
   use(io());
 
@@ -79,7 +81,7 @@ export function ExpiryChip({
         className,
       )}
     >
-      {formatExpiry(date)}
+      {formatExpiry(date, { short })}
     </span>
   );
 }

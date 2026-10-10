@@ -137,12 +137,15 @@ export function daysUntil(dateStr: string | null): number | null {
   );
 }
 
-export function formatExpiry(dateStr: string | null): string {
+export function formatExpiry(dateStr: string | null, options?: { short?: boolean }): string {
   if (!dateStr) return "No expiry";
   const days = daysUntil(dateStr);
   if (days === null) return "No expiry";
-  if (days < -1) return `Expired ${Math.abs(days)}d ago`;
-  if (days === -1) return "Expired yesterday";
+  if (days < -1)
+    return options?.short
+      ? `Exp ${Math.abs(days)}d ago`
+      : `Expired ${Math.abs(days)}d ago`;
+  if (days === -1) return options?.short ? "Exp yesterday" : "Expired yesterday";
   if (days === 0) return "Expires today";
   if (days === 1) return "Expires tomorrow";
   if (days <= 14) return `In ${days}d`;

@@ -40,7 +40,7 @@ import {
   type CanonicalCandidateView,
   type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
-import { expiryChipProps, formatFreezerQuality } from "@/lib/freezer";
+import { expiryChipProps } from "@/lib/freezer";
 import {
   fefoSort,
   isItemLow,
@@ -672,38 +672,31 @@ export function InventoryDetail({
                 key={batch.id}
                 className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
               >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <LocationBadge
-                      location={batch.location}
-                      className="uppercase"
-                    />
-                    <span className="text-sm font-extrabold tabular-nums">
-                      {batch.quantity % 1 === 0
-                        ? batch.quantity
-                        : batch.quantity.toFixed(2).replace(/0$/, "")}
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <LocationBadge
+                    location={batch.location}
+                    className="uppercase"
+                  />
+                  <ExpiryChip
+                    {...expiryChipProps(batch)}
+                    className="uppercase"
+                    short
+                  />
+                  <span className="text-sm font-extrabold tabular-nums">
+                    {batch.quantity % 1 === 0
+                      ? batch.quantity
+                      : batch.quantity.toFixed(2).replace(/0$/, "")}
+                  </span>
+                  {unitText ? (
+                    <span className="text-xs font-semibold uppercase text-muted-foreground">
+                      {" - "}
                     </span>
-                    {unitText ? (
-                      <span className="text-xs font-semibold uppercase text-muted-foreground">
-                        {unitText}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <ExpiryChip
-                      {...expiryChipProps(batch)}
-                      className="uppercase"
-                    />
-                    {batch.location === "freezer" ? (
-                      <span className="text-xs text-muted-foreground">
-                        {batch.freezer_quality_date
-                          ? formatFreezerQuality(batch.freezer_quality_date)
-                          : batch.frozen_at
-                            ? "No quality date tracked"
-                            : "Date not tracked"}
-                      </span>
-                    ) : null}
-                  </div>
+                  ) : null}
+                  {unitText ? (
+                    <span className="text-xs font-semibold uppercase text-muted-foreground">
+                      {unitText}
+                    </span>
+                  ) : null}
                 </div>
                 <Button
                   variant="ghost"
