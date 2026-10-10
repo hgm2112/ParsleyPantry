@@ -124,7 +124,14 @@ export function AddForm({
     const clean = code.trim();
     if (!/^\d{6,14}$/.test(clean)) return;
     setLookupBusy(true);
-    const result = await resolveBarcode(clean);
+    let result;
+    try {
+      result = await resolveBarcode(clean);
+    } catch {
+      setLookupBusy(false);
+      toast.error("Lookup failed — check your connection and try again.");
+      return;
+    }
     setLookupBusy(false);
     if (!result.ok) {
       toast.error(result.error);

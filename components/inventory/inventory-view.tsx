@@ -124,7 +124,13 @@ export function InventoryView({
 
   async function handleBarcode(code: string) {
     setScanOpen(false);
-    const result = await resolveBarcode(code);
+    let result;
+    try {
+      result = await resolveBarcode(code);
+    } catch {
+      toast.error("Lookup failed — check your connection and try again.");
+      return;
+    }
     if (!result.ok) {
       toast.error(result.error);
       return;

@@ -4,6 +4,50 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 9) — Android PWA barcode scan fix (diagnostics + native hardening + ZXing fallback + lookup toasts)
+
+**Shipped**
+- `components/scanner.tsx`: `?debug=scan` (persists via `localStorage pp-scan-debug`; `?debug=scanoff` clears) on-screen overlay (masked codes only) + console: decoder path, getSupportedFormats, detect/ZXing counts+last errors, video dims, emits. Lowercase spec formats for `BarcodeDetector` (`ean_13` etc.) + `getSupportedFormats()` gate requiring `ean_13`/`upc_a`. Native: 5 consecutive `detect()` rejections → auto ZXing; 8s zero-result watchdog → ZXing. ZXing callback now handles `error` (non-retryable sets error state); `playVideoOnLoadAsync` reject(false) and `track.ended` + play timeout produce actionable messages. `forceZxing` restarts effect for seamless fallback.
+- Lookup sites now catch `resolveBarcode` throws (network) and toast "Lookup failed — check your connection and try again.": `inventory-view.tsx:handleBarcode`, `add-form.tsx:lookupBarcode`, `shop-session.tsx:handleBarcode` (close-first kept; errors guaranteed to surface).
+- No sensitive data logged (codes masked to last 4 chars).
+
+**Gotchas**
+- Overlay only appears after `?debug=scan` (or persisted flag) and during a scan session.
+- Fallback is sticky for the session (page reload clears); manual "Try again" restarts current decoder.
+- Dev: stop `next dev` before `npm run build` (as before).
+- PWA on Android: network-only SW → reopen app or hard refresh after deploy to pick up new build; camera permission already granted is instant on fallback restart.
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` clean.
+- Open PWA on phone with `?debug=scan` once; scan grocery item; report overlay lines.
+
+**Open — next session**
+- User to reproduce on Android PWA vs tab, share debug overlay output (decoder, native counts/errors, zxing counts/errors, standalone, emits).
+- Decide on follow-ups (drop native entirely? keep both with heuristics?).
+
+## 2026-10-09 (part 8) — Grocery stores inline editing + Smart Actions ignore + members polish
+
+**Shipped**
+- Grocery `/stores` list (`stores-manager.tsx`): per-store expand/collapse (chevrons) with inline aisle editing (add, reorder via dnd, rename, delete). Basic ops scoped to inline; focused `[id]` route preserved for advanced tools. Create no longer auto-navigates.
+- Focused store detail (`aisle-editor.tsx`): replaced "Aisles"/"Flat" button with labeled `<Switch size="sm">` (matches list row). Fixed "In view" text overflowing small button → name badge + "Hide"/"Show" outline button.
+- Home Smart Actions: "Don't add" option for low-stock items (ignores listed items, persists in localStorage, cycles next).
+- Settings members: switched to separate queries + realtime (`postgres_changes`), no email display in list.
+- Related migration for household_members realtime.
+
+**Gotchas**
+- Inline state (expanded + local forms) resets on `router.refresh()` after mutations.
+- Inline uses `prompt`/`confirm` (kept simple per scope).
+- AisleInline defined nested (re-render considerations).
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` clean.
+- Pushed (`435a646`).
+
+**Open — next session**
+- knifefork image removal still pending (`week-meals.tsx`).
+- Untracked working files: `parsley2.svg`, `example-thisweeksdinner.jpg`, `shoppinglistpage.jpg`, `dev.log`, `PPmessedup.jpg`.
+- (add any new items here)
+
 ## 2026-10-09 (part 7) — Confirmation emails pointed at localhost
 
 **Shipped**

@@ -167,6 +167,8 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
       } else {
         setPending({ barcode: code, off });
       }
+    } catch {
+      toast.error("Lookup failed — check your connection and try again.");
     } finally {
       busyRef.current = false;
     }
