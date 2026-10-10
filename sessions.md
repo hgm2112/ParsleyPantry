@@ -4,6 +4,23 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up. Kept local on purpose (not committed); git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-09 (part 13) — Grocery: mobile header toggle moves into button cluster
+
+**Shipped**
+- `grocery-view.tsx`: mobile (<md) header now shows `[+Add] [Stores] [Aisles|Categories] [⤢]` — the segmented toggle moved from under the title into the right button cluster, positioned after Stores, before fullscreen. Desktop (md+) unchanged (toggle beside title).
+- Extracted shared `modeToggle(extra)` helper (same state/handlers) so the two breakpoint-specific instances (`hidden md:flex` left, `md:hidden` right) aren't duplicated markup.
+- Right cluster got `ml-auto flex-wrap justify-end` so it stays right-aligned when it wraps to its own line (typical on ~375px phones — title line + cluster line).
+
+**Gotchas**
+- Edit-tool note: insert-before-`return (` must match the component-level return (2-space), not a `.map()` callback return — one misfire landed the helper inside a group map (fixed).
+
+**Verify**
+- `npx tsc --noEmit && npm run lint && npm run build` — only pre-existing lint issues.
+
+**Open — next session**
+- Android PWA scan debug overlay readings (part 9 still open).
+- Optional: filter 0-qty from recipes/search pantry checks; tighten add-form min qty to 1.
+
 ## 2026-10-09 (part 12) — Home Smart Actions: split expired vs expiring soon cards
 
 **Shipped**

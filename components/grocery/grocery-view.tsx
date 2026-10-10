@@ -444,6 +444,40 @@ export function GroceryView({
     router.refresh();
   }
 
+  // Shared Aisles|Categories segmented control; visibility differs per breakpoint
+  // (beside the title on md+, in the button cluster on mobile).
+  function modeToggle(extra: string) {
+    return (
+      <div className={cn("flex overflow-hidden rounded-md border", extra)}>
+        <button
+          type="button"
+          disabled={stores.length === 0 || !hasAisleCapableStore}
+          onClick={() => void changeMode("aisle")}
+          className={cn(
+            "px-2 py-1 text-xs font-semibold disabled:opacity-40",
+            mode === "aisle"
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground hover:bg-accent",
+          )}
+        >
+          Aisles
+        </button>
+        <button
+          type="button"
+          onClick={() => void changeMode("category")}
+          className={cn(
+            "px-2 py-1 text-xs font-semibold",
+            mode === "category"
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground hover:bg-accent",
+          )}
+        >
+          Categories
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
@@ -456,41 +490,16 @@ export function GroceryView({
                 {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
               </p>
             </div>
-            <div className="flex overflow-hidden rounded-md border">
-              <button
-                type="button"
-                disabled={stores.length === 0 || !hasAisleCapableStore}
-                onClick={() => void changeMode("aisle")}
-                className={cn(
-                  "px-2 py-1 text-xs font-semibold disabled:opacity-40",
-                  mode === "aisle"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent",
-                )}
-              >
-                Aisles
-              </button>
-              <button
-                type="button"
-                onClick={() => void changeMode("category")}
-                className={cn(
-                  "px-2 py-1 text-xs font-semibold",
-                  mode === "category"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent",
-                )}
-              >
-                Categories
-              </button>
-            </div>
+            {modeToggle("hidden md:flex")}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus /> Add
             </Button>
             <Button size="sm" render={<Link href="/grocery/stores" />}>
               <Store /> Stores
             </Button>
+            {modeToggle("md:hidden")}
             <Button
               size="icon-sm"
               variant={fullscreen ? "default" : "outline"}
