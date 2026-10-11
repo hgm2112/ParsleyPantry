@@ -132,6 +132,17 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
       return;
     }
     toast.success(`${input.name} created`);
+    // Next.js preserves this page (Activity) instead of unmounting on
+    // navigation, so clear the fields or the next /recipes/new visit shows
+    // this recipe still pre-filled. Same pattern as the inventory add form.
+    setName("");
+    setDescription("");
+    setPrepTime("0");
+    setCookTime("0");
+    setYields("1");
+    setSource("");
+    setTagsText("");
+    setRows([]);
     router.push(`/recipes/${result.data.id}`);
     router.refresh();
   }

@@ -4,6 +4,20 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 32) — Recipes: fix stale "leftovers" pre-fill on New recipe
+
+**Shipped**
+- **Bug**: created + saved a recipe, then "New recipe" still showed it pre-filled. Cause: this Next.js (`cacheComponents: true`) hides pages with React `<Activity>` instead of unmounting on navigation, preserving client state for ~3 routes — `/recipes/new` kept the saved values. Not localStorage, no draft feature.
+- **`components/recipes/recipe-editor.tsx`** `save()`: the create branch now clears every field (name, description, prep/cook, yields, source, tags, ingredient rows) before `router.push`. Mirrors `add-form.tsx` (why pantry add never had this bug) per `node_modules/next/dist/docs/.../preserving-ui-state.md`. Edit branch untouched (lands on the edit page, where the data belongs).
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Create recipe → save → New recipe: form empty.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–32).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 31) — Pantry: mobile Scan button is now primary with icon
 
 **Shipped**
