@@ -4,6 +4,54 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 20) — Inventory card icons: info beside name, view/edit split
+
+**Shipped** (`components/inventory/inventory-view.tsx`, `InventoryItemCard`)
+- **Info icon moved next to the item name**: header row restructured — name `<Link>` + Info popover now share a `flex min-w-0 flex-1` group on the left (Link dropped `flex-1`, kept `min-w-0` so the name still truncates); low icon + qty cluster stay on the right. Popover trigger remains a sibling of the Link, never nested inside it.
+- **Info popover is view + explicit edit**: replaced the readOnly `Input` (looked editable) with plain text — "Matches recipes as" label (`text-xs text-muted-foreground`) + name (`text-sm font-medium`) — and a ghost pencil `Button` (`icon-sm`, aria "Edit match for X") that swaps in the editor. Popover is now controlled (`open`/`onOpenChange`); closing resets edit mode + draft.
+- **Card-level canonical edit**: editor = `Input` (autofocus, prefilled with the current canonical name, per-card datalist id `canonical-options-${item.id}`) + Save/Cancel → `setItemCanonical(item.id, draft.trim() || null)` (busy-guarded; empty = clear). Success toast "Matches recipes as X" / "Match cleared" → close popover → `router.refresh()` (server refreshes the `canonicalNames` map). Candidates via `listCanonicalCandidates()` loaded once per card, lazily on first pencil click (recipe names mapped to `{id: recipe:<name>, categoryId: null, canonicalItemId: null}` like `normalize-review.tsx`).
+- **Running-low popover is view-only**: readOnly `Input` replaced with plain text "Running low" + muted hint "Toggle from the item menu or detail page." No buttons.
+
+**Gotchas**
+- No Undo on card-level canonical edits (detail page keeps Clear match + Undo); clearing from the card unmounts the Info icon on refresh since `canonicalName` becomes null.
+- Unmapped items still show no Info icon (unchanged) — setting a first match stays a detail-page/normalize-review job.
+- Lint baseline has grown since the "4 pre-existing problems" note: part 19's `quick-bites-widget.tsx` (conditional `useMemo`s ×4, missing/unnecessary deps) + `home/page.tsx` (`any` ×3, unused `RecipeRow`) + `home-view.tsx` unused import — 16 problems total, none in `inventory-view.tsx`.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = 16 pre-existing problems, none in the touched file; `npm run build` passes.
+
+**Open — Next Session**
+- Apply pending canonical migrations if still not applied (`20261012120000_canonical_ingredients.sql` → `20261012130000_canonical_reviewed.sql`).
+- Post-deploy: `/inventory/normalize` → Run backfill → fix "Beef broth" / "Cream Cheese" rows.
+- Android PWA scan debug overlay readings (part 9 still open).
+
+## 2026-10-10 (part 19) — Quick Bites widget, batch row redesign, inventory view icons
+
+**Shipped**
+
+- **Quick Bites widget** (`components/home/quick-bites-widget.tsx`): New home dashboard widget filtering recipes tagged "quick bites" (case-insensitive), checks ingredient availability via `rootOf`/`toOunces`/`parseQuantityText` (same pattern as recipes page), renders 2-col cards with time pills. Added to `home-view.tsx` grid (order: Snacks → Quick Bites → Pantry Insights). `app/(app)/home/page.tsx` now fetches `recipe_ingredients` and flattens for widget.
+- **Batch row redesign** in `components/inventory/detail-form.tsx` (lines ~668-716): Collapsed to single line `[PANTRY] [EXP 12D AGO] [1] - [1LB] [Edit]`. Shortened "Expired"→"Exp" via new `short` prop on `formatExpiry` (`lib/expiry.ts`) and `ExpiryChip` (`components/expiry-chip.tsx`) — only used in batch rows. Removed redundant freezer quality-date plain-text span + unused `formatFreezerQuality` import.
+- **Inventory view icons** in `components/inventory/inventory-view.tsx`:
+  - Note icon (`Info` from lucide) after item name — click opens Popover with read-only Input showing `canonicalName` ("Matches recipes as X")
+  - Running low icon (`TriangleAlert`) — click opens Popover with read-only "Running low" text
+  - Both use `render` prop pattern (matching existing `DropdownMenuTrigger`) since `@base-ui/react` primitives don't support `asChild`
+  - Removed redundant "as {canonicalName}" line below chips
+  - Icons styled `h-3.5 w-3.5 shrink-0` with `gap-1.5` spacing, matching existing visual language
+
+**Gotchas**
+- `@base-ui/react` PopoverTrigger/TooltipTrigger don't support `asChild` — must use `render={<Component />}` instead
+- `short` prop on ExpiryChip only used in batch rows (detail-form); main expiry chips elsewhere unchanged
+- Quick Bites widget doesn't auto-deduct inventory; SnackWidget unchanged
+- `recipe_ingredients` added to home page select; flattened `recipeIngredients` passed to widget
+
+**Verify**
+- `npx tsc --noEmit` clean
+- `npm run build` passes
+
+**Open — Next Session**
+- Apply any pending migrations if needed
+- [Any follow-ups from user feedback on icons/widget]
+
 ## 2026-10-10 (part 18) — Canonical: rename promotes instead of erroring, own-name clear, longer-candidate skip, Clear match + Undo
 
 **Shipped** (driven by user hitting the part-17 guard: *'An item named "Beef broth" already matches as this ingredient'*)

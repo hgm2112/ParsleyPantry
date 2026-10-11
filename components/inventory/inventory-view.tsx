@@ -8,6 +8,7 @@ import {
   Info,
   Minus,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
   ShoppingCart,
@@ -34,9 +35,12 @@ import {
   addInventoryToGrocery,
   consumeFromItem,
   deleteInventory,
+  listCanonicalCandidates,
   restoreBatches,
   resolveBarcode,
+  setItemCanonical,
   updateInventory,
+  type CanonicalCandidateView,
 } from "@/app/(app)/inventory/actions";
 import { compareByExpiry, expiryBucket } from "@/lib/expiry";
 import { effectiveExpiryDate, expiryChipProps } from "@/lib/freezer";
@@ -399,6 +403,11 @@ function InventoryItemCard({
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [useLastOpen, setUseLastOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [editingCanonical, setEditingCanonical] = useState(false);
+  const [canonicalDraft, setCanonicalDraft] = useState("");
+  const [canonicalOptions, setCanonicalOptions] = useState<CanonicalCandidateView[]>([]);
+  const [canonicalBusy, setCanonicalBusy] = useState(false);
 
   const { item, batches } = group;
   const scoped = scopedBatches(batches, tab);
@@ -467,6 +476,52 @@ function InventoryItemCard({
     else router.refresh();
   }
 
+  /** Reset view/edit mode whenever the info popover closes. */
+  function handleInfoOpenChange(open: boolean) {
+    setInfoOpen(open);
+    if (!open) {
+      setEditingCanonical(false);
+      setCanonicalDraft("");
+    }
+  }
+
+  /** Enter edit mode; candidates load once per card, lazily. */
+  async function openCanonicalEdit() {
+    setEditingCanonical(true);
+    if (canonicalOptions.length > 0) return;
+    const result = await listCanonicalCandidates();
+    if (result.ok) {
+      setCanonicalOptions([
+        ...result.data.items,
+        ...result.data.recipeNames.map((name) => ({
+          id: `recipe:${name}`,
+          name,
+          categoryId: null,
+          canonicalItemId: null,
+        })),
+      ]);
+    }
+  }
+
+  async function commitCanonical() {
+    if (canonicalBusy) return;
+    setCanonicalBusy(true);
+    const result = await setItemCanonical(item.id, canonicalDraft.trim() || null);
+    setCanonicalBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setEditingCanonical(false);
+    setInfoOpen(false);
+    toast.success(
+      result.data.canonicalName
+        ? `Matches recipes as ${result.data.canonicalName}`
+        : "Match cleared",
+    );
+    router.refresh();
+  }
+
   async function toggleLow() {
     const target = !batches.some((row) => row.is_low);
     for (const row of batches) {
@@ -507,34 +562,95 @@ function InventoryItemCard({
     <li className="rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-1.5">
-          <Link
-            href={`/inventory/${item.id}`}
-            prefetch
-            className="flex min-w-0 flex-1 items-center"
-          >
-            <span className="truncate text-sm font-semibold">
-              {item.name}
-            </span>
-          </Link>
-          {canonicalName ? (
-            <Popover>
-              <PopoverTrigger
-                render={
-                  <Info className="h-3.5 w-3.5 shrink-0 cursor-pointer text-muted-foreground hover:text-foreground" />
-                }
-              />
-              <PopoverContent align="start" sideOffset={4} className="max-w-xs">
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="text"
-                    readOnly
-                    value={canonicalName}
-                    className="text-sm"
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : null}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <Link
+              href={`/inventory/${item.id}`}
+              prefetch
+              className="flex min-w-0 items-center"
+            >
+              <span className="truncate text-sm font-semibold">
+                {item.name}
+              </span>
+            </Link>
+            {canonicalName ? (
+              <Popover open={infoOpen} onOpenChange={handleInfoOpenChange}>
+                <PopoverTrigger
+                  render={
+                    <Info className="h-3.5 w-3.5 shrink-0 cursor-pointer text-muted-foreground hover:text-foreground" />
+                  }
+                />
+                <PopoverContent align="start" sideOffset={4} className="max-w-xs">
+                  {editingCanonical ? (
+                    <form
+                      className="flex items-center gap-1.5"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void commitCanonical();
+                      }}
+                    >
+                      <Input
+                        autoFocus
+                        list={`canonical-options-${item.id}`}
+                        value={canonicalDraft}
+                        aria-label="Canonical ingredient"
+                        className="h-8 text-sm"
+                        onChange={(event) => setCanonicalDraft(event.target.value)}
+                      />
+                      <datalist id={`canonical-options-${item.id}`}>
+                        {canonicalOptions.map((option) => (
+                          <option key={option.id} value={option.name} />
+                        ))}
+                      </datalist>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 shrink-0 px-2 text-xs"
+                        disabled={canonicalBusy}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 shrink-0 px-2 text-xs"
+                        onClick={() => {
+                          setEditingCanonical(false);
+                          setCanonicalDraft("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">
+                          Matches recipes as
+                        </p>
+                        <p className="truncate text-sm font-medium">
+                          {canonicalName}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Edit match for ${item.name}`}
+                        onClick={() => {
+                          setCanonicalDraft(canonicalName);
+                          void openCanonicalEdit();
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            ) : null}
+          </div>
           {low ? (
             <Popover>
               <PopoverTrigger
@@ -543,14 +659,10 @@ function InventoryItemCard({
                 }
               />
               <PopoverContent align="start" sideOffset={4} className="max-w-xs">
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="text"
-                    readOnly
-                    value="Running low"
-                    className="text-sm"
-                  />
-                </div>
+                <p className="text-sm font-medium">Running low</p>
+                <p className="text-xs text-muted-foreground">
+                  Toggle from the item menu or detail page.
+                </p>
               </PopoverContent>
             </Popover>
           ) : null}
