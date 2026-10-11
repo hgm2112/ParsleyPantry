@@ -4,6 +4,22 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 35) — Grocery edit dialog: mobile footer matches desktop ([Trash][Save])
+
+**Shipped**
+- `components/grocery/item-dialog.tsx`: mobile footer was stacked (`DialogFooter` defaults to `flex-col-reverse` <640px → trash chip above Save). Now one row matching desktop.
+  - Footer: added `flex-row` (overrides `flex-col-reverse`; DOM order `[Delete, Save]` → `[Trash][Save]`). `sm:flex-row sm:justify-end` unchanged, so desktop is identical.
+  - Delete: dropped `size="icon-sm"`, now `h-11 w-11 sm:h-8 sm:w-auto sm:px-2.5` — 44px square on mobile aligned with the tall `h-11` Save; compact chip restored at `sm:`. (Button merges className via cn/twMerge, so these override the default `h-8`.)
+  - Save untouched (`h-11 flex-1 sm:h-8`).
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Mobile /grocery → tap item: footer is `[🗑][SAVE]`, full width, matching heights. Desktop unchanged.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–35).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 34) — Pantry Scan: hidden on mobile; add-form Scan primary + wider
 
 **Shipped**

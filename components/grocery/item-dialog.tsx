@@ -353,11 +353,10 @@ export function ItemDialog({
           );
         })}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="flex-row gap-2 sm:gap-0">
           <Button
             variant="destructive"
-            size="icon-sm"
-            className="sm:h-8 sm:w-auto sm:px-2.5"
+            className="h-11 w-11 sm:h-8 sm:w-auto sm:px-2.5"
             onClick={remove}
             disabled={deleteBusy}
             aria-label={`Remove ${item.name}`}
