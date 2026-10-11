@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { categoryMatchKey } from "@/lib/kitchenowl";
-import { fileGroceryItem, syncStoreAislesToCategories } from "@/lib/grocery";
+import {
+  bumpGroceryAddMemory,
+  fileGroceryItem,
+  findOrCreateCatalogItem,
+  rememberItemStores,
+  syncStoreAislesToCategories,
+} from "@/lib/grocery";
 import type {
   GroceryViewMode,
   StoreAisleRow,
@@ -46,6 +52,26 @@ export async function addGroceryItem(
     const input = parsed.data;
     const { supabase, householdId, user } = await requireDal();
 
+    // Free-text adds (Manual tab, recipe ingredients with no catalog link)
+    // must land in the catalog so the type-ahead remembers them after the
+    // shopping line is cleared. Without this they leave no trace at all.
+    let itemId = input.itemId ?? null;
+    let categoryId = input.categoryId ?? null;
+    let unit = input.unit ?? null;
+    if (!itemId) {
+      const catalogItem = await findOrCreateCatalogItem(supabase, householdId, {
+        name: input.name,
+        categoryId,
+        unit,
+        createdBy: user.id,
+      });
+      if (catalogItem) {
+        itemId = catalogItem.id;
+        if (!categoryId) categoryId = catalogItem.category_id;
+        if (!unit) unit = catalogItem.unit;
+      }
+    }
+
     const lookup = supabase
       .from("grocery_items")
       .select("id")
@@ -53,7 +79,7 @@ export async function addGroceryItem(
       .eq("checked", false);
 
     const { data: existingRows } = await (
-      input.itemId ? lookup.eq("item_id", input.itemId) : lookup.eq("name", input.name)
+      itemId ? lookup.eq("item_id", itemId) : lookup.eq("name", input.name)
     ).limit(1);
 
     const existing = (existingRows ?? [])[0] as { id: string } | undefined;
@@ -66,11 +92,11 @@ export async function addGroceryItem(
       .from("grocery_items")
       .insert({
         household_id: householdId,
-        item_id: input.itemId ?? null,
+        item_id: itemId,
         name: input.name,
         quantity: input.quantity,
-        unit: input.unit ?? null,
-        category_id: input.categoryId ?? null,
+        unit,
+        category_id: categoryId,
         sale_only: input.saleOnly,
         source: input.source,
         created_by: user.id,
@@ -82,7 +108,8 @@ export async function addGroceryItem(
       return { ok: false, error: error?.message ?? "Could not add item" };
     }
 
-    await fileGroceryItem(supabase, householdId, (data as { id: string }).id);
+    await bumpGroceryAddMemory(supabase, householdId, itemId);
+    await fileGroceryItem(supabase, householdId, (data as { id: string }).id, itemId);
 
     revalidatePath("/grocery");
     return { ok: true, data: { id: (data as { id: string }).id, created: true } };
@@ -214,7 +241,7 @@ export async function restoreGroceryItems(
     if (parsed.data.length === 0) return { ok: true, data: { restored: 0 } };
     const { supabase, householdId, user } = await requireDal();
 
-    const { data: restored, error } = await supabase
+    const { error } = await supabase
       .from("grocery_items")
       .insert(
         parsed.data.map((item) => ({
@@ -234,10 +261,10 @@ export async function restoreGroceryItems(
       .select("id");
     if (error) return { ok: false, error: error.message };
 
-    // Cleared lines lose their store membership with their rows, so re-file
-    // them under the default store rather than dumping them in "Any store".
-    for (const row of (restored ?? []) as { id: string }[]) {
-      await fileGroceryItem(supabase, householdId, row.id);
+    // Re-file using remembered item stores when available (so memory works on
+    // undo too); falls back to primary store inside fileGroceryItem.
+    for (const item of parsed.data) {
+      await fileGroceryItem(supabase, householdId, item.id, item.item_id ?? null);
     }
 
     revalidatePath("/grocery");
@@ -585,6 +612,19 @@ export async function setGroceryItemStores(
         })),
       );
       if (error) return { ok: false, error: error.message };
+    }
+
+    // Filing a line that has a catalog item also remembers where you buy that
+    // item, so the next add lands in the right store instead of the default.
+    const { data: line } = await supabase
+      .from("grocery_items")
+      .select("item_id")
+      .eq("household_id", householdId)
+      .eq("id", groceryItemId)
+      .maybeSingle();
+    const catalogItemId = (line?.item_id as string | null) ?? null;
+    if (catalogItemId) {
+      await rememberItemStores(supabase, householdId, catalogItemId, wanted);
     }
 
     revalidatePath("/grocery");

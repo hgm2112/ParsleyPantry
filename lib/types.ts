@@ -75,6 +75,9 @@ export interface ItemRow {
   /** Last freezer food type chosen for this item (key from lib/freezer.ts). */
   freezer_food_type: string | null;
   created_by: string | null;
+  /** Count of times this catalog item has been added to grocery list (for ranking). */
+  grocery_add_count?: number | null;
+  grocery_last_added_at?: string | null;
 }
 
 export interface InventoryRow {
@@ -136,6 +139,13 @@ export interface HouseholdSettingsRow {
 export interface GroceryItemStoreRow {
   household_id: string;
   grocery_item_id: string;
+  store_id: string;
+}
+
+/** Durable per-catalog-item store memory (which stores you buy this item at). */
+export interface ItemStoreRow {
+  household_id: string;
+  item_id: string;
   store_id: string;
 }
 

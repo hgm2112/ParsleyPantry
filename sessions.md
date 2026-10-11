@@ -4,6 +4,40 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-11 — Grocery item memory (store recall + frequency/recency ranking)
+
+**Shipped**
+- Durable per-item "where I buy this" memory + usage stats for smarter grocery:
+  - New table `public.item_stores` (household_id, item_id, store_id) — parallel to `item_store_aisles`.
+  - New columns on `items`: `grocery_add_count`, `grocery_last_added_at`.
+  - Migration: `supabase/migrations/20261013120000_grocery_item_memory.sql`.
+- `lib/grocery.ts`:
+  - `findOrCreateCatalogItem` — free-text adds (Manual tab, recipe ingredients without links) now create catalog rows so they can be remembered.
+  - `bumpGroceryAddMemory` — increments count + timestamp on catalog item.
+  - `rememberItemStores` — persists chosen stores for a catalog item.
+  - `fileGroceryItem` now prefers remembered `item_stores` for new lines (falls back to primary/default).
+  - `ensureGroceryItem` updated for the same (used by inventory low-stock, consume, add-to-list).
+- `app/(app)/grocery/actions.ts`:
+  - `addGroceryItem` resolves free-text to catalog, bumps memory on create, files using memory.
+  - `setGroceryItemStores` now also calls `rememberItemStores` (editing "Buy at" teaches the system for future adds).
+  - `restoreGroceryItems` re-files using memory.
+  - `addManyGroceryItems` flows through the above.
+- `app/(app)/grocery/page.tsx` + `components/grocery/grocery-view.tsx`: catalog select includes the new columns; type-ahead search sorts by (startsWith, -count, -recency, name).
+- All grocery add paths (manual/quick-add, add-sheet, recipes, planner, inventory auto-restock/consume, home smart actions) now populate memory and benefit from it.
+
+**Verify**
+- `npx tsc --noEmit` clean.
+- `npm run lint` clean on touched files (pre-existing unrelated lint issues remain elsewhere).
+- `npm run build` succeeds.
+
+**Gotchas**
+- Apply the migration before using (new items won't remember stores/counts until then; existing adds continue to work).
+- Memory only seeds the *initial* filing of a line; you can still re-assign per-trip via the item dialog.
+- Counts/recency only affect the in-page type-ahead on /grocery (not global search).
+
+**Open — next session**
+- (feature complete)
+
 ## 2026-10-10 (part 35) — Grocery edit dialog: mobile footer matches desktop ([Trash][Save])
 
 **Shipped**

@@ -68,6 +68,8 @@ export type CatalogEntry = {
   category_id: string | null;
   barcode: string | null;
   canonical_item_id: string | null;
+  grocery_add_count?: number | null;
+  grocery_last_added_at?: string | null;
 };
 
 export type GroceryRecipe = {
@@ -253,16 +255,32 @@ export function GroceryView({
   const searchResults = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return [];
-    const scored: { entry: CatalogEntry; rank: number }[] = [];
+    const scored: {
+      entry: CatalogEntry;
+      startsWith: number;
+      count: number;
+    }[] = [];
     for (const entry of catalog) {
       const name = entry.name.toLowerCase();
       const barcode = entry.barcode ?? "";
       if (!name.includes(needle) && !barcode.includes(needle)) continue;
-      scored.push({ entry, rank: name.startsWith(needle) ? 0 : 1 });
+      scored.push({
+        entry,
+        startsWith: name.startsWith(needle) ? 0 : 1,
+        count: entry.grocery_add_count ?? 0,
+      });
     }
-    scored.sort(
-      (a, b) => a.rank - b.rank || a.entry.name.localeCompare(b.entry.name),
-    );
+    // Starts-with beats contains; within that, frequently-added items float
+    // up, then most-recently-added, then alphabetical. Keeps matches you
+    // actually buy above one-off catalog entries.
+    scored.sort((a, b) => {
+      if (a.startsWith !== b.startsWith) return a.startsWith - b.startsWith;
+      if (a.count !== b.count) return b.count - a.count;
+      const aRecency = a.entry.grocery_last_added_at ?? "";
+      const bRecency = b.entry.grocery_last_added_at ?? "";
+      if (aRecency !== bRecency) return aRecency < bRecency ? 1 : -1;
+      return a.entry.name.localeCompare(b.entry.name);
+    });
     return scored.slice(0, 8).map((entry) => entry.entry);
   }, [catalog, query]);
 
