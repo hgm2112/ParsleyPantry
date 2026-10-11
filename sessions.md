@@ -4,6 +4,23 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 28) — /search: page search bar desktop-hidden (mobile keeps it)
+
+**Shipped**
+- `app/(app)/search/page.tsx`: on-page GET form (the duplicate that sat under the persistent nav `SearchForm` on desktop) gained `md:hidden`, plus a comment explaining the split. **Mobile keeps the input** — the mobile nav header only has a Search *icon* linking to `/search`, so the page form is the only place phone users can type; desktop now shows only the sidebar/header search. `SearchSkeleton`'s input-sized bar also `md:hidden` so desktop never flashes a phantom bar.
+
+**Gotchas**
+- Desktop: two search bars at once was the bug; mobile deliberately unchanged. `autoFocus` kept (mobile landing → keyboard up is the intended flow).
+- If mobile search ever needs a sheet/dialog instead, revisit the nav icon's destination.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Check: desktop /search?q=x shows no page bar; mobile (<768px) still has it.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–28).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 27) — Recipes: brighter dark-mode row names
 
 **Shipped**

@@ -21,7 +21,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function SearchSkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-9 w-full max-w-lg" />
+      <Skeleton className="h-9 w-full max-w-lg md:hidden" />
       <Skeleton className="h-6 w-40" />
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
@@ -305,7 +305,13 @@ async function SearchWrapper({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <div className="space-y-3">
-      <form action="/search" method="GET" className="relative max-w-lg">
+      {/* Mobile: the nav only has a search icon, so this page owns the input.
+          Desktop has the persistent nav SearchForm — hide the duplicate. */}
+      <form
+        action="/search"
+        method="GET"
+        className="relative max-w-lg md:hidden"
+      >
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
