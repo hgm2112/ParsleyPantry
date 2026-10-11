@@ -4,6 +4,50 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 25) — /plan cards: widget MealIcon, MON | OCT 5, per-day 6/9
+
+**Shipped**
+- **Extracted `MealIcon`** (`components/plan/meal-icon.tsx`) from the Home dinners widget (`week-meals.tsx`): same `rounded-full tint.dot` circle — ChefHat (today, unmade), white Check (made), `knifefork2.svg` white via `brightness-0 invert` (recipe), KindIcon/StickyNote fallbacks. `onMark` now optional: Home passes it (today circle clickable → MadeConfirm, hover ring); /plan omits it (decorative — whole card opens DayDialog). `week-meals.tsx` imports it; Home visuals unchanged.
+- **/plan DayCard redesign** (left-aligned per request): food-emoji "images" removed; date row now **"MON | OCT 5"** (uppercase weekday · dim pipe · uppercase month); "Made ✓" pill removed — replaced by the `MealIcon` circle at `size-12`; card content left-aligned (`items-center gap-2.5` circle + title/meta column, not centered like the widget); title + meta line **`35 min · 6/9`** (time when >0; coverage emerald bold when fully covered, muted otherwise); note line at bottom via `mt-auto`. Unplanned = dashed card, "Plan a meal" only. Today via `useToday()` (hydration-safe hook, same as Home).
+- **Per-recipe pantry coverage**: `lib/meal-summary.ts` refactored — shared `buildPantryPools` + `resolveLine` (canonical/oz pooling) used by `buildWeekSummary` and new **`buildRecipeCoverage(ingredients, inventory, items) → Map<recipeId, {total, inPantry}>`**. `plan/page.tsx` computes `coverageById` for all planned un-made recipes in the 14-day window and passes it to `PlanView`.
+
+**Gotchas**
+- 6/9 = that recipe's **ingredient lines** covered by raw pantry stock (holds ignored, Quick Bites parity) — same math as the week tile.
+- Today-ChefHat on /plan is decorative; mark-made lives one tap deeper in DayDialog (Home keeps the quick MadeConfirm).
+- Week Ingredients tile + three shop buttons from part 24 unchanged.
+
+**Verify**
+- Manual code review only (no tsc/lint/build per request). Visual pass pending: circle sizes in 2-col grid, MON | OCT 5 spacing, emerald 6/6, today's ChefHat flip.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24+25).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
+## 2026-10-10 (part 24) — /plan: 14-day card grid, 3 shop actions, ingredient summaries
+
+**Shipped**
+- **/plan layout rewrite** (`components/plan/plan-view.tsx`): 7-row vertical list → **14-day (2-week) card grid**. Each week = section with "Week 1/2 · Oct 13–19" header + `grid-cols-1 sm:grid-cols-2` of 7 day cards + 1 **Ingredients Summary tile** (equal `min-h-24` cards); `border-t` divider between weeks. Day cards follow Home's tinted-card language (`tintFor(recipe.name)` / kind tint / `NOTE_TINT`, unplanned = dashed border) — **image/gradient tiles removed**, replaced with small inline `foodEmoji`/`KindIcon`/`StickyNote`/`Plus`. Open-day state is now `{weekStart, dayIndex}` (DayDialog reused unchanged, mounted per week).
+- **Three shop actions** in the header (shared busy flag): **Shop this week** (primary, existing `planWeekToGrocery`), **Shop both weeks** (new `planDaysToGrocery` with all 14 keys), **Select days to shop** (opens picker). All three share one toast format.
+- **Action refactor** (`app/(app)/plan/actions.ts`): core of `planWeekToGrocery` extracted into internal `shopDays(targets: {weekStart, dayIndex}[], emptyError)` — wipes/recomputes holds **only for targeted days** (per-week `.in("day_index", …)` deletes so a multi-week selection never stomps untargeted days; untargeted holds stay reserved). `planWeekToGrocery` = wrapper over days 0–6. New exported `planDaysToGrocery(days)` (zod `array(dayKeySchema).min(1).max(14)`, deduped) — single code path for all three buttons. Same pantry-first math: canonical-root pools, oz conversions, made-day skip, oldest-first reserve, `addManyGroceryItems` dedupe.
+- **Day picker** (new `components/plan/shop-days-dialog.tsx`): 14 rows in Week 1/2 groups (date + meal title, Made ✓ suffix), checkboxes, **Select all / Clear**, "N days selected", disabled "Shop selected days" at 0. Unplanned + made days shown but disabled. `max-w-md max-h-[85vh]`.
+- **Ingredient summaries**: new pure `lib/meal-summary.ts` `buildWeekSummary` — per-week line counts (Have X/Y, "N to buy") using the shop action's canonical/oz pooling (raw pantry sufficiency, holds ignored — Quick Bites semantics). `plan/page.tsx` now fetches both weeks (`weekStart` + `+7`), plus `recipe_ingredients` (on_shopping_list, un-made recipes only) + inventory + items for summaries. Tile "View list" → new `components/plan/week-ingredients-dialog.tsx` (line rows with ✓ pantry / needed chips).
+
+**Gotchas**
+- Summary counts **ingredient lines** (incl. cross-recipe duplicates), aggregating coverage only per `(root, unit)` pool — "1 lb" + "500 g" chicken count as 2 lines.
+- Summary ignores stock holds (Quick Bites parity); after shopping, a tile may still say "have" for stock reserved by the *other* week.
+- Grocery dedupe still only skips *unchecked* existing lines (pre-existing).
+- `?week=` window is now weekStart+next week; prev/next nav still shifts 7 days; mini-calendar/Home untouched.
+- Per request: no tests/lint/tsc/build run this session — re-verify when the dev server is stopped (`npx tsc --noEmit`, `npm run lint`, `npm run build`).
+
+**Verify**
+- Manual code review only (per request). Visual pass pending: 14-day grid on mobile (1 col) / desktop (2 col), all three shop paths (week / both / subset), View list counts.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped.
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 23) — Dark mode: Light/Dark/System
 
 **Shipped**

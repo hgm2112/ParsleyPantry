@@ -12,7 +12,7 @@ import {
   stockPoolKey,
   toOunces,
 } from "@/lib/stock";
-import { addDays, isIsoDate } from "@/lib/plan";
+import { isIsoDate } from "@/lib/plan";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -173,40 +173,60 @@ export async function clearMealDay(
 
 
 
+type ShopTarget = { weekStart: string; dayIndex: number };
+
 /**
- * Pantry-first shopping: reserves what the week's recipes can take from
+ * Pantry-first shopping: reserves what the target days' recipes can take from
  * current stock (holds per day+item, oldest days first) and sends only the
  * shortfall to the grocery list. Made days are skipped; re-running wipes and
- * recomputes the week's holds.
+ * recomputes only the targeted days' holds — untargeted days keep theirs
+ * reserved so a partial re-shop never double-dips the pantry.
  */
-export async function planWeekToGrocery(
-  weekStart: string,
+async function shopDays(
+  targets: ShopTarget[],
+  emptyError: string,
 ): Promise<ActionResult<{ reserved: number; added: number; skipped: number }>> {
   try {
-    if (!isIsoDate(weekStart)) return { ok: false, error: "Bad week" };
+    if (targets.length === 0) return { ok: false, error: emptyError };
     const { supabase, householdId } = await requireDal();
 
-    const weekEnd = addDays(weekStart, 6);
+    const targetKeys = new Set(
+      targets.map((target) => `${target.weekStart}:${target.dayIndex}`),
+    );
+    const weekStarts = Array.from(new Set(targets.map((target) => target.weekStart)));
+
     const { data: dayRows } = await supabase
       .from("meal_plan_days")
-      .select("day_index, recipe_id, made_at")
+      .select("week_start, day_index, recipe_id, made_at")
       .eq("household_id", householdId)
-      .gte("week_start", weekStart)
-      .lte("week_start", weekEnd)
+      .in("week_start", weekStarts)
       .not("recipe_id", "is", null);
 
+    type PlannedTargetDay = {
+      week_start: string;
+      day_index: number;
+      recipe_id: string;
+      made_at: null;
+    };
     const planDays = ((dayRows ?? []) as {
+      week_start: string;
       day_index: number;
       recipe_id: string | null;
       made_at: string | null;
     }[])
       .filter(
-        (day): day is { day_index: number; recipe_id: string; made_at: null } =>
-          day.recipe_id !== null && day.made_at === null,
+        (day): day is PlannedTargetDay =>
+          targetKeys.has(`${day.week_start}:${day.day_index}`) &&
+          day.recipe_id !== null &&
+          day.made_at === null,
       )
-      .sort((a, b) => a.day_index - b.day_index);
+      .sort((a, b) =>
+        a.week_start === b.week_start
+          ? a.day_index - b.day_index
+          : a.week_start.localeCompare(b.week_start),
+      );
     if (planDays.length === 0) {
-      return { ok: false, error: "No meals left to shop for this week" };
+      return { ok: false, error: emptyError };
     }
 
     const recipeIds = Array.from(new Set(planDays.map((day) => day.recipe_id)));
@@ -243,7 +263,7 @@ export async function planWeekToGrocery(
         .eq("household_id", householdId),
       supabase
         .from("stock_holds")
-        .select("item_id, quantity, unit, week_start")
+        .select("item_id, quantity, unit, week_start, day_index")
         .eq("household_id", householdId),
       supabase
         .from("items")
@@ -282,8 +302,10 @@ export async function planWeekToGrocery(
       quantity: number;
       unit: string | null;
       week_start: string;
+      day_index: number;
     }[]) {
-      if (row.week_start === weekStart) continue; // being recomputed below
+      // Targeted days are being recomputed below.
+      if (targetKeys.has(`${row.week_start}:${row.day_index}`)) continue;
       const oz = toOunces(row.quantity, row.unit);
       const q = oz != null ? oz : row.quantity;
       const u = oz != null ? "oz" : row.unit;
@@ -291,13 +313,19 @@ export async function planWeekToGrocery(
       held.set(key, (held.get(key) ?? 0) + q);
     }
 
-    // Recompute this week's holds from scratch.
-    const { error: wipeError } = await supabase
-      .from("stock_holds")
-      .delete()
-      .eq("household_id", householdId)
-      .eq("week_start", weekStart);
-    if (wipeError) return { ok: false, error: wipeError.message };
+    // Recompute the targeted days' holds from scratch.
+    for (const weekStart of weekStarts) {
+      const dayIndexes = targets
+        .filter((target) => target.weekStart === weekStart)
+        .map((target) => target.dayIndex);
+      const { error: wipeError } = await supabase
+        .from("stock_holds")
+        .delete()
+        .eq("household_id", householdId)
+        .eq("week_start", weekStart)
+        .in("day_index", dayIndexes);
+      if (wipeError) return { ok: false, error: wipeError.message };
+    }
 
     const newHolds: {
       household_id: string;
@@ -347,7 +375,7 @@ export async function planWeekToGrocery(
             item_id: ingredientRoot,
             quantity: holdQty,
             unit: parsed.unit,
-            week_start: weekStart,
+            week_start: day.week_start,
             day_index: day.day_index,
           });
           held.set(key, (held.get(key) ?? 0) + reserve);
@@ -393,6 +421,38 @@ export async function planWeekToGrocery(
       error: error instanceof Error ? error.message : "Could not plan shopping",
     };
   }
+}
+
+/** Shops a whole week (all 7 days). Header button's "Shop this week". */
+export async function planWeekToGrocery(
+  weekStart: string,
+): Promise<ActionResult<{ reserved: number; added: number; skipped: number }>> {
+  if (!isIsoDate(weekStart)) return { ok: false, error: "Bad week" };
+  return shopDays(
+    Array.from({ length: 7 }, (_, dayIndex) => ({ weekStart, dayIndex })),
+    "No meals left to shop for this week",
+  );
+}
+
+const shopDaysSchema = z.array(dayKeySchema).min(1).max(14);
+
+/**
+ * Shops an arbitrary selection of planned days (≤14): this week, both weeks,
+ * or a hand-picked subset — same pantry/dedupe semantics as the week action.
+ */
+export async function planDaysToGrocery(
+  days: z.input<typeof shopDaysSchema>,
+): Promise<ActionResult<{ reserved: number; added: number; skipped: number }>> {
+  const parsed = shopDaysSchema.safeParse(days);
+  if (!parsed.success) return { ok: false, error: "Invalid days" };
+  const targets = new Map<string, ShopTarget>();
+  for (const day of parsed.data) {
+    targets.set(`${day.weekStart}:${day.dayIndex}`, day);
+  }
+  return shopDays(
+    Array.from(targets.values()),
+    "No meals left to shop for the selected days",
+  );
 }
 
 /**
