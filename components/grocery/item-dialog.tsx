@@ -356,13 +356,15 @@ export function ItemDialog({
         <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="destructive"
+            size="icon-sm"
+            className="sm:h-8 sm:w-auto sm:px-2.5"
             onClick={remove}
             disabled={deleteBusy}
             aria-label={`Remove ${item.name}`}
           >
             {deleteBusy ? <Loader2 className="animate-spin" /> : <Trash2 />}
           </Button>
-          <Button onClick={save} disabled={busy} className="flex-1">
+          <Button onClick={save} disabled={busy} className="h-11 flex-1 sm:h-8">
             {busy ? <Loader2 className="animate-spin" /> : null}
             Save
           </Button>

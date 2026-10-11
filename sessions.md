@@ -4,6 +4,20 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 30) — Edit dialogs: larger mobile Save, smaller mobile Delete
+
+**Shipped**
+- `components/grocery/item-dialog.tsx` footer: Save `h-11 flex-1 sm:h-8` (44px full-width tap target on mobile); Delete/Remove `size="icon-sm"` + `sm:h-8 sm:w-auto sm:px-2.5` (28px chip on mobile, pixel-identical on desktop).
+- `components/inventory/batch-dialog.tsx` footer: Save/`Add batch` `h-11 sm:h-8`; Remove `h-7 text-xs sm:h-8 sm:text-sm`. Cancel untouched. Desktop unchanged in both (`sm:` restores defaults; `DialogFooter` stacks them Save→Cancel→Remove on mobile via `flex-col-reverse`).
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Check <640px: tall full-width Save on top, small Delete/Remove at bottom.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–30).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 29) — /stats page: cooking history, habits, planning + pantry insights
 
 **Shipped**

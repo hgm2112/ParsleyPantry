@@ -288,7 +288,7 @@ export function BatchDialog({
             {editing ? (
               <Button
                 variant="outline"
-                className="text-destructive"
+                className="h-7 text-xs text-destructive sm:h-8 sm:text-sm"
                 onClick={() => setRemoveOpen(true)}
               >
                 <Trash2 /> Remove
@@ -297,7 +297,11 @@ export function BatchDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void confirm()} disabled={busy}>
+            <Button
+              className="h-11 sm:h-8"
+              onClick={() => void confirm()}
+              disabled={busy}
+            >
               {busy ? "Saving…" : editing ? "Save" : "Add batch"}
             </Button>
           </DialogFooter>
