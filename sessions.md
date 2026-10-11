@@ -4,6 +4,39 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 27) — Recipes: brighter dark-mode row names
+
+**Shipped**
+- `components/recipes/recipes-view.tsx` name span: added `relative` + `dark:text-zinc-50`. Two causes of the "dull" names: (1) the absolute-positioned gradient wash (`inset-0`, opacity-50) painted **over** the in-flow name span, tinting it with the deep dark stop; (2) base color was only `--foreground` `#f2f4ef`. `relative` lifts the name above the wash; `dark:text-zinc-50` (soft white, per request) brightens dark mode. Light mode unchanged.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request).
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–27).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
+## 2026-10-10 (part 26) — Recipes: dark-mode row gradients fixed at source
+
+**Shipped**
+- **Root cause**: `recipes-view.tsx` painted the row wash with `grad.split(" ")[0]` — kept only the light `from-*` class and discarded every `dark:` variant from `tileGradient()`, so dark mode rendered light pastels (`*-100`) at 50% opacity over charcoal (the washed gray/blue-purple-green look). The part-23 dark stops also used near-black `*-950/60` opacity — the "light color with reduced opacity" pattern.
+- **`lib/tiles.ts`**: `GRADIENTS` rewritten as from-stop-only pairs — light stops **unchanged** (`from-emerald-100` etc., same 8 assignments per recipe name); dark stops now solid deep/subdued colors: emerald-900, violet-950, stone-800 (warm charcoal), blue-950, rose-950, green-900, indigo-950, cyan-900. Dropped the dead `to-*` stops (only consumer fades with `to-transparent`); `tileGradient` JSDoc updated. `tileFor` left as-is (unused export).
+- **`components/recipes/recipes-view.tsx`**: `grad.split(" ")[0]` → `grad`, so the `dark:` from-stop reaches the DOM. Row keeps `bg-gradient-to-r … to-transparent opacity-50` — right edge still fades to the page surface in both themes; layout/heights/tags/columns untouched.
+
+**Gotchas**
+- Only consumer of `tileGradient` is the recipes list; home hero gradient (`home-view.tsx:30`) has its own dark pair — untouched.
+- `opacity-50` now halves the solid deep stops in dark (subtle wash by design; bump to a darker stop if too faint).
+- Text/tag contrast unchanged — gradients only got darker behind them.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Browser check: toggle Light/Dark in nav — washes switch live via `dark:` class on `<html>`, no refresh.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–26).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 25) — /plan cards: widget MealIcon, MON | OCT 5, per-day 6/9
 
 **Shipped**

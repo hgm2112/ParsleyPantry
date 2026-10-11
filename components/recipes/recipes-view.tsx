@@ -71,11 +71,13 @@ export function RecipesView({
             <div
               className={cn(
                 "absolute inset-0 bg-gradient-to-r pointer-events-none",
-                grad.split(" ")[0],
+                grad,
                 "to-transparent opacity-50",
               )}
             />
-            <span className="font-semibold truncate">{recipe.name}</span>
+            <span className="relative font-semibold truncate dark:text-zinc-50">
+              {recipe.name}
+            </span>
             {recipe.tags.length > 0 && (
               <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
                 {recipe.tags.slice(0, 3).map((tag) => (
