@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChefHat, Loader2, Search, Trash2, X } from "lucide-react";
+import { Check, ChefHat, Loader2, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   clearMealDay,
   saveMealNote,
   setMealDay,
+  unmarkMealMade,
 } from "@/app/(app)/plan/actions";
 import { MadeConfirmContent } from "@/components/plan/made-confirm";
 import { dayLabel } from "@/lib/plan";
@@ -140,6 +141,20 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
     onDone();
   }
 
+  async function undoMade() {
+    setBusy(true);
+    const result = await unmarkMealMade({ weekStart, dayIndex: day.index });
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      "Unmarked as made — pantry stock used when it was confirmed isn’t restored",
+    );
+    router.refresh();
+  }
+
   function groupHeading(title: string) {
     return (
       <li className="bg-muted/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -230,9 +245,16 @@ export function DayDialog({ weekStart, day, recipes, onDone }: Props) {
                 </Button>
               ) : null}
               {day.entry?.made_at ? (
-                <p className="flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-sm font-semibold text-primary">
-                  <Check className="h-4 w-4" /> Made
-                </p>
+                <button
+                  type="button"
+                  onClick={() => void undoMade()}
+                  disabled={busy}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                >
+                  <Check className="h-4 w-4" /> Made ✓
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span className="sr-only">— undo</span>
+                </button>
               ) : null}
 
               <div className="relative">

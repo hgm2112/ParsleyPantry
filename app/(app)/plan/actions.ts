@@ -564,6 +564,40 @@ export async function markMealMade(
 }
 
 /**
+ * Undoes "Mark as made": clears the completion timestamp. Pantry stock
+ * consumed by the original confirmation is NOT restored (consumption isn't
+ * logged); the day returns to planned.
+ */
+export async function unmarkMealMade(
+  input: z.input<typeof dayKeySchema>,
+): Promise<ActionResult> {
+  try {
+    const parsed = dayKeySchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid day" };
+    const { supabase, householdId } = await requireDal();
+
+    const { error } = await supabase
+      .from("meal_plan_days")
+      .update({ made_at: null })
+      .eq("household_id", householdId)
+      .eq("week_start", parsed.data.weekStart)
+      .eq("day_index", parsed.data.dayIndex);
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePath("/plan");
+    revalidatePath("/home");
+    revalidatePath("/stats");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not update the meal",
+    };
+  }
+}
+
+/**
  * Reads the day's reserved holds so the confirm dialog can show exactly what
  * markMealMade will take from the pantry (empty list = nothing reserved).
  */

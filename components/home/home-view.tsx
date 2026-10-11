@@ -13,6 +13,7 @@ import { SnackWidget } from "@/components/home/snack-widget";
 import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
 import { QuickBitesWidget } from "@/components/home/quick-bites-widget";
+import { StatsSummary } from "@/components/stats/stats-summary";
 import type { RecipeOption } from "@/components/plan/day-dialog";
 import type {
   CategoryRow,
@@ -100,6 +101,7 @@ export function HomeView({
         />
         <PantryInsights rows={pantry} subcategories={subcategories} />
         <MiniCalendar meals={meals} recipes={recipes} />
+        <StatsSummary meals={meals} />
         <PromoCard />
       </div>
 

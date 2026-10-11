@@ -4,6 +4,34 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 29) — /stats page: cooking history, habits, planning + pantry insights
+
+**Shipped**
+- **New `/stats` page** (zero migrations — existing `made_at` + `kind` columns carry everything):
+  - `lib/stats.ts`: all pure calculations — period ranges (`all`/`year`/`90`/`30` via `?period=`), cooked occurrences (made_at set AND kind null, filtered by LOCAL date of made_at via `localDateOfTimestamp`), cooking streak (≥1 cooked per date; no-cook neither extends nor breaks), distinct No Cooking Days (scheduled dates of kind='no_cook' in range), favorites ranked count-then-recency, weekly (30/90) / monthly (year/all) CSS bar buckets, most active weekday (Mon-first), new-recipes-tried (earliest-ever cooked date in range — reliable, full history), milestones (25/50/100/250/500 all-time), planning stats (planned/cooked/no-cook/eating-out/meal-kit + past-due completion rate excluding non-cook kinds + most-planned recipes), pantry snapshot (expired/expiring-soon ≤3 days + canonical-pool coverage of upcoming planned ingredient lines with holds on other days subtracted).
+  - `app/(app)/stats/page.tsx`: server component fetches all meal_plan_days, recipes (id, name), inventory, items catalog, stock_holds, plus on_shopping_list ingredient lines for planned un-made recipe ids; Suspense-wrapped for `useSearchParams`.
+  - `components/stats/stats-view.tsx`: period segmented control (ThemePicker radiogroup pattern), 5 overview cards (No Cooking card dashed), favorites top-5 + show-all, cooking habits (CSS bar chart — no chart library, avg/week, active day, new recipes, milestone chips + progress), meal planning (+ completion-rate sentence naming eating-out/meal-kit exclusions), pantry insights (expiry lists, coverage bar, honest "consumption isn't tracked" note — most-used-ingredients deliberately omitted). `useToday()` supplies today; server never reads wall clock.
+  - **Undo made**: new `unmarkMealMade` server action (clears made_at, revalidates /plan /home /stats); DayDialog's "Made" pill is now a clickable undo button — toast warns pantry stock used at confirm time is NOT restored (consumption isn't logged).
+  - **Home card**: `components/stats/stats-summary.tsx` — compact "Your Stats" (cooked / this month / streak / no-cook) mounted in home-view right stack after MiniCalendar, before PromoCard; reuses the already-fetched `meals` (zero extra queries).
+  - **Nav**: sidebar item Stats (ChartColumn) between Recipes and Settings; mobile header icon beside Search; bottom bar stays 5 items. NavFallback already renders 7 skeleton rows.
+- `lib/meal-summary.ts`: exported `buildPantryPools`/`resolveLine`/`PantryPools` (were private) for coverage math.
+
+**Gotchas**
+- Cooked = made_at AND kind is null, by LOCAL date of made_at. No Cooking entries are never counted as cooked, never in streak/favorites/milestones; completion-rate denominator only kind-less past-due plans.
+- Coverage subtracts holds on days OUTSIDE the upcoming-demand set (reservations respected); no consumption tracking yet — stats page says so explicitly rather than faking usage numbers.
+- `mondayOf` takes a Date — stats.ts wraps it in `mondayIso(iso)`. Undo does NOT restore consumed pantry stock (documented in toast + sessions).
+- lucide exports `ChartColumn` (not `BarChart3`).
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Check: /stats period switch updates all sections; streak excludes no-cook days; DayDialog undo flips Made→planned and refreshes /stats; Home card totals match /stats all-time.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–29).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
+
+
 ## 2026-10-10 (part 28) — /search: page search bar desktop-hidden (mobile keeps it)
 
 **Shipped**

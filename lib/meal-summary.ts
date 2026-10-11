@@ -50,7 +50,7 @@ export function emptyWeekSummary(): WeekSummary {
   return { total: 0, inPantry: 0, needed: 0, lines: [] };
 }
 
-type PantryPools = {
+export type PantryPools = {
   rootOf: (id: string) => string;
   nameToRoot: Map<string, string>;
   stock: Map<string, number>;
@@ -60,7 +60,7 @@ type PantryPools = {
  * Stock pooled by canonical identity: every product under one generic root
  * shares a pool, quantities normalized to ounces when units convert.
  */
-function buildPantryPools(
+export function buildPantryPools(
   inventory: SummaryInventoryRow[],
   items: SummaryItemRow[],
 ): PantryPools {
@@ -82,7 +82,7 @@ function buildPantryPools(
   return { rootOf, nameToRoot, stock };
 }
 
-function resolveLine(
+export function resolveLine(
   ingredient: SummaryIngredient,
   pools: PantryPools,
 ): { poolKey: string; quantity: number; resolved: boolean } {

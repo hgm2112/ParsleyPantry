@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
+  ChartColumn,
   House,
   Package,
   Search,
@@ -24,6 +25,7 @@ const sidebarItems = [
   { href: "/inventory", label: "Pantry", icon: Package },
   { href: "/grocery", label: "Shopping list", icon: ShoppingCart },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
+  { href: "/stats", label: "Stats", icon: ChartColumn },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -157,6 +159,13 @@ function MobileHeader() {
       <Wordmark href="/home" className="text-base" markClassName="h-7.5 w-8.75" />
       <div className="flex items-center gap-1">
         <ThemeToggle />
+        <Link
+          href="/stats"
+          aria-label="Stats"
+          className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <ChartColumn className="h-5 w-5" />
+        </Link>
         <Link
           href="/search"
           aria-label="Search"
