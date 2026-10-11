@@ -4,6 +4,20 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 31) — Pantry: mobile Scan button is now primary with icon
+
+**Shipped**
+- `components/inventory/inventory-view.tsx` sticky-header Scan button: added `<ScanBarcode />` icon; mobile-first restyle — filled primary (`bg-primary text-primary-foreground hover:bg-primary/80`) on phones, `sm:` restores the old outline look (`sm:bg-background sm:text-foreground sm:border-border` + dark `sm:dark:border-input sm:dark:bg-input/30 sm:dark:hover:bg-input/50`). Same `size="sm"`/`h-9` and ScanSheet flow. Desktop adds only the small icon.
+- Empty-state "Scan barcode", add-form Scan, and "Just bought" deliberately untouched.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Check <640px /inventory: Scan is a filled primary icon+label button beside search; ≥640px unchanged outline.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–31).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 30) — Edit dialogs: larger mobile Save, smaller mobile Delete
 
 **Shipped**

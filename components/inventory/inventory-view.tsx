@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  ScanBarcode,
   Search,
   ShoppingCart,
   Trash2,
@@ -203,12 +204,11 @@ export function InventoryView({
             />
           </div>
           <Button
-            variant="outline"
             size="sm"
-            className="h-9"
+            className="h-9 gap-1.5 sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted sm:hover:text-foreground sm:dark:border-input sm:dark:bg-input/30 sm:dark:hover:bg-input/50"
             onClick={() => setScanOpen(true)}
           >
-            Scan
+            <ScanBarcode /> Scan
           </Button>
         </div>
 
