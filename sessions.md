@@ -4,6 +4,19 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 22) — Grocery qty/unit divider "·"
+
+**Shipped**
+- Home shopping widget (`components/home/shopping-widget.tsx`) + grocery page item rows (`components/grocery/grocery-view.tsx`): quantity and unit now render as `2 · lb` (was `2 lb` — template string gained ` · `). No unit → bare quantity, no dangling bullet. Matches the grocery add-search dropdown's existing ` · {unit}` convention (`grocery-view.tsx:637-638`).
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = 16 pre-existing problems, none in touched files.
+
+**Open — Next Session**
+- Apply pending canonical migrations if still not applied (`20261012120000_canonical_ingredients.sql` → `20261012130000_canonical_reviewed.sql`).
+- Post-deploy: `/inventory/normalize` → Run backfill → fix "Beef broth" / "Cream Cheese" rows.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 21) — Search results: drop emoji tiles, canonical info icon
 
 **Shipped**

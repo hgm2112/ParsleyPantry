@@ -789,7 +789,7 @@ export function GroceryView({
                           </button>
                           <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                             {item.quantity}
-                            {item.unit ? ` ${item.unit}` : ""}
+                            {item.unit ? ` · ${item.unit}` : ""}
                           </span>
                           <Button
                             variant="ghost"

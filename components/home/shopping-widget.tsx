@@ -268,7 +268,7 @@ export function ShoppingWidget({
                               ) : null}
                               <span className="shrink-0 text-xs text-muted-foreground">
                                 {item.quantity}
-                                {item.unit ? ` ${item.unit}` : ""}
+                                {item.unit ? ` · ${item.unit}` : ""}
                               </span>
                             </label>
                           </li>
