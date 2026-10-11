@@ -4,6 +4,24 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 33) — Pantry detail: stop pre-filling Unit with "oz"
+
+**Shipped**
+- **Bug**: `/inventory/{id}` showed Unit filled with `oz` on entry. Cause: `detail-form.tsx:78` seeded the field with `initialItem.unit ?? "oz"` — items with a NULL `items.unit` (KitchenOwl imports, canonical-root creation never write a unit) rendered the literal `"oz"` as a *value*, not the grey hint. The input already had `placeholder="oz"`.
+- **`components/inventory/detail-form.tsx:78`**: `?? "oz"` → `?? ""`. Save unaffected (`unit.trim() || null` keeps empty as NULL).
+- Not the Activity/state-preservation bug — a different item can't leak its unit (the `[id]` param is in the Activity key, so each item's page remounts fresh).
+
+**Known-not-fixed (deferred by request)**
+- The detail page's Save writes the unit to the *anchor batch row* but never to `items.unit` (`actions.ts` item-patch omits `unit`) — a unit you set isn't persisted at item level. Stopped the fabricated-`oz` leak; persistence left as-is.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Open an item with no unit: field empty, `oz` shows as placeholder only.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–33).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 32) — Recipes: fix stale "leftovers" pre-fill on New recipe
 
 **Shipped**

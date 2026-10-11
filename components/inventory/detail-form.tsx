@@ -75,7 +75,7 @@ export function InventoryDetail({
   const [editingRename, setEditingRename] = useState(false);
   const [renameDraft, setRenameDraft] = useState(canonicalItem?.name ?? "");
   const renameBusyRef = useRef(false);
-  const [unit, setUnit] = useState(initialItem.unit ?? "oz");
+  const [unit, setUnit] = useState(initialItem.unit ?? "");
   const [lowThreshold, setLowThreshold] = useState(
     initialItem.low_threshold != null ? String(initialItem.low_threshold) : "",
   );
