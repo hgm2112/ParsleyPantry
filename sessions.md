@@ -4,6 +4,29 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 21) — Search results: drop emoji tiles, canonical info icon
+
+**Shipped**
+- New `components/canonical-info.tsx` — view-only client component `CanonicalInfo({ name })`: `Info` trigger (same `h-3.5 w-3.5` muted styling as the inventory card) + popover with plain-text "Matches recipes as" label + name. No edit — the inventory card keeps its own view+pencil popover.
+- `app/(app)/search/page.tsx` — all four result sections are now text-only rows (the "pictures" were the `size-10` emoji/gradient tiles from `lib/tiles`; the app has no real images):
+  - **In your pantry** + **Items (not in pantry)**: tiles removed, `as {canonicalName}` text line replaced by `<CanonicalInfo>` after the name. Whole-card `<Link>` couldn't hold a popover trigger (nested-interactive), so cards use the stretched-link pattern: `li` is the card (`relative rounded-xl border bg-card p-3`), name `Link` gets `after:absolute after:inset-0 after:content-['']`, icon sits in a `relative z-10` span above the overlay. Whole card stays clickable.
+  - **Recipes**: tile removed; card stays a plain whole-card `Link` (no canonical concept).
+  - **On your shopping list**: card's `ShoppingCart` icon removed (section-header cart icon stays); plain whole-card `Link`.
+- Dropped the now-unused `foodEmoji`/`tileGradient` import; `cn` kept (checked line-through), `ShoppingCart` kept (section header).
+- **Pantry card meta line** (`In your pantry`): quantity now `font-bold` and separated from the unit by a `gap-x-1.5` baseline-aligned flex row (was a single space in regular-weight text). **Gotcha:** `globals.css` sets `body { font-weight: 600 }` app-wide, so the meta line already renders at 600 — `font-medium` (500) read as thinner and `font-semibold` (600) was a literal no-op; only `font-bold` (700) makes the quantity stand out.
+
+**Gotchas**
+- Grocery cards get no info icon — the grocery query selects no `item_id`/canonical data (deferred; would need a join).
+- Stretched-link cards (`after:inset-0` overlay) only used on the two item sections where the icon must sit inline; recipe/grocery sections keep the simple Link-card.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = 16 pre-existing problems, none in touched files; `npm run build` passes.
+
+**Open — Next Session**
+- Apply pending canonical migrations if still not applied (`20261012120000_canonical_ingredients.sql` → `20261012130000_canonical_reviewed.sql`).
+- Post-deploy: `/inventory/normalize` → Run backfill → fix "Beef broth" / "Cream Cheese" rows.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 20) — Inventory card icons: info beside name, view/edit split
 
 **Shipped** (`components/inventory/inventory-view.tsx`, `InventoryItemCard`)

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
-import { foodEmoji, tileGradient } from "@/lib/tiles";
+import { CanonicalInfo } from "@/components/canonical-info";
 import { groupByItem } from "@/lib/batches";
 import { buildCanonicalNameMap } from "@/lib/canonical";
 import { cn } from "@/lib/utils";
@@ -159,41 +159,36 @@ async function SearchContent({ query }: { query: string }) {
             count={inventoryGroups.length}
           />
           <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {inventoryGroups.map((group) => (
-              <li key={group.item.id}>
-                <Link
-                  href={`/inventory/${group.item.id}`}
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
+            {inventoryGroups.map((group) => {
+              const canonical = canonicalNames[group.item.id];
+              return (
+                <li
+                  key={group.item.id}
+                  className="relative rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
                 >
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
-                      tileGradient(group.item.name),
-                    )}
-                    aria-hidden
-                  >
-                    {group.item.icon ?? foodEmoji(group.item.name)}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/inventory/${group.item.id}`}
+                      className="block min-w-0 truncate text-sm font-semibold after:absolute after:inset-0 after:content-['']"
+                    >
                       {group.item.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {group.totalQuantity}
-                      {group.batches[0]?.unit ?? group.item.unit
-                        ? ` ${group.batches[0]?.unit ?? group.item.unit}`
-                        : ""}{" "}
-                      · {group.locations.join(", ")}
-                    </span>
-                    {canonicalNames[group.item.id] ? (
-                      <span className="block text-xs text-muted-foreground">
-                        as {canonicalNames[group.item.id]}
+                    </Link>
+                    {canonical ? (
+                      <span className="relative z-10">
+                        <CanonicalInfo name={canonical} />
                       </span>
                     ) : null}
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </div>
+                  <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
+                    <span className="font-bold">{group.totalQuantity}</span>
+                    {group.batches[0]?.unit ?? group.item.unit ? (
+                      <span>{group.batches[0]?.unit ?? group.item.unit}</span>
+                    ) : null}
+                    <span>· {group.locations.join(", ")}</span>
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
@@ -207,13 +202,11 @@ async function SearchContent({ query }: { query: string }) {
           />
           <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {grocery.map((row) => (
-              <li key={row.id}>
-                <Link
-                  href="/grocery"
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
-                >
-                  <ShoppingCart className="size-5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0">
+                <li key={row.id}>
+                  <Link
+                    href="/grocery"
+                    className="block rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
+                  >
                     <span
                       className={cn(
                         "block truncate text-sm font-semibold",
@@ -226,9 +219,8 @@ async function SearchContent({ query }: { query: string }) {
                       {row.quantity}
                       {row.unit ? ` ${row.unit}` : ""}
                     </span>
-                  </span>
-                </Link>
-              </li>
+                  </Link>
+                </li>
             ))}
           </ul>
         </section>
@@ -242,24 +234,13 @@ async function SearchContent({ query }: { query: string }) {
               <li key={recipe.id}>
                 <Link
                   href={`/recipes/${recipe.id}`}
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
+                  className="block rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
                 >
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
-                      tileGradient(recipe.name),
-                    )}
-                    aria-hidden
-                  >
-                    {foodEmoji(recipe.name, recipe.tags)}
+                  <span className="block truncate text-sm font-semibold">
+                    {recipe.name}
                   </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
-                      {recipe.name}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {recipe.tags.join(" · ") || "Recipe"}
-                    </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {recipe.tags.join(" · ") || "Recipe"}
                   </span>
                 </Link>
               </li>
@@ -276,45 +257,40 @@ async function SearchContent({ query }: { query: string }) {
             count={catalogOnly.length}
           />
           <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {catalogOnly.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={
-                    item.barcode
-                      ? `/inventory/add?barcode=${item.barcode}`
-                      : "/inventory/add"
-                  }
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
+            {catalogOnly.map((item) => {
+              const canonical = canonicalNames[item.id];
+              return (
+                <li
+                  key={item.id}
+                  className="relative rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
                 >
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xl",
-                      tileGradient(item.name),
-                    )}
-                    aria-hidden
-                  >
-                    {item.icon ?? foodEmoji(item.name)}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={
+                        item.barcode
+                          ? `/inventory/add?barcode=${item.barcode}`
+                          : "/inventory/add"
+                      }
+                      className="block min-w-0 truncate text-sm font-semibold after:absolute after:inset-0 after:content-['']"
+                    >
                       {item.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {item.barcode
-                        ? `Barcode ${item.barcode} · ${
-                            categoryName(item.category_id) ?? "No category"
-                          }`
-                        : (categoryName(item.category_id) ?? "No category")}
-                    </span>
-                    {canonicalNames[item.id] ? (
-                      <span className="block text-xs text-muted-foreground">
-                        as {canonicalNames[item.id]}
+                    </Link>
+                    {canonical ? (
+                      <span className="relative z-10">
+                        <CanonicalInfo name={canonical} />
                       </span>
                     ) : null}
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {item.barcode
+                      ? `Barcode ${item.barcode} · ${
+                          categoryName(item.category_id) ?? "No category"
+                        }`
+                      : (categoryName(item.category_id) ?? "No category")}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
