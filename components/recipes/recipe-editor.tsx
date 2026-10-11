@@ -366,7 +366,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
                   const displayHave = trimDecimal(haveRaw);
                   return (
                     <span
-                      className={`text-xs ${sufficient ? "text-emerald-600" : "text-muted-foreground"}`}
+                      className={`text-xs ${sufficient ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground"}`}
                       title={sufficient ? `Have ${haveRaw}` : `Have ${haveRaw} (need ${row.quantity_text})`}
                     >
                       {sufficient ? "✓ " : ""}{displayHave}

@@ -45,14 +45,14 @@ const KEYWORDS: [RegExp, string][] = [
 const FALLBACK = ["🍳", "🥘", "🍽️", "🥘", "🍲", "🧁", "🥐", "🥗"];
 
 const GRADIENTS = [
-  "from-emerald-100 to-teal-50",
-  "from-violet-100 to-fuchsia-50",
-  "from-amber-100 to-orange-50",
-  "from-sky-100 to-blue-50",
-  "from-rose-100 to-pink-50",
-  "from-lime-100 to-green-50",
-  "from-purple-100 to-indigo-50",
-  "from-cyan-100 to-sky-50",
+  "from-emerald-100 to-teal-50 dark:from-emerald-950/60 dark:to-teal-950/40",
+  "from-violet-100 to-fuchsia-50 dark:from-violet-950/60 dark:to-fuchsia-950/40",
+  "from-amber-100 to-orange-50 dark:from-amber-950/60 dark:to-orange-950/40",
+  "from-sky-100 to-blue-50 dark:from-sky-950/60 dark:to-blue-950/40",
+  "from-rose-100 to-pink-50 dark:from-rose-950/60 dark:to-pink-950/40",
+  "from-lime-100 to-green-50 dark:from-lime-950/60 dark:to-green-950/40",
+  "from-purple-100 to-indigo-50 dark:from-purple-950/60 dark:to-indigo-950/40",
+  "from-cyan-100 to-sky-50 dark:from-cyan-950/60 dark:to-sky-950/40",
 ];
 
 const AISLE_KEYWORDS: [RegExp, string][] = [

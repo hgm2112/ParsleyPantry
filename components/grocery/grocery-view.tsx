@@ -748,7 +748,7 @@ export function GroceryView({
                         ) : null}
                       </p>
                     ) : null}
-                    <ul className="flex-1 divide-y divide-black/5 bg-background">
+                    <ul className="flex-1 divide-y divide-border bg-background">
                       {group.items.map((item) => (
                         <li key={item.id} className="flex items-center gap-3 px-3 py-2">
                           <Checkbox
@@ -775,7 +775,7 @@ export function GroceryView({
                                 {item.name}
                               </span>
                               {item.sale_only ? (
-                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                                   <Tag className="h-2.5 w-2.5" />
                                   Sale only
                                 </span>

@@ -240,7 +240,7 @@ export function ShoppingWidget({
                           left
                         </span>
                       </div>
-                      <ul className="divide-y divide-black/5 bg-background">
+                      <ul className="divide-y divide-border bg-background">
                         {group.items.map((item) => (
                           <li key={item.id}>
                             <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent/40">
@@ -262,7 +262,7 @@ export function ShoppingWidget({
                               </span>
                               {item.sale_only ? (
                                 <Tag
-                                  className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                                  className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300"
                                   aria-label="Only buy if on sale"
                                 />
                               ) : null}

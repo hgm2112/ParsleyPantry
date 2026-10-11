@@ -250,7 +250,7 @@ export function ItemDialog({
             className={cn(
               "shrink-0",
               saleOnly &&
-                "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200",
+                "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900",
             )}
           >
             <Tag />

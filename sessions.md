@@ -4,6 +4,32 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 23) — Dark mode: Light/Dark/System
+
+**Shipped**
+- **Infrastructure**: new `components/theme-provider.tsx` (next-themes `0.4.6`, already in package.json but never mounted) — `attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`. Mounted in `app/layout.tsx` around children + Toaster (sonner's `useTheme()` finally gets a provider → toasts follow theme). `suppressHydrationWarning` added to `<html>`. `viewport.themeColor` → media array (light `#ffffff`, dark `#171A17`). Persists per-device in localStorage (`theme` key); no DB column (theme is device-level).
+- **Dark palette** (`globals.css` `.dark` block rewritten): layered charcoal — page `#171A17`, cards/muted `#222722`, popovers/secondary `#2B312B`, sidebar `#141714`, text `#F2F4EF`, muted-foreground `#A8B0A5`, borders/inputs `#394139`, accent `#263027`/`#CBE5D4`, primary = brighter parsley green `oklch(0.75 0.15 155)` with near-black-green on-primary. Matches existing class-based `@custom-variant dark (&:is(.dark *))`.
+- **Settings → Appearance** section (after Preferences in `settings-view.tsx`): 3-way segmented control Light/Dark/System (Sun/Moon/Monitor, grocery Aisles|Categories visual language) via new `components/theme-switch.tsx` `ThemePicker`.
+- **Nav quick toggle** (`ThemeToggle` in same file): icon button in mobile header (before Search) + desktop header (before avatar) — cycles Light → Dark → System, icon shows current mode (Sun/Moon/Monitor), aria-label announces current+next.
+- **Dark: pairs** (following the `expiry-chip.tsx` `*-100 → dark:*-950` pattern): `lib/tints.ts` (all 8 category/aisle tint sets + icons), `lib/tiles.ts` (8 gradients → `dark:from-*-950/60 dark:to-*-950/40`), `lib/meal-kind.ts` (3 kind tints), `smart-actions.tsx` (6 cards), `home-view.tsx` hero gradient, `stock-row.tsx` (2 badges), `shopping-widget.tsx` (sale icon), `grocery-view.tsx` + `item-dialog.tsx` (sale-only chips), `inventory-view.tsx` (violet/emerald chips, orange/amber alerts), `recipe-editor.tsx` (have/✓ emerald).
+- **Dividers**: 3× `divide-black/5` → `divide-border` (categories, grocery, shopping-widget).
+
+**Gotchas**
+- Scanner overlays (`bg-black`, white rings), dialog scrims, `text-white` on solid `-600` dots intentionally untouched — correct in both themes.
+- Manifest `background_color: #ffffff` unchanged (splash-only, cosmetic).
+- Nav toggle forces light/dark (leaves System); Settings picker is the place to return to System.
+- Body `font-weight: 600` (part 21 gotcha) applies in dark too — unchanged.
+
+**Verify**
+- `npx tsc --noEmit` clean; `npm run lint` = 16 pre-existing problems, none in touched files. `npm run build` skipped (dev server live on :3000 — rerun when stopped).
+- Manual: Settings → Appearance cycles all three; nav toggle cycles; hard-refresh PWA picks up dark; walk Home/Pantry/Grocery/Recipes/Plan + dialogs under dark; toasts follow theme; System tracks OS.
+
+**Open — Next Session**
+- Run `npm run build` when dev is stopped.
+- Visual pass on dark: primary-green contrast on cards, tile gradients, tinted headers.
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 22) — Grocery qty/unit divider "·"
 
 **Shipped**

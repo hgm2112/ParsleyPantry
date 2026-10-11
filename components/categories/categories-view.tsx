@@ -244,7 +244,7 @@ export function CategoriesView({
                           No aisles yet.
                         </p>
                       ) : (
-                        <ul className="divide-y divide-black/5">
+                        <ul className="divide-y divide-border">
                           {storeAisles.map((aisle) => (
                             <li key={aisle.id} className="py-1.5 text-sm">
                               {aisle.name}

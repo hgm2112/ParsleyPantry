@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useFullscreen, setFullscreen } from "@/lib/fullscreen";
 import { useHour } from "@/lib/use-now";
 import { LogoMark, TAGLINE, Wordmark, brandClassName } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-switch";
 
 const sidebarItems = [
   { href: "/home", label: "Home", icon: House },
@@ -155,6 +156,7 @@ function MobileHeader() {
     <header className="md:hidden sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
       <Wordmark href="/home" className="text-base" markClassName="h-7.5 w-8.75" />
       <div className="flex items-center gap-1">
+        <ThemeToggle />
         <Link
           href="/search"
           aria-label="Search"
@@ -183,6 +185,7 @@ function DesktopHeader({ name }: { name: string | null }) {
           <span className="text-sm text-muted-foreground">
             <Greeting name={name} />
           </span>
+          <ThemeToggle />
           <Link
             href="/settings"
             aria-label="Settings"

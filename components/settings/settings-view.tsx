@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ThemePicker } from "@/components/theme-switch";
 import {
   joinHouseholdByCode,
   regenerateInviteCode,
@@ -423,6 +424,13 @@ export function SettingsView({
             </SelectContent>
           </Select>
         </div>
+      </Section>
+
+      <Section
+        title="Appearance"
+        description="Light, dark, or follow your device. Saved on this device."
+      >
+        <ThemePicker />
       </Section>
 
       <Section

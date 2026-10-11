@@ -214,7 +214,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       action: listAction(expiredSorted, showAllExpired, () =>
         setShowAllExpired((value) => !value),
       ),
-      tint: "border-red-200 bg-red-50 text-red-900",
+      tint: "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
     });
   }
 
@@ -227,7 +227,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       action: listAction(soonSorted, showAllSoon, () =>
         setShowAllSoon((value) => !value),
       ),
-      tint: "border-amber-200 bg-amber-50 text-amber-900",
+      tint: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200",
     });
   }
 
@@ -252,7 +252,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
         () => setShowAllFreezer((value) => !value),
         formatFreezerList,
       ),
-      tint: "border-sky-200 bg-sky-50 text-sky-900",
+      tint: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200",
     });
   }
 
@@ -262,7 +262,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       emoji: "🛒",
       line: `${unchecked} item${unchecked === 1 ? "" : "s"} on your shopping list`,
       action: <Link href="/grocery">Continue shopping →</Link>,
-      tint: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      tint: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
     });
   }
 
@@ -321,7 +321,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
           </button>
         </span>
       ),
-      tint: "border-rose-200 bg-rose-50 text-rose-900",
+      tint: "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200",
     });
   }
 
@@ -335,7 +335,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
           Pick a meal →
         </button>
       ),
-      tint: "border-violet-200 bg-violet-50 text-violet-900",
+      tint: "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-200",
     });
   }
 

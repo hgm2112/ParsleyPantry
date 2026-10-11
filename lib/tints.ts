@@ -14,43 +14,51 @@ export type Tint = {
 
 const TINTS: Tint[] = [
   {
-    header: "bg-emerald-50 border-emerald-200 text-emerald-900",
-    icon: "text-emerald-600",
+    header:
+      "bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-900 dark:text-emerald-200",
+    icon: "text-emerald-600 dark:text-emerald-300",
     dot: "bg-emerald-500",
   },
   {
-    header: "bg-violet-50 border-violet-200 text-violet-900",
-    icon: "text-violet-600",
+    header:
+      "bg-violet-50 border-violet-200 text-violet-900 dark:bg-violet-950 dark:border-violet-900 dark:text-violet-200",
+    icon: "text-violet-600 dark:text-violet-300",
     dot: "bg-violet-500",
   },
   {
-    header: "bg-amber-50 border-amber-200 text-amber-900",
-    icon: "text-amber-600",
+    header:
+      "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200",
+    icon: "text-amber-600 dark:text-amber-300",
     dot: "bg-amber-500",
   },
   {
-    header: "bg-sky-50 border-sky-200 text-sky-900",
-    icon: "text-sky-600",
+    header:
+      "bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950 dark:border-sky-900 dark:text-sky-200",
+    icon: "text-sky-600 dark:text-sky-300",
     dot: "bg-sky-500",
   },
   {
-    header: "bg-rose-50 border-rose-200 text-rose-900",
-    icon: "text-rose-600",
+    header:
+      "bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950 dark:border-rose-900 dark:text-rose-200",
+    icon: "text-rose-600 dark:text-rose-300",
     dot: "bg-rose-500",
   },
   {
-    header: "bg-lime-50 border-lime-200 text-lime-900",
-    icon: "text-lime-600",
+    header:
+      "bg-lime-50 border-lime-200 text-lime-900 dark:bg-lime-950 dark:border-lime-900 dark:text-lime-200",
+    icon: "text-lime-600 dark:text-lime-300",
     dot: "bg-lime-500",
   },
   {
-    header: "bg-purple-50 border-purple-200 text-purple-900",
-    icon: "text-purple-600",
+    header:
+      "bg-purple-50 border-purple-200 text-purple-900 dark:bg-purple-950 dark:border-purple-900 dark:text-purple-200",
+    icon: "text-purple-600 dark:text-purple-300",
     dot: "bg-purple-500",
   },
   {
-    header: "bg-cyan-50 border-cyan-200 text-cyan-900",
-    icon: "text-cyan-600",
+    header:
+      "bg-cyan-50 border-cyan-200 text-cyan-900 dark:bg-cyan-950 dark:border-cyan-900 dark:text-cyan-200",
+    icon: "text-cyan-600 dark:text-cyan-300",
     dot: "bg-cyan-500",
   },
 ];

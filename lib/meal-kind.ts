@@ -17,8 +17,9 @@ export const MEAL_KINDS: MealKindMeta[] = [
     label: "Eating out",
     Icon: UtensilsCrossed,
     tint: {
-      header: "bg-amber-50 border-amber-200 text-amber-900",
-      icon: "text-amber-600",
+      header:
+        "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200",
+      icon: "text-amber-600 dark:text-amber-300",
       dot: "bg-amber-500",
     },
     placeholder: "Pizza from Sal's…",
@@ -28,8 +29,9 @@ export const MEAL_KINDS: MealKindMeta[] = [
     label: "Meal kit",
     Icon: Package,
     tint: {
-      header: "bg-sky-50 border-sky-200 text-sky-900",
-      icon: "text-sky-600",
+      header:
+        "bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950 dark:border-sky-900 dark:text-sky-200",
+      icon: "text-sky-600 dark:text-sky-300",
       dot: "bg-sky-500",
     },
     placeholder: "What's in the kit?",
@@ -39,8 +41,9 @@ export const MEAL_KINDS: MealKindMeta[] = [
     label: "No cooking",
     Icon: Ban,
     tint: {
-      header: "bg-lime-50 border-lime-200 text-lime-900",
-      icon: "text-lime-600",
+      header:
+        "bg-lime-50 border-lime-200 text-lime-900 dark:bg-lime-950 dark:border-lime-900 dark:text-lime-200",
+      icon: "text-lime-600 dark:text-lime-300",
       dot: "bg-lime-500",
     },
     placeholder: "Cereal night…",

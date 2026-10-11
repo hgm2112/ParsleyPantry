@@ -178,7 +178,7 @@ export function InventoryView({
               {groups.length} {groups.length === 1 ? "item" : "items"} ·{" "}
               {rows.length} {rows.length === 1 ? "batch" : "batches"}
               {lowCount > 0 ? (
-                <span className="text-orange-600"> · {lowCount} running low</span>
+                <span className="text-orange-600 dark:text-orange-300"> · {lowCount} running low</span>
               ) : null}
             </p>
           </div>
@@ -655,7 +655,7 @@ function InventoryItemCard({
             <Popover>
               <PopoverTrigger
                 render={
-                  <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 cursor-pointer" />
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300 cursor-pointer" />
                 }
               />
               <PopoverContent align="start" sideOffset={4} className="max-w-xs">
@@ -754,7 +754,7 @@ function InventoryItemCard({
           className="flex flex-wrap items-center gap-1.5"
         >
           {unitText ? (
-            <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800">
+            <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800 dark:bg-violet-950 dark:text-violet-200">
               {unitText}
             </span>
           ) : null}
@@ -774,7 +774,7 @@ function InventoryItemCard({
             />
           ))}
           {subcategoryName ? (
-            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase text-emerald-800">
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
               {subcategoryName}
             </span>
           ) : null}
