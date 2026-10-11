@@ -428,7 +428,7 @@ export function AddForm({
               />
               <Button
                 type="button"
-                variant="outline"
+                className="px-4"
                 onClick={() => setScanOpen(true)}
                 disabled={lookupBusy}
               >

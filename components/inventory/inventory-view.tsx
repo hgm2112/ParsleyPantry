@@ -205,7 +205,7 @@ export function InventoryView({
           </div>
           <Button
             size="sm"
-            className="h-9 gap-1.5 sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted sm:hover:text-foreground sm:dark:border-input sm:dark:bg-input/30 sm:dark:hover:bg-input/50"
+            className="hidden h-9 gap-1.5 sm:inline-flex sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted sm:hover:text-foreground sm:dark:border-input sm:dark:bg-input/30 sm:dark:hover:bg-input/50"
             onClick={() => setScanOpen(true)}
           >
             <ScanBarcode /> Scan

@@ -4,6 +4,20 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-10 (part 34) — Pantry Scan: hidden on mobile; add-form Scan primary + wider
+
+**Shipped**
+- `components/inventory/inventory-view.tsx:208`: header Scan button gained `hidden sm:inline-flex` — gone on mobile (search stretches full width), kept on desktop. Mobile scanning now only via `[+ Add]` and "Just bought", matching the request.
+- `components/inventory/add-form.tsx:429-437`: barcode-field Scan button `variant="outline"` → default (primary/filled) + `px-4` (was px-2.5) for a wider tap target. Height unchanged so it still aligns with the input.
+
+**Verify**
+- Manual review only (no tsc/lint/build per request). Mobile /inventory: no Scan by search. /inventory/add: wider filled-blue Scan next to barcode.
+
+**Open — Next Session**
+- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–34).
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+
 ## 2026-10-10 (part 33) — Pantry detail: stop pre-filling Unit with "oz"
 
 **Shipped**
