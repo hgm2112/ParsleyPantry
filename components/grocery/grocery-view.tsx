@@ -528,16 +528,20 @@ export function GroceryView({
                 {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
               </p>
             </div>
-            {modeToggle("hidden md:flex")}
+            {fullscreen ? null : modeToggle("hidden md:flex")}
           </div>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus /> Add
-            </Button>
-            <Button size="sm" render={<Link href="/grocery/stores" />}>
-              <Store /> Stores
-            </Button>
-            {modeToggle("md:hidden")}
+            {fullscreen ? null : (
+              <>
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  <Plus /> Add
+                </Button>
+                <Button size="sm" render={<Link href="/grocery/stores" />}>
+                  <Store /> Stores
+                </Button>
+                {modeToggle("md:hidden")}
+              </>
+            )}
             <Button
               size="icon-sm"
               variant={fullscreen ? "default" : "outline"}
@@ -573,7 +577,7 @@ export function GroceryView({
             </span>
         </div>
 
-        {stores.length > 0 ? (
+        {fullscreen || stores.length === 0 ? null : (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             {stores.map((entry) => {
               const on = selectedIds.includes(entry.id);
@@ -601,80 +605,82 @@ export function GroceryView({
               );
             })}
           </div>
-        ) : null}
+        )}
 
-        <div className="mt-2.5 flex items-center gap-2">
-          <div
-            className="relative flex-1"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setSearchFocused(false);
-              }
-            }}
-          >
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  const first = searchResults[0];
-                  if (first) void quickAdd(first);
-                } else if (event.key === "Escape") {
-                  setQuery("");
+        {fullscreen ? null : (
+          <div className="mt-2.5 flex items-center gap-2">
+            <div
+              className="relative flex-1"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                   setSearchFocused(false);
                 }
               }}
-              placeholder="Type to add an item…"
-              className="h-9 pl-8 pr-3"
-              aria-label="Search catalog to add to grocery list"
-            />
-            {searchFocused && query.trim() ? (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border bg-background shadow-md">
-                {searchResults.length === 0 ? (
-                  <p className="px-3 py-2.5 text-sm text-muted-foreground">
-                    No catalog match — use Add for recipes or a new item.
-                  </p>
-                ) : (
-                  searchResults.map((entry) => (
-                    <button
-                      type="button"
-                      key={entry.id}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => void quickAdd(entry)}
-                      disabled={addingId === entry.id}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-60"
-                    >
-                      {addingId === entry.id ? (
-                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                      ) : null}
-                      <span className="min-w-0 flex-1 truncate">
-                        {entry.name}
-                        {entry.unit ? (
-                          <span className="text-muted-foreground"> · {entry.unit}</span>
+            >
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    const first = searchResults[0];
+                    if (first) void quickAdd(first);
+                  } else if (event.key === "Escape") {
+                    setQuery("");
+                    setSearchFocused(false);
+                  }
+                }}
+                placeholder="Type to add an item…"
+                className="h-9 pl-8 pr-3"
+                aria-label="Search catalog to add to grocery list"
+              />
+              {searchFocused && query.trim() ? (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border bg-background shadow-md">
+                  {searchResults.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-muted-foreground">
+                      No catalog match — use Add for recipes or a new item.
+                    </p>
+                  ) : (
+                    searchResults.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => void quickAdd(entry)}
+                        disabled={addingId === entry.id}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-60"
+                      >
+                        {addingId === entry.id ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                         ) : null}
-                      </span>
-                      {stockByItem.get(rootOf(entry.id)) ? (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          ×{stockByItem.get(rootOf(entry.id))} in pantry
+                        <span className="min-w-0 flex-1 truncate">
+                          {entry.name}
+                          {entry.unit ? (
+                            <span className="text-muted-foreground"> · {entry.unit}</span>
+                          ) : null}
                         </span>
-                      ) : null}
-                      {onListSet.has(rootOf(entry.id)) ? (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                          on list
-                        </span>
-                      ) : null}
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : null}
+                        {stockByItem.get(rootOf(entry.id)) ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            ×{stockByItem.get(rootOf(entry.id))} in pantry
+                          </span>
+                        ) : null}
+                        {onListSet.has(rootOf(entry.id)) ? (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                            on list
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        )}
 
-        {mode === "aisle" && stores.length === 0 ? (
+        {fullscreen || mode !== "aisle" || stores.length > 0 ? null : (
           <p className="mt-2 text-xs text-muted-foreground">
             Showing your categories —{" "}
             <Link href="/grocery/stores" className="underline">
@@ -682,7 +688,7 @@ export function GroceryView({
             </Link>{" "}
             to arrange by a store&apos;s own aisles.
           </p>
-        ) : null}
+        )}
       </div>
 
       {items.length === 0 ? (

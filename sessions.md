@@ -4,6 +4,23 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-11 (part 37) — Shopping fullscreen now shows only the list
+
+**Shipped**
+- Grocery `/grocery` fullscreen toggle (existing `lib/fullscreen.ts` singleton + `nav.tsx`/`app-main.tsx` chrome hiding) now hides the in-page controls too:
+  - `[Aisles | Categories]` toggle (desktop + mobile), `[+ Add]`, `[Stores]`, store pills (names/counts/selection), the "Type to add an item…" search + results dropdown, and the "create a store" hint.
+  - Still visible: title + "N to buy · M in cart", progress bar, the fullscreen/exit button (stays right-aligned in the same sticky row), the list grid (aisle/category headings, items, checkboxes, quantities, item actions), empty states, and the "Finish shopping" bar.
+- Toolbar collapses to one compact sticky line in fullscreen, so the list takes the freed space; normal mode is unchanged; desktop unaffected (toggle is `md:hidden`); flag still auto-resets on route change.
+- Store-name group headings inside the list (shown when >1 store is active) deliberately stay — they're part of the list structure.
+
+**Verify** (manual only — no tsc/lint/build per request)
+- Mobile `/grocery` → Maximize2: header, bottom nav, Add, Stores, toggle, pills, search gone; list + progress + Finish shopping + exit button remain; Minimize2 restores; navigate away → resets; desktop unchanged.
+
+**Open — next session**
+- Apply `supabase/migrations/20261014120000_purchased_frozen.sql` (if not already).
+- Android PWA scan debug overlay readings (part 9 still open).
+- Clean up stray untracked dev files (images, `dev.log`, etc.) before release.
+
 ## 2026-10-11 (part 36) — Standardized barcode scanning + purchased-frozen state + persistent shop trip
 
 **Shipped**
