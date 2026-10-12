@@ -15,6 +15,7 @@ for "what changed", this is for "what's true now / what's next".
 
 **Verify** (manual only — no tsc/lint/build per request)
 - Mobile `/grocery` → Maximize2: header, bottom nav, Add, Stores, toggle, pills, search gone; list + progress + Finish shopping + exit button remain; Minimize2 restores; navigate away → resets; desktop unchanged.
+- Committed + pushed to main (`b6a17f6`).
 
 **Open — next session**
 - Apply `supabase/migrations/20261014120000_purchased_frozen.sql` (if not already).
@@ -41,6 +42,7 @@ for "what changed", this is for "what's true now / what's next".
 
 **Verify** (manual only — no tsc/lint/build per request)
 - Apply the migration, then: scan a pantry item (→ add form prefilled), scan a known barcode in Just Bought (→ confirm sheet; freezer fields appear once location = Freezer), scan an unknown barcode (→ add form), save, check the trip line + freezer chips, and navigate away/back mid-trip to confirm the trip survives.
+- Committed + pushed to main (`6e55ae5`).
 
 **Gotchas**
 - No backfill: pre-existing freezer rows with no date stay "untracked" — indistinguishable from genuinely untracked by design.
