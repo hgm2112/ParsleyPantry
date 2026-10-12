@@ -9,7 +9,13 @@ import { io } from "next/cache";
  * immediately, so the snapshot is computed at request time and hydration
  * always matches the server HTML.
  */
-const subscribe = () => () => {};
+// Poll once a minute so date/hour-derived UI rolls over at local midnight and
+// on the hour even when nothing else re-renders; React bails out of the
+// re-render unless the snapshot actually changed.
+const subscribe = (onStoreChange: () => void) => {
+  const id = setInterval(onStoreChange, 60_000);
+  return () => clearInterval(id);
+};
 
 const getDateKey = () => {
   const now = new Date();

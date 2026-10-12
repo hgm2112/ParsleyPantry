@@ -4,6 +4,25 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 40) — Leftovers widget: added date + age
+
+**Shipped**
+- Leftovers rows now show one-line meta after the (now `font-semibold`) name: `Added Oct 9 · 3 days ago` / `· Yesterday` / `· Today`, muted `font-normal` secondary styling, inside the existing `min-w-0 flex-1 truncate` span (long names ellipsize, no overflow; X button untouched).
+- **No migration, no schema change** (user's call): the date is derived client-side from the existing `created_at` timestamptz (already fetched via `select("*")`, already in `LeftoverRow`). Local calendar date via `getFullYear/getMonth/getDate` in the browser zone (no UTC day-shift); age = calendar-day diff of two UTC-midnight-parsed date keys (DST-immune); negative clamps to Today; invalid timestamp → meta omitted.
+- `lib/use-now.ts`: `subscribe` now polls `setInterval(onStoreChange, 60_000)` (was a no-op) so `useToday()`/`useHour()` re-read at local midnight/on the hour even when idle — React bails out unless the snapshot changed. Fixes live rollover for this widget AND the other 7 consumers (greeting, mini-calendar, week-meals, plan, stats). SSR/hydration unchanged (`getServerSnapshot` still the server snapshot).
+- Helpers `localDateKey`/`dayDiff`/`formatAdded` live in the widget file (only consumer); date rendered `toLocaleDateString("en-US", { month: "short", day: "numeric" })`.
+
+**Verify**
+- Manual review only — no tsc/lint/build per request.
+
+**Gotchas**
+- Displayed date follows the *viewing device's* current zone (travel → item may re-date); chosen deliberately over a frozen `date_added` column.
+- Age labels roll over at local midnight via the use-now poll (up to 60s lag), not instantly.
+
+**Open — next session**
+- Not committed yet — commit + push when user asks.
+- Still open: Vercel env vars for the reminder cron (VAPID/service-role/CRON_SECRET), `Date.now` blocking-prerender error, stray untracked dev files, Android PWA scan overlay.
+
 ## 2026-10-12 (part 39) — Daily leftovers reminder (phase 2)
 
 **Shipped**
