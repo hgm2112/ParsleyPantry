@@ -6,6 +6,7 @@ import type {
   HouseholdRow,
   HouseholdSettingsRow,
   MemberRow,
+  NotificationSettingsRow,
 } from "@/lib/types";
 
 export const metadata = { title: "Settings" };
@@ -30,29 +31,39 @@ function SettingsSkeleton() {
 async function SettingsContent() {
   const { supabase, householdId, user, profile } = await requireDal();
 
-  const [householdResult, membersResult, membershipsResult, settingsResult] =
-    await Promise.all([
-      supabase
-        .from("households")
-        .select("id, name, invite_code")
-        .eq("id", householdId)
-        .maybeSingle(),
-      supabase
-        .from("household_members")
-        .select("household_id, role, created_at, user_id")
-        .eq("household_id", householdId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("household_members")
-        .select("household_id, role, households(id, name)")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("household_settings")
-        .select("*")
-        .eq("household_id", householdId)
-        .maybeSingle(),
-    ]);
+  const [
+    householdResult,
+    membersResult,
+    membershipsResult,
+    settingsResult,
+    reminderResult,
+  ] = await Promise.all([
+    supabase
+      .from("households")
+      .select("id, name, invite_code")
+      .eq("id", householdId)
+      .maybeSingle(),
+    supabase
+      .from("household_members")
+      .select("household_id, role, created_at, user_id")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("household_members")
+      .select("household_id, role, households(id, name)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("household_settings")
+      .select("*")
+      .eq("household_id", householdId)
+      .maybeSingle(),
+    supabase
+      .from("notification_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
   // Robust fetch: separate queries avoid PostgREST embed issues (no FK from user_id -> profiles.id)
   let members: MemberRow[] = [];
@@ -82,6 +93,9 @@ async function SettingsContent() {
         (membershipsResult.data ?? []) as unknown as MembershipRow[]
       }
       settings={(settingsResult.data ?? null) as HouseholdSettingsRow | null}
+      reminder={
+        (reminderResult.data ?? null) as NotificationSettingsRow | null
+      }
       profile={profile}
       currentUserId={user.id}
     />

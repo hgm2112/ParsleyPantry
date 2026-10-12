@@ -71,6 +71,32 @@ Import the repo, set the two Supabase env vars in the project settings, and
 deploy. Note: `@supabase/supabase-js` wants Node 22+ (Vercel default); on
 Node 20 it only prints a deprecation warning.
 
+### Daily leftovers reminder (optional)
+
+Settings → "Leftovers reminder" sends a daily web-push notification about
+what's on your leftovers list. Generate a VAPID keypair:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Then set these env vars in Vercel (never commit them):
+
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — public key from the keypair
+- `VAPID_PRIVATE_KEY` — private key from the keypair
+- `VAPID_SUBJECT` — contact for the VAPID spec, e.g. `mailto:you@example.com`
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Settings → API (cron-only; never
+  expose to the browser)
+- `CRON_SECRET` — any long random string; the cron route rejects requests
+  without `Authorization: Bearer <CRON_SECRET>`
+
+How it fires: Vercel Hobby only allows one cron expression per deployment, so
+`vercel.json` registers 24 hourly jobs on the same path. Each run only sends to
+users whose local due window (scheduled time + 2h, wrapping midnight) contains
+that hour, and a per-device/day delivery row guarantees exactly one send. On
+iPhone/iPad, web push works only in the installed Home Screen app (iOS 16.4+);
+deactivating/deleting the app eventually deactivates that subscription.
+
 Then point Supabase **Authentication → URL Configuration** at the deployed
 URL (Site URL + the Vercel origin in Redirect URLs, `http://localhost:3000/**`
 kept for dev) — Setup step 1.4 explains why, otherwise confirmation emails
@@ -79,11 +105,14 @@ from production sign-ups link to localhost.
 Before the first deploy, run every migration in `supabase/migrations/` in
 filename order in the Supabase SQL Editor — this includes
 `20261009120000_meal_plan_kind.sql` (the day-kind column for eating out /
-meal kits / no-cook days) and
+meal kits / no-cook days),
 `20261009160000_restore_default_signup_categories.sql` (re-asserts the
 signup bootstrap so every new standalone account gets the plain default
 categories, never KitchenOwl-style labels; it carries two read-only
-diagnostics and an opt-in cleanup for households that already drifted).
+diagnostics and an opt-in cleanup for households that already drifted),
+and `20261016120000_reminder_notifications.sql` (daily leftovers reminder:
+per-user notification settings, per-device push subscriptions, delivery
+dedup — needed before enabling the reminder, not for the widget itself).
 
 ## Install on your phone
 

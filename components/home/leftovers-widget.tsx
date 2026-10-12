@@ -48,7 +48,7 @@ export function LeftoversWidget({ rows }: { rows: LeftoverRow[] | null }) {
   }
 
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm">
+    <section id="leftovers" className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Refrigerator className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-extrabold">Leftovers</h2>

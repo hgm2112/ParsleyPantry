@@ -225,6 +225,30 @@ export interface LeftoverRow {
   created_at: string;
 }
 
+/** Per-user daily leftovers-reminder preferences (push notifications). */
+export interface NotificationSettingsRow {
+  user_id: string;
+  enabled: boolean;
+  /** Local wall-clock time as "HH:MM:SS" (PostgREST `time`), default 18:00. */
+  local_time: string;
+  /** IANA zone captured when the user saved the setting, e.g. "America/New_York". */
+  timezone: string | null;
+  generic_message: boolean;
+  updated_at: string;
+}
+
+/** One browser/device push subscription owned by a user. */
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export type HomeMeal = MealPlanDayRow & {
   recipe: { id: string; name: string; time: number; tags: string[] } | null;
 };

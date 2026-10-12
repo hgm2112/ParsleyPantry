@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ThemePicker } from "@/components/theme-switch";
+import { LeftoverReminderSection } from "@/components/settings/leftover-reminder-section";
 import {
   joinHouseholdByCode,
   regenerateInviteCode,
@@ -36,7 +37,7 @@ import {
   updateHouseholdName,
 } from "@/app/(app)/settings/actions";
 import type { MembershipRow } from "@/app/(app)/settings/page";
-import { LOCATIONS, type HouseholdRow, type HouseholdSettingsRow, type Location, type MemberRow, type ProfileRow } from "@/lib/types";
+import { LOCATIONS, type HouseholdRow, type HouseholdSettingsRow, type Location, type MemberRow, type NotificationSettingsRow, type ProfileRow } from "@/lib/types";
 
 function Section({
   title,
@@ -65,6 +66,7 @@ type Props = {
   members: MemberRow[];
   memberships: MembershipRow[];
   settings: HouseholdSettingsRow | null;
+  reminder: NotificationSettingsRow | null;
   profile: ProfileRow;
   currentUserId: string;
 };
@@ -74,6 +76,7 @@ export function SettingsView({
   members,
   memberships,
   settings,
+  reminder,
   profile,
   currentUserId,
 }: Props) {
@@ -431,6 +434,13 @@ export function SettingsView({
         description="Light, dark, or follow your device. Saved on this device."
       >
         <ThemePicker />
+      </Section>
+
+      <Section
+        title="Leftovers reminder"
+        description="A daily nudge to enjoy what's still on your leftovers list."
+      >
+        <LeftoverReminderSection settings={reminder} />
       </Section>
 
       <Section

@@ -4,6 +4,39 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 39) — Daily leftovers reminder (phase 2)
+
+**Shipped**
+- Migration `supabase/migrations/20261016120000_reminder_notifications.sql` (**NOT yet applied**): `notification_settings` (per-user PK, `enabled` false, `local_time` '18:00', `timezone` IANA, `generic_message` privacy flag; RLS own-row all) + `push_subscriptions` (endpoint-unique, own-row RLS) + `leftover_reminder_deliveries` (unique `(subscription_id, local_date)`, **zero policies** — cron-only via service role).
+- `lib/reminder.ts` (pure): `localParts` (Intl `hourCycle: "h23"`, en-CA → "YYYY-MM-DD" + minutes), `parseLocalTime`, `isDue` (elapsed `(now - sched + 1440) % 1440 < 120`, wraps midnight), `reminderLocalDate` (wrap → yesterday's day as the dedup key), `composeReminder` (title "Don't forget your leftovers!"; 1 item singular "Enjoy it…"; 2–3 enumerated; 4+ → first two + "and N more"; generic/empty fallback; 30-char name trim with ellipsis).
+- `lib/supabase/admin.ts` (server-only): service-role client, throws if `SUPABASE_SERVICE_ROLE_KEY` unset.
+- `app/(app)/settings/actions.ts`: `updateLeftoverReminder` (zod patch merge-then-upsert on user_id; timezone validated via `Intl.DateTimeFormat`), `savePushSubscription` (endpoint https URL + base64url keys; upsert on endpoint).
+- `app/api/cron/leftovers-reminders/route.ts` (GET, `maxDuration=60`): fail-closed `Bearer ${CRON_SECRET}`; VAPID setup from env (500 if missing); enabled users with timezone → per-user due check → resolve household (`profiles.current_household_id` → first membership) → load leftovers → claim insert (23505 = already claimed, skip) → `webpush.sendNotification` (payload `{title, body, url:"/home#leftovers"}`, TTL 6h, urgency normal, topic leftovers-daily). Error policy: 404/410/400/413 → deactivate sub + keep claim; 401/403 → 500 (VAPID misconfig); 429/5xx/network → delete claim so a later hourly band retries; no leftovers → NOT claimed (sends later in window if items appear).
+- `vercel.json` (new): 24 crons `0 H * * *` × 24, all → `/api/cron/leftovers-reminders` (Hobby allows one expression per deployment; hourly bands + due-window logic = "fire sometime in the hour containing the user's chosen time").
+- `components/settings/leftover-reminder-section.tsx`: enable switch, time input (saves on blur), "Hide item names" switch, `Enable on this device` button (requests `Notification.permission` **only inside this click** — iOS gesture rule; registers `/sw.js` itself since the app auto-registers production-only; `pushManager.subscribe` → `savePushSubscription`); device-support detection (PushManager missing → unsupported; iOS non-standalone → install-to-Home-Screen message, button disabled).
+- `app/(app)/settings/page.tsx` + `settings-view.tsx`: `notification_settings` fetch (5th Promise.all query, `.maybeSingle()`, tolerated error), `reminder` prop, section mounted between Appearance and Data.
+- `public/sw.js`: `push` (json payload w/ generic fallback, showNotification icon/badge `/icon-192.png`, data.url) + `notificationclick` (close, focus existing client + navigate, else openWindow). Existing install/activate/fetch handlers untouched.
+- `components/home/leftovers-widget.tsx`: added `id="leftovers"` (notification tap target, `/home#leftovers`).
+- `.env.example` + README (Deploy): VAPID keypair generation, the 5 server env vars (names only, never values), Hobby-cron explanation, iOS Home Screen caveat, new migration named in the run-before-deploy list.
+- Deps: `web-push` + `@types/web-push` (engine warnings pre-existing, Node 20 local vs Node 22 wanted).
+
+**Verify**
+- Manual review only — no tsc/lint/build per request.
+
+**Gotchas**
+- Notification settings are **per-user**, not per-household (unlike the widget's household-scoped list).
+- Migration must run before enabling (Settings section tolerates missing table → null settings).
+- `notification_settings.local_time` is PostgREST `time` ("18:00:00") — UI shows HH:MM via `timeValue()`.
+- Cron claim happens BEFORE send; a crash between claim and send that day loses that device's reminder (acceptable — no double-send ever).
+- 401/403 mid-loop aborts the whole run with 500 (VAPID broken for everyone — fail loud).
+- Web push on iOS/iPadOS 16.4+ only in installed Home Screen PWA; Safari private mode lacks PushManager → "unsupported".
+
+**Open — next session**
+- **Apply `20261016120000_reminder_notifications.sql` + the Phase 1 leftovers migration if not yet done** in the SQL Editor.
+- Set the 5 env vars in Vercel (generate VAPID keys via `npx web-push generate-vapid-keys`).
+- Not committed yet — commit + push when user asks.
+- Still open from before: `Date.now` blocking-prerender error, stray untracked dev files, Android PWA scan overlay.
+
 ## 2026-10-12 (part 38) — Leftovers widget (phase 1)
 
 **Shipped**
