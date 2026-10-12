@@ -38,7 +38,8 @@ const addInputSchema = z.object({
   barcode: z
     .string()
     .trim()
-    .regex(/^\d{0,14}$/)
+    // Printable ASCII (the camera also emits CODE_128/CODE_39 store codes).
+    .regex(/^(?:[\x21-\x7e]{1,64})?$/)
     .nullish()
     .transform((value) => (value ? value : null)),
   categoryId: z.string().uuid().nullish(),
@@ -72,6 +73,32 @@ const addInputSchema = z.object({
       const trimmed = (value ?? "").trim().slice(0, 160);
       return trimmed ? trimmed : null;
     }),
+  /**
+   * Freezing inputs — only meaningful when location is "freezer". Omitted
+   * entirely (legacy callers) = freezer row that simply isn't tracked.
+   * frozenAt set + purchasedFrozen false = freezing now, known date.
+   * purchasedFrozen true = bought already frozen, date unknown (no countdown).
+   */
+  frozenAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .transform((value) => value ?? null),
+  freezerDurationMonths: z
+    .number()
+    .int()
+    .min(0)
+    .max(120)
+    .nullish()
+    .transform((value) => value ?? null),
+  purchasedFrozen: z.boolean().nullish().transform((value) => value ?? false),
+  /** Food type key from lib/freezer.ts — stored only when the item has none. */
+  freezerFoodType: z
+    .string()
+    .trim()
+    .max(64)
+    .nullish()
+    .transform((value) => value ?? null),
 });
 
 export type AddToInventoryInput = z.input<typeof addInputSchema>;
@@ -160,6 +187,47 @@ async function loadInventory(
   return row;
 }
 
+/**
+ * Freeze columns a newly added batch ends up with (see freezeColumnsForAdd's
+ * callers): only freezer rows carry them; "purchased frozen" keeps a null
+ * frozen_at because the original date is unknown — never invented — and a
+ * quality date is computed only when a real freezing date exists.
+ */
+function freezeColumnsForAdd(input: {
+  location: Location;
+  frozenAt: string | null;
+  freezerDurationMonths: number | null;
+  purchasedFrozen: boolean;
+}): FreezeColumns {
+  if (input.location !== "freezer") {
+    return {
+      frozen_at: null,
+      freezer_duration_months: null,
+      freezer_quality_date: null,
+      purchased_frozen: false,
+    };
+  }
+  if (input.purchasedFrozen) {
+    return {
+      frozen_at: null,
+      freezer_duration_months: null,
+      freezer_quality_date: null,
+      purchased_frozen: true,
+    };
+  }
+  const frozenAt = input.frozenAt;
+  const months = frozenAt && input.freezerDurationMonths != null
+    ? input.freezerDurationMonths
+    : null;
+  return {
+    frozen_at: frozenAt,
+    freezer_duration_months: months,
+    freezer_quality_date:
+      frozenAt && months != null ? computeFreezerQualityDate(frozenAt, months) : null,
+    purchased_frozen: false,
+  };
+}
+
 /** Adds to stock, merging into an existing row for that location when present. */
 export async function addToInventory(
   rawInput: AddToInventoryInput,
@@ -171,6 +239,8 @@ export async function addToInventory(
     }
     const input = parsed.data;
     const { supabase, householdId, user } = await requireDal();
+
+    const freeze = freezeColumnsForAdd(input);
 
     const imperial = toImperialStock(input.quantity, input.unit ?? null);
     const quantity = imperial.quantity;
@@ -229,6 +299,7 @@ export async function addToInventory(
           expiration_days: input.expirationDays ?? null,
           low_threshold: lowThreshold,
           auto_restock: input.autoRestock ?? false,
+          freezer_food_type: input.freezerFoodType,
           unit,
           created_by: user.id,
         })
@@ -256,6 +327,9 @@ export async function addToInventory(
       if (input.subcategoryId != null) patch.subcategory_id = input.subcategoryId;
       // Never overwrite an existing brand or a confirmed canonical mapping.
       if (input.brand && !item.brand) patch.brand = input.brand;
+      if (input.freezerFoodType && !item.freezer_food_type) {
+        patch.freezer_food_type = input.freezerFoodType;
+      }
       if (canonicalItemId && !item.canonical_item_id) {
         patch.canonical_item_id = canonicalItemId;
       }
@@ -265,8 +339,10 @@ export async function addToInventory(
       }
     }
 
-    // Batch key: same item + location + expiration date + freezing history =
-    // the same batch (quantities merge). Anything else starts a new batch.
+    // Batch key: same item + location + expiration date + freezing history
+    // (including the purchased-frozen flag) = the same batch. Anything else
+    // starts a new batch — an add never overwrites another batch's frozen
+    // status, dates, or quantity.
     const { data: existingRows } = await supabase
       .from("inventory")
       .select("*")
@@ -278,8 +354,9 @@ export async function addToInventory(
       rows.find(
         (row) =>
           row.expiration_date === input.expirationDate &&
-          row.frozen_at === null &&
-          row.freezer_duration_months === null,
+          row.frozen_at === freeze.frozen_at &&
+          row.freezer_duration_months === freeze.freezer_duration_months &&
+          row.purchased_frozen === freeze.purchased_frozen,
       ) ?? null;
 
     const existing = findExisting((existingRows ?? []) as InventoryRow[]);
@@ -317,6 +394,7 @@ export async function addToInventory(
           source: input.source ?? null,
           notes: input.notes ?? null,
           added_by: user.id,
+          ...freeze,
         })
         .select("id")
         .single();
@@ -642,6 +720,7 @@ const batchSnapshotSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullish()
     .transform((value) => value ?? null),
+  purchased_frozen: z.boolean().nullish().transform((value) => value ?? false),
   is_low: z.boolean(),
   source: z
     .string()
@@ -703,6 +782,7 @@ export async function restoreBatches(
         frozen_at: snap.frozen_at,
         freezer_duration_months: snap.freezer_duration_months,
         freezer_quality_date: snap.freezer_quality_date,
+        purchased_frozen: snap.purchased_frozen,
         is_low: snap.is_low,
         source: snap.source,
         notes: snap.notes,
@@ -721,7 +801,8 @@ export async function restoreBatches(
             (row) =>
               row.expiration_date === snap.expiration_date &&
               row.frozen_at === snap.frozen_at &&
-              row.freezer_duration_months === snap.freezer_duration_months,
+              row.freezer_duration_months === snap.freezer_duration_months &&
+              row.purchased_frozen === snap.purchased_frozen,
           );
           if (!sibling) return { ok: false, error: insertError.message };
           const { error: mergeError } = await supabase
@@ -765,7 +846,7 @@ const patchSchema = z.object({
   isLow: z.boolean().optional(),
   lowThreshold: z.number().min(0).nullish(),
   autoRestock: z.boolean().optional(),
-  /** Freeze date (YYYY-MM-DD); null = frozen with unknown date. */
+  /** Freeze date (YYYY-MM-DD); null = unknown / not recorded. */
   frozenAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -775,6 +856,8 @@ const patchSchema = z.object({
   freezerDurationMonths: z.number().int().min(0).max(120).nullish(),
   /** Food type key from lib/freezer.ts; null = "not sure". */
   freezerFoodType: z.string().trim().max(64).nullish(),
+  /** Bought already frozen — original freezing date unknown (no countdown). */
+  purchasedFrozen: z.boolean().optional(),
 });
 
 export type UpdateInventoryInput = z.input<typeof patchSchema>;
@@ -783,19 +866,26 @@ type FreezeColumns = {
   frozen_at: string | null;
   freezer_duration_months: number | null;
   freezer_quality_date: string | null;
+  purchased_frozen: boolean;
 };
 
 /**
  * Freeze columns a row should end up with after a move/patch: thawed to null
  * outside the freezer; inside, recomputed from frozen_at + months when the
- * input touches them (never chained through a previous quality date).
+ * input touches them (never chained through a previous quality date). A
+ * purchased-frozen row keeps frozen_at null — its original date stays unknown
+ * and no quality date is ever invented for it.
  */
 function resultingFreezeColumns(
   current: Pick<
     InventoryRow,
-    "frozen_at" | "freezer_duration_months" | "freezer_quality_date"
+    "frozen_at" | "freezer_duration_months" | "freezer_quality_date" | "purchased_frozen"
   >,
-  input: { frozenAt?: string | null; freezerDurationMonths?: number | null },
+  input: {
+    frozenAt?: string | null;
+    freezerDurationMonths?: number | null;
+    purchasedFrozen?: boolean;
+  },
   targetLocation: Location,
 ): FreezeColumns {
   if (targetLocation !== "freezer") {
@@ -803,15 +893,29 @@ function resultingFreezeColumns(
       frozen_at: null,
       freezer_duration_months: null,
       freezer_quality_date: null,
+      purchased_frozen: false,
     };
   }
-  const frozenAt = input.frozenAt !== undefined ? input.frozenAt : current.frozen_at;
-  const months =
-    input.freezerDurationMonths !== undefined
+  const purchasedFrozen =
+    input.purchasedFrozen !== undefined ? input.purchasedFrozen : current.purchased_frozen;
+  const frozenAt = purchasedFrozen
+    ? null
+    : input.frozenAt !== undefined
+      ? input.frozenAt
+      : current.frozen_at;
+  const months = purchasedFrozen
+    ? null
+    : input.freezerDurationMonths !== undefined
       ? input.freezerDurationMonths
       : current.freezer_duration_months;
   let quality: string | null;
-  if (input.frozenAt !== undefined || input.freezerDurationMonths !== undefined) {
+  if (purchasedFrozen) {
+    quality = null;
+  } else if (
+    input.frozenAt !== undefined ||
+    input.freezerDurationMonths !== undefined ||
+    input.purchasedFrozen !== undefined
+  ) {
     quality =
       frozenAt && months != null ? computeFreezerQualityDate(frozenAt, months) : null;
   } else {
@@ -821,6 +925,7 @@ function resultingFreezeColumns(
     frozen_at: frozenAt,
     freezer_duration_months: months,
     freezer_quality_date: quality,
+    purchased_frozen: purchasedFrozen,
   };
 }
 
@@ -870,7 +975,8 @@ export async function updateInventory(
           (row) =>
             row.expiration_date === resultExpiration &&
             row.frozen_at === freezeColumns.frozen_at &&
-            row.freezer_duration_months === freezeColumns.freezer_duration_months,
+            row.freezer_duration_months === freezeColumns.freezer_duration_months &&
+            row.purchased_frozen === freezeColumns.purchased_frozen,
         ) ?? null;
 
       const mergeIntoTarget = async (
@@ -938,7 +1044,9 @@ export async function updateInventory(
       if (input.isLow !== undefined) patch.is_low = input.isLow;
 
       const freezeTouched =
-        input.frozenAt !== undefined || input.freezerDurationMonths !== undefined;
+        input.frozenAt !== undefined ||
+        input.freezerDurationMonths !== undefined ||
+        input.purchasedFrozen !== undefined;
       const freezeColumns = freezeTouched
         ? resultingFreezeColumns(current, input, input.location ?? current.location)
         : null;
@@ -956,6 +1064,7 @@ export async function updateInventory(
               frozen_at: current.frozen_at,
               freezer_duration_months: current.freezer_duration_months,
               freezer_quality_date: current.freezer_quality_date,
+              purchased_frozen: current.purchased_frozen,
             };
             const resultExpiration =
               input.expirationDate === undefined
@@ -972,7 +1081,8 @@ export async function updateInventory(
                 row.id !== current.id &&
                 row.expiration_date === resultExpiration &&
                 row.frozen_at === cols.frozen_at &&
-                row.freezer_duration_months === cols.freezer_duration_months,
+                row.freezer_duration_months === cols.freezer_duration_months &&
+                row.purchased_frozen === cols.purchased_frozen,
             );
             if (sibling) {
               await supabase.from("inventory").delete().eq("id", current.id);

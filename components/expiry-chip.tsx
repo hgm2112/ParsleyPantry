@@ -19,7 +19,7 @@ export function ExpiryChip({
 }) {
   use(io());
 
-  // Frozen without a quality date (purchased frozen / not tracked yet).
+  // Frozen without a quality date (not tracked yet).
   if (mode === "freezer-untracked") {
     return (
       <span
@@ -29,6 +29,21 @@ export function ExpiryChip({
         )}
       >
         Frozen (no date)
+      </span>
+    );
+  }
+
+  // Bought already frozen: the original freezing date is unknown, so there is
+  // deliberately no quality countdown — never shown as merely "not tracked".
+  if (mode === "freezer-purchased") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200",
+          className,
+        )}
+      >
+        Purchased frozen
       </span>
     );
   }

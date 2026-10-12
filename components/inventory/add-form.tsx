@@ -24,6 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScanSheet } from "@/components/scan-sheet";
+import {
+  FreezerFields,
+  LocationPicker,
+  QuantityStepper,
+  defaultFreezeValue,
+  freezeInputFor,
+  type FreezeValue,
+} from "@/components/inventory/entry-fields";
 import { addDays, suggestExpiration } from "@/lib/expiry";
 import type { OffProduct } from "@/lib/off";
 import {
@@ -38,25 +46,29 @@ import {
   matchCanonical,
   type CanonicalCandidate,
 } from "@/lib/canonical";
+import {
+  FREEZER_UNKNOWN_KEY,
+  foodTypeByKey,
+  guessFreezerFoodType,
+} from "@/lib/freezer";
 import type { ItemRow, Location, SubcategoryRow } from "@/lib/types";
-import { cn } from "@/lib/utils";
-
-const LOCATIONS: { value: Location; label: string }[] = [
-  { value: "pantry", label: "Pantry" },
-  { value: "fridge", label: "Fridge" },
-  { value: "freezer", label: "Freezer" },
-];
 
 type Props = {
   subcategories: SubcategoryRow[];
   defaultLocation: Location;
   initialBarcode: string | null;
+  /**
+   * Changes when a *new* scan should re-run the lookup even if this route
+   * instance survived navigation (Next keeps ~3 routes in <Activity>).
+   */
+  lookupKey?: string | null;
 };
 
 export function AddForm({
   subcategories,
   defaultLocation,
   initialBarcode,
+  lookupKey = null,
 }: Props) {
   use(io());
   const router = useRouter();
@@ -67,6 +79,7 @@ export function AddForm({
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("oz");
   const [location, setLocation] = useState<Location>(defaultLocation);
+  const [freeze, setFreeze] = useState<FreezeValue>(defaultFreezeValue);
   const [expirationDate, setExpirationDate] = useState("");
   const [expiryTouched, setExpiryTouched] = useState(false);
   const [categoryId, setCategoryId] = useState("");
@@ -83,8 +96,14 @@ export function AddForm({
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
   const searchTimer = useRef<number | undefined>(undefined);
-  const lookupRef = useRef(false);
+  const busyRef = useRef(false);
+  const lastLookupRef = useRef<string | null>(null);
   const canonicalTouchedRef = useRef(false);
+  const foodTypeTouchedRef = useRef(false);
+  // Async lookups resume after a re-render, so "did the user type this?" must
+  // live in refs rather than the values captured by the current render.
+  const nameDirtyRef = useRef(false);
+  const expiryTouchedRef = useRef(false);
 
   const suggestion = useMemo(() => {
     if (selectedItem?.expiration_days != null) {
@@ -97,12 +116,37 @@ export function AddForm({
     return null;
   }, [selectedItem, off, name]);
 
+  const lookupToken = initialBarcode ? `${initialBarcode}|${lookupKey ?? ""}` : null;
+
   useEffect(() => {
-    if (!initialBarcode || lookupRef.current) return;
-    lookupRef.current = true;
-    void lookupBarcode(initialBarcode);
+    if (!lookupToken || lastLookupRef.current === lookupToken) return;
+    lastLookupRef.current = lookupToken;
+    // A fresh scan — clear leftovers from any previous lookup so the form
+    // only reflects what this barcode resolves to.
+    setName("");
+    setMatches([]);
+    setSelectedItem(null);
+    setOff(null);
+    setCanonicalName("");
+    canonicalTouchedRef.current = false;
+    nameDirtyRef.current = false;
+    setExpiryTouched(false);
+    expiryTouchedRef.current = false;
+    setExpirationDate("");
+    void lookupBarcode(initialBarcode ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBarcode]);
+  }, [lookupToken, initialBarcode]);
+
+  // Prefill the freezer food type until the user picks one (or clears it).
+  useEffect(() => {
+    if (foodTypeTouchedRef.current) return;
+    const saved = foodTypeByKey(selectedItem?.freezer_food_type);
+    const guess = guessFreezerFoodType(name);
+    setFreeze((current) => ({
+      ...current,
+      foodType: saved?.key ?? guess ?? FREEZER_UNKNOWN_KEY,
+    }));
+  }, [name, selectedItem]);
 
   useEffect(() => {
     let alive = true;
@@ -190,9 +234,11 @@ export function AddForm({
   function applyItem(item: ItemRow) {
     setSelectedItem(item);
     setName(item.name);
+    nameDirtyRef.current = false;
     setMatches([]);
     setCanonicalName("");
     canonicalTouchedRef.current = false;
+    foodTypeTouchedRef.current = false;
     setBarcode(item.barcode ?? barcode);
     setUnit(item.unit ?? "oz");
     setCategoryId(item.category_id ?? "");
@@ -201,14 +247,15 @@ export function AddForm({
     setAutoRestock(item.auto_restock);
     setLocation(item.default_location);
     setOff(null);
-    if (item.expiration_days != null && !expiryTouched) {
+    if (item.expiration_days != null && !expiryTouchedRef.current) {
       setExpirationDate(addDays(item.expiration_days));
     }
   }
 
   async function lookupBarcode(code: string) {
     const clean = code.trim();
-    if (!/^\d{6,14}$/.test(clean)) return;
+    // Short codes are almost always accidental input, not barcodes.
+    if (clean.length < 4) return;
     setLookupBusy(true);
     let result;
     try {
@@ -233,19 +280,21 @@ export function AddForm({
       setOff(product);
       setSelectedItem(null);
       canonicalTouchedRef.current = false;
-      if (!name && product.name) setName(product.name);
+      if (!nameDirtyRef.current && product.name) setName(product.name);
       if (product.quantity && !unit) setUnit(product.quantity);
       toast.success(`Product found: ${product.name ?? clean}`);
       return;
     }
     setSelectedItem(null);
-    toast.message("Barcode not found in Open Food Facts", {
-      description: "Add the name and details yourself.",
+    toast.message(`Barcode ${clean} not found`, {
+      description:
+        "Not in your pantry or Open Food Facts — enter the name and details yourself.",
     });
   }
 
   function onNameChange(value: string) {
     setName(value);
+    nameDirtyRef.current = true;
     canonicalTouchedRef.current = false;
     if (selectedItem && value !== selectedItem.name) {
       setSelectedItem(null);
@@ -268,28 +317,41 @@ export function AddForm({
 
   async function submit(event?: React.FormEvent) {
     event?.preventDefault();
+    // Ref guard: a double click / double Enter can fire before the disabled
+    // button re-renders, and one submit must mean one addition.
+    if (busyRef.current) return;
     const trimmedName = name.trim();
     if (!trimmedName && !selectedItem) {
       toast.error("Give the item a name");
       return;
     }
+    busyRef.current = true;
     setBusy(true);
-    const result = await addToInventory({
-      itemId: selectedItem?.id ?? null,
-      name: trimmedName || (selectedItem?.name ?? ""),
-      barcode: barcode.trim() || null,
-      categoryId: categoryId || null,
-      subcategoryId: subcategoryId || null,
-      location,
-      quantity,
-      unit: unit.trim() || null,
-      expirationDate: effectiveExpiry || null,
-      lowThreshold: lowThreshold ? Number(lowThreshold) : null,
-      autoRestock,
-      canonicalName: canonicalName.trim() || null,
-      brand: off?.brands?.trim() || null,
-    });
-    setBusy(false);
+    let result: Awaited<ReturnType<typeof addToInventory>>;
+    try {
+      result = await addToInventory({
+        itemId: selectedItem?.id ?? null,
+        name: trimmedName || (selectedItem?.name ?? ""),
+        barcode: barcode.trim() || null,
+        categoryId: categoryId || null,
+        subcategoryId: subcategoryId || null,
+        location,
+        quantity,
+        unit: unit.trim() || null,
+        expirationDate: effectiveExpiry || null,
+        lowThreshold: lowThreshold ? Number(lowThreshold) : null,
+        autoRestock,
+        canonicalName: canonicalName.trim() || null,
+        brand: off?.brands?.trim() || null,
+        ...freezeInputFor(freeze, location),
+      });
+    } catch {
+      toast.error("Could not add item — check your connection and try again.");
+      return;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
 
     if (!result.ok) {
       toast.error(result.error);
@@ -315,8 +377,11 @@ export function AddForm({
     setExpiryTouched(false);
     setExpirationDate("");
     setCanonicalName("");
+    setFreeze(defaultFreezeValue());
     canonicalTouchedRef.current = false;
-    lookupRef.current = false;
+    foodTypeTouchedRef.current = false;
+    nameDirtyRef.current = false;
+    expiryTouchedRef.current = false;
     router.refresh();
   }
 
@@ -335,7 +400,7 @@ export function AddForm({
           <div>
             <h1 className="text-lg font-extrabold">Add to inventory</h1>
             <p className="text-xs text-muted-foreground">
-              Full control — quantity, expiry, and location.
+              Full control — quantity, expiry, location, and freezer state.
             </p>
           </div>
         </div>
@@ -419,8 +484,6 @@ export function AddForm({
             <div className="flex gap-2">
               <Input
                 id="barcode"
-                inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="Scan or type a barcode"
                 value={barcode}
                 onChange={(event) => setBarcode(event.target.value)}
@@ -455,58 +518,20 @@ export function AddForm({
 
           <div className="space-y-2">
             <Label>Quantity</Label>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Decrease quantity"
-                onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-              >
-                −
-              </Button>
-              <Input
-                type="number"
-                min={0}
-                step="any"
-                value={quantity}
-                onChange={(event) =>
-                  setQuantity(Math.max(0, Number(event.target.value) || 0))
-                }
-                className="text-center"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Increase quantity"
-                onClick={() => setQuantity((value) => value + 1)}
-              >
-                <Plus />
-              </Button>
-            </div>
+            <QuantityStepper value={quantity} onChange={setQuantity} />
           </div>
 
           <div className="space-y-2">
             <Label>Location</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {LOCATIONS.map((entry) => (
-                <button
-                  key={entry.value}
-                  type="button"
-                  onClick={() => setLocation(entry.value)}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
-                    location === entry.value
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-accent",
-                  )}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
+            <LocationPicker value={location} onChange={setLocation} />
           </div>
+
+          <FreezerFields
+            location={location}
+            name={selectedItem?.name ?? name}
+            value={freeze}
+            onChange={setFreeze}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="expiry">Expiration</Label>
@@ -516,6 +541,7 @@ export function AddForm({
               value={expirationDate}
               onChange={(event) => {
                 setExpiryTouched(true);
+                expiryTouchedRef.current = true;
                 setExpirationDate(event.target.value);
               }}
             />
@@ -526,6 +552,7 @@ export function AddForm({
                   className="rounded-full border border-primary px-2 py-0.5 font-semibold text-primary"
                   onClick={() => {
                     setExpiryTouched(true);
+                    expiryTouchedRef.current = true;
                     setExpirationDate(addDays(suggestion.days));
                   }}
                 >
@@ -537,6 +564,7 @@ export function AddForm({
                 className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
                 onClick={() => {
                   setExpiryTouched(true);
+                  expiryTouchedRef.current = true;
                   setExpirationDate("");
                 }}
               >
@@ -547,6 +575,7 @@ export function AddForm({
                 className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
                 onClick={() => {
                   setExpiryTouched(true);
+                  expiryTouchedRef.current = true;
                   setExpirationDate(addDays(7));
                 }}
               >

@@ -33,17 +33,34 @@ import {
 } from "@/components/ui/sheet";
 import { Scanner } from "@/components/scanner";
 import { addDays, suggestExpiration } from "@/lib/expiry";
-import { useStoredEnum } from "@/lib/use-local-storage";
+import { useStoredEnum, useStoredJson } from "@/lib/use-local-storage";
 import type { OffProduct } from "@/lib/off";
 import {
   addToInventory,
   consumeInventory,
   resolveBarcode,
 } from "@/app/(app)/inventory/actions";
+import {
+  LOCATIONS,
+  LocationPicker,
+  QuantityStepper,
+  FreezerFields,
+  freezeInputFor,
+  type FreezeInput,
+  type FreezeValue,
+} from "@/components/inventory/entry-fields";
+import {
+  FREEZER_UNKNOWN_KEY,
+  foodTypeByKey,
+  guessFreezerFoodType,
+} from "@/lib/freezer";
 import type { ItemRow, Location } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-type SessionEntry = {
+/**
+ * One line of the current trip. Lives in localStorage so the trip survives
+ * navigating to the add form (or the item list) and coming back.
+ */
+type TripEntry = {
   key: string;
   inventoryId: string;
   itemId: string;
@@ -51,25 +68,62 @@ type SessionEntry = {
   added: number;
   location: Location;
   expirationDate: string | null;
+  /** Exact freeze inputs used when this line was last saved (re-sent on +1). */
+  freezeInput: FreezeInput;
   at: number;
 };
-
-const LOCATIONS: { value: Location; label: string }[] = [
-  { value: "pantry", label: "Pantry" },
-  { value: "fridge", label: "Fridge" },
-  { value: "freezer", label: "Freezer" },
-];
 
 const SOURCES = ["Meijer", "Kroger", "Amazon", "Costco", "Aldi", "Other"];
 
 const LOCATION_KEY = "pp-shop-location";
 const SOURCE_KEY = "pp-shop-source";
+export const TRIP_KEY = "pp-shop-session";
+
+const LOCATION_VALUES = ["pantry", "fridge", "freezer"] as const;
+
+function isFreezeInput(value: unknown): value is FreezeInput {
+  if (typeof value !== "object" || value === null) return false;
+  const input = value as Record<string, unknown>;
+  return (
+    (input.frozenAt === undefined ||
+      input.frozenAt === null ||
+      typeof input.frozenAt === "string") &&
+    (input.freezerDurationMonths === undefined ||
+      input.freezerDurationMonths === null ||
+      typeof input.freezerDurationMonths === "number") &&
+    (input.purchasedFrozen === undefined ||
+      typeof input.purchasedFrozen === "boolean") &&
+    (input.freezerFoodType === undefined ||
+      input.freezerFoodType === null ||
+      typeof input.freezerFoodType === "string")
+  );
+}
+
+function isTrip(value: unknown): value is TripEntry[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((entry) => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const row = entry as Record<string, unknown>;
+    return (
+      typeof row.key === "string" &&
+      typeof row.inventoryId === "string" &&
+      typeof row.itemId === "string" &&
+      typeof row.name === "string" &&
+      typeof row.added === "number" &&
+      typeof row.location === "string" &&
+      (LOCATION_VALUES as readonly string[]).includes(row.location) &&
+      (row.expirationDate === null || typeof row.expirationDate === "string") &&
+      isFreezeInput(row.freezeInput) &&
+      typeof row.at === "number"
+    );
+  });
+}
 
 export function ShopSession({ defaultLocation }: { defaultLocation: Location }) {
   const router = useRouter();
   const [location, setLocation] = useStoredEnum<Location>(
     LOCATION_KEY,
-    ["pantry", "fridge", "freezer"] as const,
+    LOCATION_VALUES,
     defaultLocation,
   );
   const [source, setSource] = useStoredEnum(
@@ -77,10 +131,11 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
     SOURCES as readonly string[],
     "Meijer",
   );
-  const [session, setSession] = useState<SessionEntry[]>([]);
-  const [pending, setPending] = useState<{
-    barcode: string;
+  const [trip, setTrip] = useStoredJson<TripEntry[]>(TRIP_KEY, [], isTrip);
+  const [confirm, setConfirm] = useState<{
+    item: ItemRow;
     off: OffProduct | null;
+    barcode: string;
   } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const busyRef = useRef(false);
@@ -96,76 +151,82 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
     return () => window.clearTimeout(flashTimer.current);
   }, []);
 
-  async function addKnown(item: ItemRow) {
-    const expirationDate =
-      item.expiration_days != null ? addDays(item.expiration_days) : null;
-
-    const result = await addToInventory({
-      itemId: item.id,
-      name: item.name,
-      barcode: item.barcode,
-      location,
-      quantity: 1,
-      source: source === "Other" ? null : source,
-      expirationDate,
-    });
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-
-    const inventory = result.data.inventory;
-    showFlash(item.name);
-    setSession((current) => {
+  /**
+   * Fold a saved add into the trip: repeat scans of the same inventory row
+   * accumulate instead of duplicating lines.
+   */
+  function recordAdd(input: {
+    inventoryId: string;
+    itemId: string;
+    name: string;
+    location: Location;
+    expirationDate: string | null;
+    freezeInput: FreezeInput;
+    amount: number;
+  }) {
+    setTrip((current) => {
       const existing = current.find(
-        (entry) => entry.inventoryId === inventory.id,
+        (entry) => entry.inventoryId === input.inventoryId,
       );
       if (existing) {
         return current.map((entry) =>
           entry.key === existing.key
-            ? { ...entry, added: entry.added + 1, at: Date.now() }
+            ? {
+                ...entry,
+                added: entry.added + input.amount,
+                location: input.location,
+                expirationDate: input.expirationDate,
+                freezeInput: input.freezeInput,
+                at: Date.now(),
+              }
             : entry,
         );
       }
       return [
         {
-          key: `${inventory.id}-${Date.now()}`,
-          inventoryId: inventory.id,
-          itemId: item.id,
-          name: item.name,
-          added: 1,
-          location,
-          expirationDate,
+          key: `${input.inventoryId}-${Date.now()}`,
+          inventoryId: input.inventoryId,
+          itemId: input.itemId,
+          name: input.name,
+          added: input.amount,
+          location: input.location,
+          expirationDate: input.expirationDate,
+          freezeInput: input.freezeInput,
           at: Date.now(),
         },
         ...current,
       ];
     });
-
-    toast.success(`Added ${item.name}`, {
-      action: {
-        label: "Undo",
-        onClick: () => void undoEntry(inventory.id, 1),
-      },
-      duration: 5000,
-    });
   }
 
+  /**
+   * Scanning never changes stock: it either pauses the camera for a quick
+   * confirm (item already in your pantry) or hands off to the shared add form
+   * (anything new). Stock moves only when one of those saves.
+   */
   async function handleBarcode(code: string) {
     if (busyRef.current) return;
+    const clean = code.trim();
+    if (clean.length < 4) {
+      toast.error(
+        "That code doesn't look like a barcode — try scanning it again.",
+      );
+      return;
+    }
     busyRef.current = true;
     try {
-      const result = await resolveBarcode(code);
+      const result = await resolveBarcode(clean);
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
       const { item, off } = result.data;
       if (item) {
-        await addKnown(item);
+        setConfirm({ item, off, barcode: clean });
       } else {
-        setPending({ barcode: code, off });
+        router.push(
+          `/inventory/add?barcode=${encodeURIComponent(clean)}&scan=${Date.now()}`,
+        );
       }
     } catch {
       toast.error("Lookup failed — check your connection and try again.");
@@ -184,7 +245,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
       toast.error(result.error);
       return;
     }
-    setSession((current) =>
+    setTrip((current) =>
       current
         .map((entry) =>
           entry.inventoryId === inventoryId
@@ -195,7 +256,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
     );
   }
 
-  async function bump(entry: SessionEntry, delta: 1 | -1) {
+  async function bump(entry: TripEntry, delta: 1 | -1) {
     if (delta === 1) {
       const result = await addToInventory({
         itemId: entry.itemId,
@@ -204,12 +265,13 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
         quantity: 1,
         expirationDate: entry.expirationDate,
         source: source === "Other" ? null : source,
+        ...entry.freezeInput,
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      setSession((current) =>
+      setTrip((current) =>
         current.map((row) =>
           row.key === entry.key
             ? { ...row, added: row.added + 1, at: Date.now() }
@@ -222,7 +284,12 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
     }
   }
 
-  const totalAdded = session.reduce((sum, entry) => sum + entry.added, 0);
+  function finishTrip() {
+    setTrip([]);
+    router.push("/inventory");
+  }
+
+  const totalAdded = trip.reduce((sum, entry) => sum + entry.added, 0);
 
   return (
     <div className="mx-auto max-w-xl space-y-3">
@@ -243,29 +310,13 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
             </p>
           </div>
         </div>
-        <Button size="sm" render={<Link href="/inventory" />}>
+        <Button size="sm" onClick={finishTrip}>
           <CheckCircle2 /> Done
         </Button>
       </div>
 
       <div className="space-y-2 rounded-xl border bg-background p-3">
-        <div className="grid grid-cols-3 gap-2">
-          {LOCATIONS.map((entry) => (
-            <button
-              key={entry.value}
-              type="button"
-              onClick={() => setLocation(entry.value)}
-              className={cn(
-                "rounded-md border px-2 py-1.5 text-sm font-semibold transition-colors",
-                location === entry.value
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
+        <LocationPicker value={location} onChange={setLocation} />
         <div className="flex items-center gap-2">
           <Label htmlFor="shop-source" className="text-xs text-muted-foreground">
             Source
@@ -293,7 +344,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
 
       <div className="relative">
         <Scanner
-          active={!pending}
+          active={!confirm}
           onDetect={(code) => void handleBarcode(code)}
           className="h-[42vh] min-h-64 w-full"
         />
@@ -309,30 +360,37 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
       <section className="rounded-xl border bg-background">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <h2 className="text-sm font-semibold">This trip</h2>
-          {session.length > 0 ? (
+          {trip.length > 0 ? (
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => setSession([])}
+              onClick={() => setTrip([])}
               className="text-muted-foreground"
             >
               Clear
             </Button>
           ) : null}
         </div>
-        {session.length === 0 ? (
+        {trip.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
             Scan your first item — the camera stays live between scans.
           </p>
         ) : (
           <ul className="divide-y">
-            {session.map((entry) => (
+            {trip.map((entry) => (
               <li key={entry.key} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{entry.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {LOCATIONS.find((l) => l.value === entry.location)?.label}
-                    {entry.expirationDate ? ` · exp ${entry.expirationDate}` : ""}
+                    {entry.freezeInput.purchasedFrozen
+                      ? " · purchased frozen"
+                      : entry.freezeInput.frozenAt
+                        ? ` · frozen ${entry.freezeInput.frozenAt}`
+                        : ""}
+                    {entry.expirationDate
+                      ? ` · exp ${entry.expirationDate}`
+                      : ""}
                   </p>
                 </div>
                 <span className="text-sm font-extrabold tabular-nums">
@@ -370,32 +428,29 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
 
       <p className="text-center text-xs text-muted-foreground">
         After shopping with Meijer Shop &amp; Scan, keep the camera rolling and
-        tap Done when the cart is unloaded.
+        tap Done when the cart is unloaded — the trip is kept on this device
+        until then.
       </p>
 
-      {pending ? (
-        <UnknownItemSheet
-          barcode={pending.barcode}
-          off={pending.off}
+      {confirm ? (
+        <ConfirmItemSheet
+          item={confirm.item}
+          off={confirm.off}
+          barcode={confirm.barcode}
           location={location}
           source={source}
-          onClose={() => setPending(null)}
-          onSaved={(name, inventoryId, itemId, expirationDate) => {
-            setSession((current) => [
-              {
-                key: `${inventoryId}-${Date.now()}`,
-                inventoryId,
-                itemId,
-                name,
-                added: 1,
-                location,
-                expirationDate,
-                at: Date.now(),
+          onClose={() => setConfirm(null)}
+          onSaved={(saved) => {
+            recordAdd(saved);
+            showFlash(saved.name);
+            setConfirm(null);
+            toast.success(`Added ${saved.name}`, {
+              action: {
+                label: "Undo",
+                onClick: () => void undoEntry(saved.inventoryId, saved.amount),
               },
-              ...current,
-            ]);
-            showFlash(name);
-            setPending(null);
+              duration: 5000,
+            });
             router.refresh();
           }}
         />
@@ -404,56 +459,85 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
   );
 }
 
-function UnknownItemSheet({
-  barcode,
+/**
+ * Quick confirm for a barcode that already exists in the pantry: quantity,
+ * expiry, location and freezer state in one sheet, then back to scanning.
+ */
+function ConfirmItemSheet({
+  item,
   off,
-  location,
+  barcode,
+  location: initialLocation,
   source,
   onClose,
   onSaved,
 }: {
-  barcode: string;
+  item: ItemRow;
   off: OffProduct | null;
+  barcode: string;
   location: Location;
   source: string;
   onClose: () => void;
-  onSaved: (
-    name: string,
-    inventoryId: string,
-    itemId: string,
-    expirationDate: string | null,
-  ) => void;
+  onSaved: (saved: {
+    inventoryId: string;
+    itemId: string;
+    name: string;
+    amount: number;
+    location: Location;
+    expirationDate: string | null;
+    freezeInput: FreezeInput;
+  }) => void;
 }) {
   use(io());
-  const [name, setName] = useState(off?.name ?? "");
+  const [location, setLocation] = useState<Location>(initialLocation);
   const [quantity, setQuantity] = useState(1);
   const [expiryTouched, setExpiryTouched] = useState(false);
   const [manualExpiry, setManualExpiry] = useState("");
+  const [freeze, setFreeze] = useState<FreezeValue>(() => ({
+    frozen: true,
+    mode: "now",
+    foodType:
+      foodTypeByKey(item.freezer_food_type)?.key ??
+      guessFreezerFoodType(item.name) ??
+      FREEZER_UNKNOWN_KEY,
+  }));
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
-  const suggestion = suggestExpiration(off?.categories ?? [], off?.name ?? name);
-  const expirationDate = expiryTouched
-    ? manualExpiry
-    : suggestion
-      ? addDays(suggestion.days)
-      : "";
+  const suggestion = suggestExpiration(off?.categories ?? [], item.name);
+  const defaultExpiry =
+    item.expiration_days != null
+      ? addDays(item.expiration_days)
+      : suggestion
+        ? addDays(suggestion.days)
+        : "";
+  const expirationDate = expiryTouched ? manualExpiry : defaultExpiry;
 
   async function save() {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast.error("Give the item a name");
-      return;
-    }
+    // Ref guard: a double tap must not add twice.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
-    const result = await addToInventory({
-      name: trimmed,
-      barcode,
-      location,
-      quantity,
-      expirationDate: expirationDate || null,
-      source: source === "Other" ? null : source,
-    });
-    setBusy(false);
+    const freezeInput = freezeInputFor(freeze, location);
+    let result: Awaited<ReturnType<typeof addToInventory>>;
+    try {
+      result = await addToInventory({
+        itemId: item.id,
+        name: item.name,
+        barcode: item.barcode ?? barcode,
+        location,
+        quantity,
+        expirationDate: expirationDate || null,
+        source: source === "Other" ? null : source,
+        ...freezeInput,
+      });
+    } catch {
+      toast.error("Could not add item — check your connection and try again.");
+      return;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
 
     if (!result.ok) {
       toast.error(result.error);
@@ -461,67 +545,43 @@ function UnknownItemSheet({
     }
 
     const inventory = result.data.inventory;
-    onSaved(
-      inventory.item?.name ?? trimmed,
-      inventory.id,
-      inventory.item_id,
-      inventory.expiration_date,
-    );
+    onSaved({
+      inventoryId: inventory.id,
+      itemId: inventory.item_id,
+      name: inventory.item?.name ?? item.name,
+      amount: quantity,
+      location,
+      expirationDate: inventory.expiration_date,
+      freezeInput,
+    });
   }
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="bottom" className="gap-3">
         <SheetHeader>
-          <SheetTitle>New item</SheetTitle>
+          <SheetTitle>{item.name}</SheetTitle>
           <SheetDescription>
             {barcode}
-            {off?.brands ? ` · ${off.brands}` : ""} — not in your pantry yet.
+            {off?.brands ? ` · ${off.brands}` : ""} — already in your pantry.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-2 px-4">
-          <Label htmlFor="unknown-name">Name</Label>
-          <Input
-            id="unknown-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="What did you buy?"
-            autoFocus
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 px-4">
+        <div className="space-y-4 px-4">
           <div className="space-y-2">
             <Label>Quantity</Label>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Decrease quantity"
-                onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-              >
-                −
-              </Button>
-              <span className="flex-1 text-center text-lg font-extrabold tabular-nums">
-                {quantity}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Increase quantity"
-                onClick={() => setQuantity((value) => value + 1)}
-              >
-                <Plus />
-              </Button>
-            </div>
+            <QuantityStepper value={quantity} onChange={setQuantity} />
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="unknown-expiry">Expiration</Label>
+            <Label>Location</Label>
+            <LocationPicker value={location} onChange={setLocation} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirm-expiry">Expiration</Label>
             <Input
-              id="unknown-expiry"
+              id="confirm-expiry"
               type="date"
               value={expirationDate}
               onChange={(event) => {
@@ -529,7 +589,7 @@ function UnknownItemSheet({
                 setManualExpiry(event.target.value);
               }}
             />
-            {suggestion ? (
+            {suggestion && !expiryTouched ? (
               <button
                 type="button"
                 className="text-xs font-semibold text-primary"
@@ -542,6 +602,13 @@ function UnknownItemSheet({
               </button>
             ) : null}
           </div>
+
+          <FreezerFields
+            location={location}
+            name={item.name}
+            value={freeze}
+            onChange={setFreeze}
+          />
         </div>
 
         <SheetFooter className="gap-2 sm:gap-0">

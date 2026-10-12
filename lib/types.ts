@@ -88,12 +88,18 @@ export interface InventoryRow {
   quantity: number;
   unit: string | null;
   expiration_date: string | null;
-  /** Date stock entered the freezer; null while frozen = unknown / purchased frozen. */
+  /** Date stock entered the freezer; null = unknown / not recorded. */
   frozen_at: string | null;
   /** Months from frozen_at to the best-quality date; null = not tracked. */
   freezer_duration_months: number | null;
   /** Computed best-quality-by date while frozen; cleared on thaw. */
   freezer_quality_date: string | null;
+  /**
+   * Bought already frozen — the original freezing date is unknown (frozen_at
+   * stays null and no quality countdown is invented). Distinct from a freezer
+   * row that simply isn't tracked. Cleared when the row leaves the freezer.
+   */
+  purchased_frozen: boolean;
   is_low: boolean;
   source: string | null;
   notes: string | null;

@@ -141,6 +141,7 @@ export type BatchSnapshot = {
   frozen_at: string | null;
   freezer_duration_months: number | null;
   freezer_quality_date: string | null;
+  purchased_frozen: boolean;
   is_low: boolean;
   source: string | null;
   notes: string | null;
@@ -157,6 +158,7 @@ export function toBatchSnapshot(row: InventoryRow): BatchSnapshot {
     frozen_at: row.frozen_at,
     freezer_duration_months: row.freezer_duration_months,
     freezer_quality_date: row.freezer_quality_date,
+    purchased_frozen: row.purchased_frozen,
     is_low: row.is_low,
     source: row.source,
     notes: row.notes,

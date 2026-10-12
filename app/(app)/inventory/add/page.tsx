@@ -22,10 +22,17 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 async function AddContent({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const barcodeParam = params.barcode;
+  // The camera emits EAN/UPC *and* CODE_128/CODE_39 store codes, so accept
+  // any printable code rather than silently dropping (and never looking up)
+  // anything that isn't 6–14 digits.
   const initialBarcode =
-    typeof barcodeParam === "string" && /^\d{6,14}$/.test(barcodeParam)
+    typeof barcodeParam === "string" && /^[\x21-\x7e]{4,64}$/.test(barcodeParam)
       ? barcodeParam
       : null;
+  // Bumped by the scanner so a fresh scan re-runs the lookup even when this
+  // route instance was kept alive by <Activity>.
+  const lookupKey =
+    typeof params.scan === "string" ? params.scan.slice(0, 40) : null;
 
   const { supabase, householdId } = await requireDal();
 
@@ -51,6 +58,7 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       defaultLocation={defaultLocation}
       initialBarcode={initialBarcode}
+      lookupKey={lookupKey}
     />
   );
 }

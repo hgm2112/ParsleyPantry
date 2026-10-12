@@ -6,9 +6,12 @@ import { daysUntil, parseDate, toDateString } from "@/lib/expiry";
  *
  * While a row lives at location "freezer":
  *  - expiration_date keeps the ORIGINAL refrigerated date (never overwritten),
- *  - frozen_at records when it went in (null = purchased frozen / unknown),
+ *  - frozen_at records when it went in (null = date unknown / not recorded),
+ *  - purchased_frozen marks "bought already frozen, original date unknown"
+ *    so it is never confused with a row that simply isn't tracked,
  *  - freezer_quality_date = frozen_at + recommended months (computed once,
- *    never chained through a previous quality date).
+ *    never chained through a previous quality date; never invented when the
+ *    freezing date is unknown).
  * Moving back out of the freezer clears the freeze fields (thaw).
  */
 
@@ -211,20 +214,31 @@ export function freezerStatus(row: {
   return days < 0 ? "quality-passed" : "near-quality";
 }
 
-export type ExpiryChipMode = "refrigerated" | "freezer" | "freezer-untracked";
+export type ExpiryChipMode =
+  | "refrigerated"
+  | "freezer"
+  | "freezer-untracked"
+  | "freezer-purchased";
 
 /** Chip props for any inventory row: picks the right date + mode. */
 export function expiryChipProps(row: {
   location: string;
   expiration_date: string | null;
   freezer_quality_date: string | null;
+  purchased_frozen?: boolean | null;
 }): { date: string | null; mode: ExpiryChipMode } {
   if (row.location !== "freezer") {
     return { date: row.expiration_date, mode: "refrigerated" };
   }
-  return row.freezer_quality_date
-    ? { date: row.freezer_quality_date, mode: "freezer" }
-    : { date: null, mode: "freezer-untracked" };
+  if (row.freezer_quality_date) {
+    return { date: row.freezer_quality_date, mode: "freezer" };
+  }
+  // No quality date: bought already frozen (never invent a countdown) vs
+  // simply not tracked.
+  return {
+    date: null,
+    mode: row.purchased_frozen ? "freezer-purchased" : "freezer-untracked",
+  };
 }
 
 /** "Best quality by Feb 10" / "Quality date passed" — never "expired". */

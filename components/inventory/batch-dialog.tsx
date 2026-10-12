@@ -260,7 +260,9 @@ export function BatchDialog({
                         day: "numeric",
                         year: "numeric",
                       })}`
-                    : "❄️ Frozen — date not tracked"}
+                    : freezerBatch.purchased_frozen
+                      ? "❄️ Purchased frozen — original date unknown"
+                      : "❄️ Frozen — date not tracked"}
                 </p>
                 <p className="text-sm">
                   {freezerBatch.freezer_quality_date

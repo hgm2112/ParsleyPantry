@@ -77,7 +77,9 @@ export function FreezeDialog({
   const today = toDateString(startOfToday());
 
   const [frozenOn, setFrozenOn] = useState(inventory.frozen_at ?? today);
-  const [purchasedFrozen, setPurchasedFrozen] = useState(false);
+  const [purchasedFrozen, setPurchasedFrozen] = useState(
+    inventory.purchased_frozen ?? false,
+  );
   const [foodType, setFoodType] = useState<string>(() => {
     const saved = foodTypeByKey(inventory.item.freezer_food_type);
     if (saved) return saved.key;
@@ -134,6 +136,9 @@ export function FreezeDialog({
     const result = await updateInventory({
       inventoryId: inventory.id,
       location: "freezer",
+      // Sent explicitly so unchecking "purchased frozen" can clear it — an
+      // omitted field keeps the current value.
+      purchasedFrozen,
       frozenAt: purchasedFrozen ? null : frozenOn,
       freezerDurationMonths: months,
       freezerFoodType: type ? type.key : null,

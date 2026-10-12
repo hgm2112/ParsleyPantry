@@ -38,7 +38,6 @@ import {
   deleteInventory,
   listCanonicalCandidates,
   restoreBatches,
-  resolveBarcode,
   setItemCanonical,
   updateInventory,
   type CanonicalCandidateView,
@@ -149,24 +148,22 @@ export function InventoryView({
     return map;
   }, [subcategories]);
 
-  async function handleBarcode(code: string) {
+  // Every scan lands on the same inventory form: the form itself runs the
+  // barcode lookup (existing product or Open Food Facts) and prefills. Scanning
+  // never navigates to the item detail page and never changes quantities —
+  // only saving the form adds stock.
+  function handleBarcode(code: string) {
+    const clean = code.trim();
+    if (clean.length < 4) {
+      toast.error(
+        "That code doesn't look like a barcode — try scanning it again.",
+      );
+      return;
+    }
     setScanOpen(false);
-    let result;
-    try {
-      result = await resolveBarcode(code);
-    } catch {
-      toast.error("Lookup failed — check your connection and try again.");
-      return;
-    }
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    if (result.data.item) {
-      router.push(`/inventory/${result.data.item.id}`);
-    } else {
-      router.push(`/inventory/add?barcode=${encodeURIComponent(code)}`);
-    }
+    router.push(
+      `/inventory/add?barcode=${encodeURIComponent(clean)}&scan=${Date.now()}`,
+    );
   }
 
   return (
@@ -313,7 +310,7 @@ export function InventoryView({
         onOpenChange={setScanOpen}
         onBarcode={handleBarcode}
         title="Scan an item"
-        description="Look up a barcode in your pantry or add it fresh."
+        description="Opens the add form with this barcode looked up — you review and save."
       />
 
       {consumeTarget ? (

@@ -4,6 +4,39 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-11 (part 36) — Standardized barcode scanning + purchased-frozen state + persistent shop trip
+
+**Shipped**
+- Every barcode scan (Pantry header, Add form, Just Bought) opens the inventory add form with the barcode prefilled and looked up. Scanning never changes stock — only saving the form calls `addToInventory` (existing batch/merge rules preserved).
+  - `inventory-view.tsx`: `handleBarcode` → `/inventory/add?barcode=…&scan=<Date.now()>`; no longer routes known barcodes to the item detail page; codes under 4 chars get a toast instead of a silent no-op.
+  - `add/page.tsx`: barcode param accepts any printable 4–64 char code (was digits-only 6–14, which silently dropped CODE-128/Code-39 store codes); new `scan` param becomes the form's `lookupKey`.
+  - `add-form.tsx`: fresh-scan reset keyed on `lookupKey` + `lastLookupRef` (re-runs lookup even when `<Activity>` reuses the route instance); pantry-then-Open-Food-Facts lookup; name/expiry "dirty" refs so async lookups never clobber what the user typed; double-submit ref guard; barcode field no longer `pattern="[0-9]*"` (that blocked submit for non-numeric codes).
+- Three distinct frozen states now persist (previously: "frozen with a date" vs everything else):
+  - not tracked (freezer but frozen off / legacy rows) | frozen now (`frozen_at` set) | purchased already frozen (`purchased_frozen` true, `frozen_at` null, no countdown invented).
+  - Migration `supabase/migrations/20261014120000_purchased_frozen.sql`: adds `inventory.purchased_frozen`, rebuilds `inventory_batch_key` to include it.
+  - Batch key includes `purchased_frozen` — `addToInventory`/`updateInventory`/`restoreBatches` match full freeze identity, so an add never overwrites another batch's frozen status.
+  - `ExpiryChip` shows "Purchased frozen"; batch dialog shows "❄️ Purchased frozen — original date unknown"; FreezeDialog initializes from and explicitly sends `purchasedFrozen` (unchecking clears it).
+- New shared UI `components/inventory/entry-fields.tsx`: `QuantityStepper`, `LocationPicker`, `FreezerFields`, `FreezeValue`, `freezeInputFor()` — reused by the add form and the Just Bought confirm sheet. `mode: now` → `frozenAt` today + food-type months; `mode: purchased` → flag only; not-freezer or frozen-off → `{}`.
+- Just Bought trip survives navigation: `useStoredJson` (new, in `lib/use-local-storage.ts`) under localStorage key `pp-shop-session`.
+  - Known barcode → `ConfirmItemSheet` (qty stepper, expiry, location, FreezerFields) with the camera paused (`Scanner active={!confirm}`); unknown barcode → hand-off to the shared Add form.
+  - `+1` on a trip line re-sends the exact freeze inputs recorded at save (stored resolved, so freeze-now never re-stamps a later date); `UnknownItemSheet`/`addKnown` removed.
+  - Trip lines show "purchased frozen" / "frozen YYYY-MM-DD"; Done and Clear wipe the trip.
+
+**Verify** (manual only — no tsc/lint/build per request)
+- Apply the migration, then: scan a pantry item (→ add form prefilled), scan a known barcode in Just Bought (→ confirm sheet; freezer fields appear once location = Freezer), scan an unknown barcode (→ add form), save, check the trip line + freezer chips, and navigate away/back mid-trip to confirm the trip survives.
+
+**Gotchas**
+- No backfill: pre-existing freezer rows with no date stay "untracked" — indistinguishable from genuinely untracked by design.
+- "Freezing it now" always stamps today; use "Edit freezer details" to backdate.
+- Items added via the Add form during a shop trip are not appended to the trip list (avoids double counting).
+- Trip is per-device localStorage; survives navigation, not Done/Clear.
+
+**Open — next session**
+- Apply `supabase/migrations/20261014120000_purchased_frozen.sql`.
+- Android PWA scan debug overlay readings (part 9 still open).
+- Optional: append Add-form saves made during a shop trip into the trip list.
+- Clean up stray untracked dev files (images, `dev.log`, etc.) before release.
+
 ## 2026-10-11 — Grocery item memory (store recall + frequency/recency ranking)
 
 **Shipped**
@@ -29,6 +62,7 @@ for "what changed", this is for "what's true now / what's next".
 - `npx tsc --noEmit` clean.
 - `npm run lint` clean on touched files (pre-existing unrelated lint issues remain elsewhere).
 - `npm run build` succeeds.
+- Committed + pushed to main.
 
 **Gotchas**
 - Apply the migration before using (new items won't remember stores/counts until then; existing adds continue to work).
@@ -36,7 +70,10 @@ for "what changed", this is for "what's true now / what's next".
 - Counts/recency only affect the in-page type-ahead on /grocery (not global search).
 
 **Open — next session**
-- (feature complete)
+- Apply `supabase/migrations/20261013120000_grocery_item_memory.sql` (and any other pending); verify per-item store memory auto-filing + type-ahead ranking by usage.
+- Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
+- Android PWA scan debug overlay readings (part 9 still open).
+- Clean up stray untracked dev files (images, dev.log, etc.) before release.
 
 ## 2026-10-10 (part 35) — Grocery edit dialog: mobile footer matches desktop ([Trash][Save])
 
@@ -50,7 +87,7 @@ for "what changed", this is for "what's true now / what's next".
 - Manual review only (no tsc/lint/build per request). Mobile /grocery → tap item: footer is `[🗑][SAVE]`, full width, matching heights. Desktop unchanged.
 
 **Open — Next Session**
-- Run `npm run build` + `npx tsc --noEmit` when dev is stopped (covers parts 24–35).
+- Build + tsc + lint verified + pushed in 2026-10-11 session (covers recent parts).
 - Apply pending canonical migrations if still not applied; `/inventory/normalize` backfill.
 - Android PWA scan debug overlay readings (part 9 still open).
 
