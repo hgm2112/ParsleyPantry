@@ -9,6 +9,7 @@ import {
   type ShoppingPreviewItem,
 } from "@/components/home/shopping-widget";
 import { SmartActions } from "@/components/home/smart-actions";
+import { LeftoversWidget } from "@/components/home/leftovers-widget";
 import { SnackWidget } from "@/components/home/snack-widget";
 import { PantryInsights } from "@/components/home/pantry-insights";
 import { MiniCalendar } from "@/components/home/mini-calendar";
@@ -20,6 +21,7 @@ import type {
   HomeMeal,
   HouseholdSettingsRow,
   InventoryEntry,
+  LeftoverRow,
   RecipeRow,
   StoreAisleRow,
   StoreRow,
@@ -57,6 +59,7 @@ export function HomeView({
   settings,
   recipes,
   recipeIngredients,
+  leftovers,
 }: {
   meals: HomeMeal[];
   pantry: InventoryEntry[];
@@ -77,6 +80,7 @@ export function HomeView({
     quantity_text: string;
     optional: boolean;
   }>;
+  leftovers: LeftoverRow[] | null;
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -93,6 +97,7 @@ export function HomeView({
       </div>
 
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+        <LeftoversWidget rows={leftovers} />
         <SnackWidget rows={pantry} subcategories={subcategories} />
         <QuickBitesWidget
           recipes={recipes}

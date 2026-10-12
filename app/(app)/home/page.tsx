@@ -8,6 +8,7 @@ import type {
   CategoryRow,
   HouseholdSettingsRow,
   InventoryEntry,
+  LeftoverRow,
   RecipeRow,
   StoreAisleRow,
   StoreRow,
@@ -23,6 +24,7 @@ function HomeSkeleton() {
       <Skeleton className="hidden rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block h-[26rem]" />
       <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
       <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+        <Skeleton className="h-40 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />
         <Skeleton className="h-48 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />
@@ -50,6 +52,7 @@ async function HomeContent() {
     recipesResult,
     subsResult,
     itemStoresResult,
+    leftoversResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -111,7 +114,18 @@ async function HomeContent() {
       .from("grocery_item_stores")
       .select("grocery_item_id, store_id")
       .eq("household_id", householdId),
+    supabase
+      .from("leftovers")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: true }),
   ]);
+
+  // Unlike the other queries, a failed leftovers fetch must not read as an
+  // empty list — null tells the widget to render its error state instead.
+  const leftovers = leftoversResult.error
+    ? null
+    : ((leftoversResult.data ?? []) as LeftoverRow[]);
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
   const pantry = (inventoryResult.data ?? []) as InventoryEntry[];
@@ -170,6 +184,7 @@ const recipeIngredients = (recipesResult.data ?? [])
       settings={settings}
       recipes={recipes}
       recipeIngredients={recipeIngredients}
+      leftovers={leftovers}
     />
   );
 }

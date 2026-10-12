@@ -217,6 +217,14 @@ export interface StockHoldRow {
   day_index: number;
 }
 
+/** A named leftover — a standalone household reminder, not an inventory record. */
+export interface LeftoverRow {
+  id: string;
+  household_id: string;
+  name: string;
+  created_at: string;
+}
+
 export type HomeMeal = MealPlanDayRow & {
   recipe: { id: string; name: string; time: number; tags: string[] } | null;
 };

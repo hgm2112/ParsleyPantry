@@ -4,6 +4,31 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 38) — Leftovers widget (phase 1)
+
+**Shipped**
+- New standalone "Leftovers" card on the Home dashboard (right rail, first child — directly below Smart Actions, above Snacks): `components/home/leftovers-widget.tsx` (`Refrigerator` icon, house `section rounded-2xl border bg-card p-4 shadow-sm` styling, dark mode free via CSS vars). Rows render name + X ghost button; `[+ Add]` form at the bottom (`Input` + `Plus` button, categories-view pattern).
+  - States: page Suspense skeleton covers initial load; `rows === null` (query failed) → "Couldn't load leftovers." + Try again (`router.refresh()`), **never rendered as empty**; empty → dashed-border hint; per-row spinner while deleting; sonner toasts on errors.
+  - Add: trim + reject empty (client and server), 160-char cap, busy flag blocks double-submit (the only duplicate guard — same name can be added intentionally, no unique constraint). Success → clear input + `router.refresh()`.
+  - X: permanent delete (no confirm/archive/undo); row retained + `toast.error` on failure; 0-rows-deleted treated as success (idempotent); all X buttons disabled while one delete is in flight.
+- `app/(app)/home/actions.ts` (new): `addLeftover` / `deleteLeftover` — house pattern (`ActionResult` union local to file, `requireDal()` inside try, `.eq("household_id", householdId)` on top of RLS, `revalidatePath("/home")` on success, catch → returned error).
+- Migration `supabase/migrations/20261015120000_leftovers.sql` (**NOT yet applied**): `public.leftovers` (id, household_id → households cascade, name, created_at), index `(household_id, created_at)`, RLS enabled + single `for all using/check (public.is_member(household_id))` policy (house pattern), added to `supabase_realtime` publication (global realtime-sync refreshes other devices).
+- `lib/types.ts`: `LeftoverRow`. `app/(app)/home/page.tsx`: 13th query in the `Promise.all` — the only one that checks `.error` (error → `null`, not `[]`); +1 skeleton in the right rail. `components/home/home-view.tsx`: `leftovers` prop + widget inserted (no existing widget moved).
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. Files re-read and checked by hand.
+
+**Gotchas**
+- Household-scoped (user's choice), not per-user — all household members share one list; matches every other table's RLS.
+- Leftovers are pure reminders: no inventory/plan/grocery linkage, no age-based cleanup (spec).
+- Widget shows error state (not empty) until the migration is applied — expected before setup.
+
+**Open — next session**
+- **Apply `supabase/migrations/20261015120000_leftovers.sql` in the SQL Editor** (20261014120000_purchased_frozen.sql confirmed applied by user).
+- Phase 2 of the leftovers work incoming.
+- Android PWA scan debug overlay readings (part 9 still open).
+- Clean up stray untracked dev files (images, `dev.log`, etc.) before release.
+
 ## 2026-10-11 (part 37) — Shopping fullscreen now shows only the list
 
 **Shipped**
