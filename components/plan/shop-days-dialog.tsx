@@ -41,7 +41,10 @@ export function ShopDaysDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weeks: ShopWeekGroup[];
-  onShop: (days: { weekStart: string; dayIndex: number }[]) => void;
+  /** Runs the shop action; resolves true on success (dialog closes via parent). */
+  onShop: (
+    days: { weekStart: string; dayIndex: number }[],
+  ) => Promise<boolean>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -67,26 +70,28 @@ export function ShopDaysDialog({
     });
   }
 
-  function shop() {
+  async function shop() {
     const days = allDays
       .filter((day) => selected.has(dayKey(day)))
       .map((day) => ({ weekStart: day.weekStart, dayIndex: day.dayIndex }));
     if (days.length === 0) return;
     setBusy(true);
-    onShop(days);
+    const ok = await onShop(days);
+    // On failure the dialog stays open — recover so the user can retry.
+    if (!ok) setBusy(false);
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-3 overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-3 overflow-hidden sm:max-w-md">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Select days to shop</DialogTitle>
           <DialogDescription>
             Pantry stock is reserved oldest day first across the days you pick.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex shrink-0 items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="xs"
@@ -105,7 +110,7 @@ export function ShopDaysDialog({
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
           {weeks.map((week) => (
             <div key={week.title} className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-2">
@@ -159,16 +164,14 @@ export function ShopDaysDialog({
           ))}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="shrink-0 gap-2 sm:gap-0">
           <div className="flex w-full items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
-              {selected.size} {selected.size === 1 ? "day" : "days"} selected
+              {selected.size === 0
+                ? "Select at least one day"
+                : `${selected.size} ${selected.size === 1 ? "day" : "days"} selected`}
             </span>
-            <Button
-              size="sm"
-              onClick={shop}
-              disabled={selected.size === 0 || busy}
-            >
+            <Button size="sm" onClick={shop} disabled={selected.size === 0 || busy}>
               {busy ? (
                 <Loader2 className="animate-spin" />
               ) : (

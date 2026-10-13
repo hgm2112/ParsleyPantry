@@ -9,7 +9,6 @@ import {
   fromOunces,
   parseQuantityText,
   splitNameAndQuantity,
-  stockPoolKey,
   toOunces,
 } from "@/lib/stock";
 import { isIsoDate } from "@/lib/plan";
@@ -184,12 +183,64 @@ export async function clearMealDay(
 
 type ShopTarget = { weekStart: string; dayIndex: number };
 
+type InventoryRow = { item_id: string; quantity: number; unit: string | null };
+type HoldRow = {
+  item_id: string;
+  quantity: number;
+  unit: string | null;
+  week_start: string;
+  day_index: number;
+};
+
+/**
+ * Blind per-root stock pools shared by planner shopping and the
+ * mark-as-made preview: quantities summed across EVERY batch of a canonical
+ * group (mixed units collapse the common unit to null, exactly like the
+ * recipe editor). Holds are summed raw and the caller's skip rule excludes
+ * the days being recomputed, so stock is never double-allocated.
+ */
+function poolStockAndHolds(
+  inventoryRows: InventoryRow[],
+  holdsRows: HoldRow[],
+  rootOf: (itemId: string) => string,
+  skipHold: (row: HoldRow) => boolean,
+): {
+  stockByRoot: Map<string, number>;
+  stockUnitByRoot: Map<string, string | null>;
+  heldByRoot: Map<string, number>;
+} {
+  const stockByRoot = new Map<string, number>();
+  const stockUnitByRoot = new Map<string, string | null>();
+  const stockUnitSeen = new Set<string>();
+  for (const row of inventoryRows) {
+    const root = rootOf(row.item_id);
+    stockByRoot.set(root, (stockByRoot.get(root) ?? 0) + row.quantity);
+    if (!stockUnitSeen.has(root)) {
+      stockUnitSeen.add(root);
+      stockUnitByRoot.set(root, row.unit);
+    } else if (stockUnitByRoot.get(root) !== row.unit) {
+      stockUnitByRoot.set(root, null);
+    }
+  }
+  const heldByRoot = new Map<string, number>();
+  for (const row of holdsRows) {
+    if (skipHold(row)) continue;
+    const root = rootOf(row.item_id);
+    heldByRoot.set(root, (heldByRoot.get(root) ?? 0) + row.quantity);
+  }
+  return { stockByRoot, stockUnitByRoot, heldByRoot };
+}
+
 /**
  * Pantry-first shopping: reserves what the target days' recipes can take from
- * current stock (holds per day+item, oldest days first) and sends only the
- * shortfall to the grocery list. Made days are skipped; re-running wipes and
- * recomputes only the targeted days' holds — untargeted days keep theirs
- * reserved so a partial re-shop never double-dips the pantry.
+ * current stock (holds per day+item, oldest days first). Coverage is
+ * calculated with proper units (oz-family converts exactly; cans/cups/counts
+ * compare as plain quantities) over blind per-root pools. The grocery list
+ * gets ONE unitless line per uncovered ingredient whose quantity is the
+ * NUMBER OF selected meals still needing it ("2 Ground Beef") — not a
+ * combined weight. Made days are skipped; re-running wipes and recomputes
+ * only the targeted days' holds — untargeted days keep theirs reserved so a
+ * partial re-shop never double-dips the pantry.
  */
 async function shopDays(
   targets: ShopTarget[],
@@ -293,34 +344,13 @@ async function shopDays(
       nameToRoot.set(row.name.trim().toLowerCase(), rootOf(row.id));
     }
 
-    const stock = new Map<string, number>();
-    for (const row of (inventoryResult.data ?? []) as {
-      item_id: string;
-      quantity: number;
-      unit: string | null;
-    }[]) {
-      const oz = toOunces(row.quantity, row.unit);
-      const q = oz != null ? oz : row.quantity;
-      const u = oz != null ? "oz" : row.unit;
-      const key = stockPoolKey(rootOf(row.item_id), u);
-      stock.set(key, (stock.get(key) ?? 0) + q);
-    }
-    const held = new Map<string, number>();
-    for (const row of (holdsResult.data ?? []) as {
-      item_id: string;
-      quantity: number;
-      unit: string | null;
-      week_start: string;
-      day_index: number;
-    }[]) {
+    const { stockByRoot, stockUnitByRoot, heldByRoot } = poolStockAndHolds(
+      (inventoryResult.data ?? []) as InventoryRow[],
+      (holdsResult.data ?? []) as HoldRow[],
+      rootOf,
       // Targeted days are being recomputed below.
-      if (targetKeys.has(`${row.week_start}:${row.day_index}`)) continue;
-      const oz = toOunces(row.quantity, row.unit);
-      const q = oz != null ? oz : row.quantity;
-      const u = oz != null ? "oz" : row.unit;
-      const key = stockPoolKey(rootOf(row.item_id), u);
-      held.set(key, (held.get(key) ?? 0) + q);
-    }
+      (row) => targetKeys.has(`${row.week_start}:${row.day_index}`),
+    );
 
     // Recompute the targeted days' holds from scratch.
     for (const weekStart of weekStarts) {
@@ -344,41 +374,46 @@ async function shopDays(
       week_start: string;
       day_index: number;
     }[] = [];
-    const groceryInputs: {
-      itemId: string | null;
-      name: string;
-      quantity: number;
-      unit: string | null;
-      source: "planner";
-    }[] = [];
+    // Grocery lines are MEAL COUNTS, unitless: one line per canonical
+    // ingredient (or unmatched name) whose quantity is how many selected
+    // meals still need it after pantry coverage ("2 Ground Beef") — not a
+    // combined weight.
+    const uncoveredMeals = new Map<string, number>();
+    const lineNames = new Map<string, string>();
     let reserved = 0;
 
     for (const day of planDays) {
+      const countedThisMeal = new Set<string>();
       for (const ingredient of ingredientsByRecipe.get(day.recipe_id) ?? []) {
         const parsed = parseQuantityText(ingredient.quantity_text);
+        const bareName = splitNameAndQuantity(ingredient.name).name
+          .trim()
+          .toLowerCase();
         const ingredientRoot = ingredient.item_id
           ? rootOf(ingredient.item_id)
-          : (nameToRoot.get(
-              splitNameAndQuantity(ingredient.name).name.trim().toLowerCase(),
-            ) ?? null);
-        if (!ingredientRoot) {
-          groceryInputs.push({
-            itemId: null,
-            name: ingredient.name,
-            quantity: parsed.quantity,
-            unit: parsed.unit,
-            source: "planner",
-          });
-          continue;
+          : (nameToRoot.get(bareName) ?? null);
+        // Unmatched ingredients group (and dedupe) by bare recipe name.
+        const groupKey = ingredientRoot ?? `name:${bareName}`;
+        if (!lineNames.has(groupKey)) lineNames.set(groupKey, ingredient.name);
+
+        // Coverage uses proper units: the oz-family converts exactly;
+        // cans/cups/counts compare as plain quantities over the blind
+        // per-root pool.
+        const needed = toOunces(parsed.quantity, parsed.unit) ?? parsed.quantity;
+        let reservePool = 0;
+        if (ingredientRoot) {
+          const haveRaw = stockByRoot.get(ingredientRoot) ?? 0;
+          const commonUnit = stockUnitByRoot.get(ingredientRoot) ?? null;
+          const have = toOunces(haveRaw, commonUnit) ?? haveRaw;
+          const held = heldByRoot.get(ingredientRoot) ?? 0;
+          const available = Math.max(0, have - held);
+          reservePool = Math.min(available, needed);
         }
-        const oz = toOunces(parsed.quantity, parsed.unit);
-        const q = oz != null ? oz : parsed.quantity;
-        const u = oz != null ? "oz" : parsed.unit;
-        const key = stockPoolKey(ingredientRoot, u);
-        const available = (stock.get(key) ?? 0) - (held.get(key) ?? 0);
-        const reserve = Math.max(0, Math.min(available, q));
-        if (reserve > 0) {
-          const holdQty = oz != null ? (fromOunces(reserve, parsed.unit) ?? reserve) : reserve;
+        if (reservePool > 0 && ingredientRoot) {
+          const holdQty =
+            parsed.unit != null
+              ? (fromOunces(reservePool, parsed.unit) ?? reservePool)
+              : reservePool;
           newHolds.push({
             household_id: householdId,
             item_id: ingredientRoot,
@@ -387,22 +422,29 @@ async function shopDays(
             week_start: day.week_start,
             day_index: day.day_index,
           });
-          held.set(key, (held.get(key) ?? 0) + reserve);
+          heldByRoot.set(
+            ingredientRoot,
+            (heldByRoot.get(ingredientRoot) ?? 0) + reservePool,
+          );
           reserved += 1;
         }
-        const shortfall = q - reserve;
-        if (shortfall > 0) {
-          const shortQty = oz != null ? (fromOunces(shortfall, parsed.unit) ?? shortfall) : shortfall;
-          groceryInputs.push({
-            itemId: ingredientRoot,
-            name: ingredient.name,
-            quantity: shortQty,
-            unit: parsed.unit,
-            source: "planner",
-          });
+        // One count per meal per ingredient, even if a recipe lists it twice.
+        if (needed - reservePool > 0 && !countedThisMeal.has(groupKey)) {
+          countedThisMeal.add(groupKey);
+          uncoveredMeals.set(groupKey, (uncoveredMeals.get(groupKey) ?? 0) + 1);
         }
       }
     }
+
+    const groceryInputs = Array.from(uncoveredMeals.entries()).map(
+      ([groupKey, mealCount]) => ({
+        itemId: groupKey.startsWith("name:") ? null : groupKey,
+        name: lineNames.get(groupKey) ?? groupKey,
+        quantity: mealCount,
+        unit: null,
+        source: "planner" as const,
+      }),
+    );
 
     if (newHolds.length > 0) {
       const { error: holdError } = await supabase
@@ -569,38 +611,15 @@ async function resolveDayIngredients(
     groupByRoot.set(root, group);
   }
 
-  // Quantity pools per canonical root — the recipe editor's model: one number
-  // per ingredient across every batch and unit (mixed units collapse the
-  // common unit to null, exactly like recipes/[id]/page.tsx).
-  const stockByRoot = new Map<string, number>();
-  const stockUnitByRoot = new Map<string, string | null>();
-  const stockUnitSeen = new Set<string>();
-  for (const row of (inventoryResult.data ?? []) as {
-    item_id: string;
-    quantity: number;
-    unit: string | null;
-  }[]) {
-    const root = rootOf(row.item_id);
-    stockByRoot.set(root, (stockByRoot.get(root) ?? 0) + row.quantity);
-    if (!stockUnitSeen.has(root)) {
-      stockUnitSeen.add(root);
-      stockUnitByRoot.set(root, row.unit);
-    } else if (stockUnitByRoot.get(root) !== row.unit) {
-      stockUnitByRoot.set(root, null);
-    }
-  }
-  const heldByRoot = new Map<string, number>();
-  for (const row of (holdsResult.data ?? []) as {
-    item_id: string;
-    quantity: number;
-    unit: string | null;
-    week_start: string;
-    day_index: number;
-  }[]) {
-    if (row.week_start === weekStart && row.day_index === dayIndex) continue;
-    const root = rootOf(row.item_id);
-    heldByRoot.set(root, (heldByRoot.get(root) ?? 0) + row.quantity);
-  }
+  // Blind per-root pools shared with planner shopping (poolStockAndHolds):
+  // one number per ingredient across every batch and unit.
+  const { stockByRoot, stockUnitByRoot, heldByRoot } = poolStockAndHolds(
+    (inventoryResult.data ?? []) as InventoryRow[],
+    (holdsResult.data ?? []) as HoldRow[],
+    rootOf,
+    // This day's own holds exist for this meal — they don't reduce it.
+    (row) => row.week_start === weekStart && row.day_index === dayIndex,
+  );
 
   const round3 = (value: number) => Math.round(value * 1000) / 1000;
 

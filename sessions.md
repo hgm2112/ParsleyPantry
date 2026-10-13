@@ -4,6 +4,50 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 46) — Planner shopping: meal-count grocery lines + pantry coverage fix; picker footer hardening
+
+**Shipped**
+- Issue 1 (footer "still floats"): the anchored 3-area layout was already correct in the local tree (part 45) but **uncommitted/undeployed** — the live site still ran the old whole-popup scroller. Hardening added: `overflow-hidden` on the picker's `DialogContent` so the footer can never paint outside the dialog box. No other structural change.
+- Issue 2 root cause: `shopDays` pooled stock/holds per `stockPoolKey(root, unit)` (unit-aware buckets) — stock in a different unit than the recipe's parsed unit was invisible ("2 cans" need vs "6 floz" stock → 0 available → full shopped). Same bug part 43 fixed for cooking; shopping was never updated.
+- New shared helper `poolStockAndHolds()` in `app/(app)/plan/actions.ts`: blind per-root pools (raw sums across all batches, mixed units collapse common unit to null; holds summed raw minus caller's skip rule). Used by BOTH `shopDays` (skips target days' holds) and `resolveDayIngredients` (skips this day's) — dialog/preview/shopping now share identical math.
+- `shopDays` coverage: proper units — `needed = toOunces(q,u) ?? q`, `have = toOunces(rawSum, commonUnit) ?? raw`, `available = max(0, have − held)`, `reserve = min(available, needed)`; holds still written per-day in recipe units (unchanged architecture, oldest-day-first). 16 oz stock does NOT cover a 2 lb need.
+- **Grocery lines are meal counts, unitless** (user directive): one line per canonical root (or unmatched bare name); quantity = number of SELECTED MEALS with an uncovered requirement after coverage ("2 Ground Beef", "3 Carrots"), `unit: null`. No weight summing/conversion on the list. Same recipe on two days counts twice; duplicate ingredient rows within one recipe count once per meal (per-meal `countedThisMeal` set). Unmatched names always count (no stock by definition) — same as before, but now aggregated per name.
+- Reconciliation unchanged: within a run, one aggregated line per ingredient; across runs, `addGroceryItem`'s existing skip-if-unchecked-row-with-item_id convention (no quantity merging, no deletions of manual rows). Checked-off lines never auto-add to inventory, so counts can't corrupt pantry batches. `on_shopping_list` filter, made-day skip, hold wipe/recompute, toasts, `planWeekToGrocery`/`planDaysToGrocery` all preserved. Dropped the now-unused `stockPoolKey` import from actions.ts.
+- Bulk produce vs packaged: no schema added. The count is explicitly a MEAL count (unitless), so it never claims "3 bags" — shopper applies bag judgment. A per-item "bulk → cap at 1" toggle remains a possible future addition, deliberately not built.
+- Cooking "Mark as made" dialog untouched (user chose to keep part-43 oz conversion there).
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT verified on device or against live data.
+
+**Gotchas**
+- Grocery quantity semantics CHANGED from "shortfall amount in recipe units" to "count of uncovered meals, unitless" for planner-sourced lines only (source: "planner"). Manual/recipe/low-stock adds unaffected.
+- `addGroceryItem` quantity max is 9999 — meal counts are tiny, fine.
+- Holds still store recipe-unit amounts; cooking preview subtracts them raw (established part-43 looseness).
+
+**Open — next session**
+- Not committed yet (parts 42–46 uncommitted) — commit + push when user asks; deploys part 45's footer fix to the live site.
+- User to verify: picker footer anchored + clickable (mobile/desktop); "2 Ground Beef"-style lines; covered meals don't count; 16 oz ≠ enough for 2 lb.
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path; PWA white-bar device verification (part 41); Bolognese mark-as-made verification (part 44).
+
+## 2026-10-12 (part 45) — /plan "Select days to shop": anchored footer + working button
+
+**Shipped**
+- Root cause (code-level, not device-verified): `overflow-y-auto max-h-[85vh]` was on the WHOLE `DialogContent` — header, controls, day list, and footer all scrolled together; default `flex-shrink: 1` on every child also squashed header/footer on long (14-day) lists, clipping the footer (full-bleed via `-mx-4 -mb-4`) at the scrollport's bottom edge — on mobile that edge sits in/below the OS nav (stale `vh` vs dynamic toolbar), so taps miss the button. Additionally the button was hard-disabled at 0 days with a silent no-op in `shop()`, and the parent closed the dialog BEFORE the action ran, so the internal busy spinner never showed and an error left no in-place retry.
+- `components/plan/shop-days-dialog.tsx`: 3-area layout — `DialogContent` = `flex max-h-[85dvh] flex-col gap-3 sm:max-w-md` (no overflow; `sm:max-w-md` also fixes tailwind-merge letting base `sm:max-w-sm` cap the width); header + Select-all/Clear `shrink-0`; new dedicated scroll region around the weeks list (`min-h-0 flex-1 overflow-y-auto overscroll-contain`); footer `shrink-0` (anchored). Counter shows "Select at least one day" at 0. `shop()` now `await onShop(days)` and recovers `busy` on failure so the Loader2 spinner works and retry is possible. `onShop` prop returns `Promise<boolean>`.
+- `components/plan/plan-view.tsx`: `runShop` returns `boolean`; `shopSelectedDays` awaits it and closes the dialog only on success (error toast + dialog stays open for retry). Same `planDaysToGrocery` handler, same toast format, same day-selection semantics.
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT yet verified on device.
+
+**Gotchas**
+- Dialog close-on-success (was close-immediately): behavior change requested by the spec ("allow retrying" after failure).
+- Page-behind scroll remains Base UI's modal scroll-lock; `overscroll-contain` only stops scroll chaining from the day list.
+
+**Open — next session**
+- Not committed yet (parts 42–45 uncommitted) — commit + push when user asks.
+- User to verify: footer anchored while list scrolls; button tappable mobile + desktop; retry after forced error; 0-day hint text.
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path; PWA white-bar device verification (part 41); Bolognese mark-as-made dialog verification (part 44).
+
 ## 2026-10-12 (part 44) — Mark-as-made dialog: selectable ingredient deduction
 
 **Shipped**

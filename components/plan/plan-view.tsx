@@ -75,18 +75,19 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
     }
   }, [weekStart, router]);
 
-  async function runShop(action: () => Promise<ShopResult>) {
+  async function runShop(action: () => Promise<ShopResult>): Promise<boolean> {
     setShopping(true);
     const result = await action();
     setShopping(false);
     if (!result.ok) {
       toast.error(result.error);
-      return;
+      return false;
     }
     const { reserved, added, skipped } = result.data;
     toast.success(
       `${reserved} reserved from pantry · ${added} added${skipped ? ` · ${skipped} already on the list` : ""}`,
     );
+    return true;
   }
 
   function shopThisWeek() {
@@ -102,9 +103,14 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
     void runShop(() => planDaysToGrocery(days));
   }
 
-  function shopSelectedDays(days: { weekStart: string; dayIndex: number }[]) {
-    setShopDialogOpen(false);
-    void runShop(() => planDaysToGrocery(days));
+  async function shopSelectedDays(
+    days: { weekStart: string; dayIndex: number }[],
+  ): Promise<boolean> {
+    // Close only after a successful shop so an error toast can be followed
+    // by an in-dialog retry.
+    const ok = await runShop(() => planDaysToGrocery(days));
+    if (ok) setShopDialogOpen(false);
+    return ok;
   }
 
   if (weekStart === null || weeks.length === 0) {
