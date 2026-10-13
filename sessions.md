@@ -4,6 +4,26 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 41) — Installed-PWA white bottom bar (Android/Samsung)
+
+**Shipped**
+- Root cause (code-level, not yet device-verified): static `<meta name="theme-color">` was keyed to OS `prefers-color-scheme` with pure `#ffffff` for light — Android paints the installed app's system nav strip with that meta, which diverges from the class-based next-themes page bg (`#fbfaf7` light / `#171a17` dark, user-toggleable). Chrome tab hides the strip behind its toolbar → "correct in Chrome, white in installed app" (Samsung OS light or app forced dark); Motorola presumably dark-OS.
+- `components/theme-color-sync.tsx` (new, client): on mount + theme change, sets ALL `meta[name="theme-color"]` content to `#171a17` (dark) / `#fbfaf7` (light) via `useTheme().resolvedTheme` — meta now follows the app theme, not the OS scheme. Mounted inside `ThemeProvider` in root layout.
+- `app/layout.tsx`: light static fallback `#ffffff` → `#fbfaf7` (matches `--background` token; pre-hydration paint only).
+- Untouched on purpose: manifest `theme_color: #009444` (overridden by meta on modern Android), `background_color: #ffffff` (splash-only), SW (network-only, no cache), all nav/safe-area CSS.
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT yet verified on either phone.
+
+**Gotchas**
+- If a One UI build ignores theme-color for WebAPKs entirely, web cannot override it — meta is the supported mechanism, note only.
+- WebAPK meta updates can lag on Samsung: open site once in Chrome, force-stop the installed app, reopen; reinstall shortcut only as last resort.
+
+**Open — next session**
+- Not committed yet — commit + push when user asks.
+- User to verify white bar gone on Galaxy S25+ (all 3 theme modes) and unchanged on Razr.
+- Still open: Vercel env vars for reminder cron, `Date.now` blocking-prerender error, stray untracked dev files, Android PWA scan overlay, sw.js notification icon path references nonexistent `/icon-192.png` (icons are `icon-192x192.png`).
+
 ## 2026-10-12 (part 40) — Leftovers widget: added date + age
 
 **Shipped**

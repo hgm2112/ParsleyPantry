@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { ThemeColorSync } from "@/components/theme-color-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -34,7 +35,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    // Fallback for pre-hydration paint; ThemeColorSync overrides these with
+    // the app theme's --background once the class-based theme applies.
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf7" },
     { media: "(prefers-color-scheme: dark)", color: "#171A17" },
   ],
 };
@@ -48,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-dvh flex flex-col bg-background text-foreground">
         <ThemeProvider>
+          <ThemeColorSync />
           {children}
           <Toaster position="top-center" richColors closeButton />
         </ThemeProvider>
