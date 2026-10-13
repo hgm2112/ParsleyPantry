@@ -25,9 +25,9 @@ for "what changed", this is for "what's true now / what's next".
 - Holds still store recipe-unit amounts; cooking preview subtracts them raw (established part-43 looseness).
 
 **Open — next session**
-- Not committed yet (parts 42–46 uncommitted) — commit + push when user asks; deploys part 45's footer fix to the live site.
-- User to verify: picker footer anchored + clickable (mobile/desktop); "2 Ground Beef"-style lines; covered meals don't count; 16 oz ≠ enough for 2 lb.
-- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path; PWA white-bar device verification (part 41); Bolognese mark-as-made verification (part 44).
+- Session wrapped 2026-10-12: parts 42–44 pushed as `f975f89`; parts 45–46 pushed as `71baaf0` (Vercel deploy of the footer + meal-count shopping fixes pending).
+- User to verify on live: picker footer anchored + clickable (mobile/desktop); "2 Ground Beef"-style lines; covered meals don't count; 16 oz ≠ enough for 2 lb; Bolognese mark-as-made dialog (parts 43–44); PWA white nav bar (part 41).
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files (jpg/svg/log at repo root — never committed), Android PWA scan overlay, sw.js `/icon-192.png` path.
 
 ## 2026-10-12 (part 45) — /plan "Select days to shop": anchored footer + working button
 
