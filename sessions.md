@@ -4,6 +4,73 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-12 (part 44) — Mark-as-made dialog: selectable ingredient deduction
+
+**Shipped**
+- Dialog ingredient rows are now full-row toggle buttons (`aria-pressed`, `type="button"`, focus-visible ring, hover/press feedback, disabled while submitting). Selected row = `border-primary/40 bg-primary text-primary-foreground` (parsley tokens, readable both themes); quantity/status/optional spans flip to `primary-foreground/80`-style tints when selected. Names, quantities, status text, rounded corners, spacing unchanged.
+- Default selection on preview load: indices where `take > 0` (usable stock, incl. partial) — Bolognese: 6 selected, Carrots off. Retry/reopen re-default from fresh pantry state; selection is local-only (cancel/close changes nothing).
+- `app/(app)/plan/actions.ts`: new `madeMealSchema = dayKeySchema.extend({ selected: z.array(int 0-99).optional() })`. `markMealMade` builds `wanted = Set(selected)` (absent → null = legacy all-eligible) and skips non-selected indices in the deduction loop — a filter only; all quantities still recomputed server-side (`takePool`, FEFO, weight-batch conversion, delete-at-zero, optional-never-deducted, idempotency guard, holds release, revalidate all preserved). Zero-selection confirm still records the meal.
+- `confirm()` snapshots `[...selected]`; toggles ignored while `busy`; footer button still busy-disabled. Dialog description now says "tap an ingredient to choose what leaves your pantry".
+- Untouched: `previewMealMade`/`resolveDayIngredients` shape, shopping/holds/grocery, stats, day-dialog/week-meals wrappers (props identical).
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT yet verified in app.
+
+**Gotchas**
+- Selection keys are preview-order indices (recipe_ingredients sort_order); stable within an open dialog, recomputed server-side on confirm.
+- Optional ingredients can be toggled but are still never deducted server-side (established policy).
+- Status text always describes real pantry availability, independent of selection (deselecting doesn't change "Not in pantry — need X").
+
+**Open — next session**
+- Not committed yet (parts 42–44 all uncommitted) — commit + push when user asks.
+- User to verify on Bolognese: default 6-on/Carrots-off, green toggle, deselect blocks deduction, cancel/reopen resets.
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path; PWA white-bar device verification (part 41).
+
+## 2026-10-12 (part 43) — Mark-as-made: recipe-editor unit-blind pooling
+
+**Shipped**
+- User reported 5/7 Bolognese ingredients still "not in pantry" after part 42 — matching was already identical to the recipe editor (item_id → rootOf, else exact lowercase name → root); the divergence was **stock pooling**. Editor pools ONE quantity per canonical root across all batches/units (`stockByItem[root] += qty`, compares with `toOunces(need) ?? need >= toOunces(have) ?? have`); the dialog pooled per `stockPoolKey(root, unit)` — "2 cans"/"1 cup"/unitless "3" looked up empty buckets → false shortfalls, and the FEFO `.eq("unit", ...)` matched nothing.
+- `resolveDayIngredients` (`app/(app)/plan/actions.ts`): pools replaced with editor-style blind root sums — `stockByRoot`/`stockUnitByRoot` (mixed units collapse common unit to null, exactly like recipes/[id]/page.tsx), `heldByRoot` = other-days holds summed raw. Per-ingredient: `needed = toOunces(q, u) ?? q`, `take = min(needed, haveNet)`, `shortfall`; **no unit matching anywhere**. Oz-family conversion retained (exact weights only: lb↔oz↔g); cups/cans/counts compare as plain numbers — recipe units are informational (user's directive: dialog is the decision point for what to remove). Display numbers converted back with `fromOunces` into the recipe's own unit ("Using 1 lb", "Using 2 cans").
+- `ResolvedIngredient` reshaped: `unit` now the recipe unit; `needed/available/take/shortfall` recipe-space (preview + dialog); new `takePool` = pool-space amount (oz for weight recipes, raw otherwise) consumed by FEFO; removed `takeParsed`/`parseUnit`.
+- `markMealMade` deduction: no unit filter — FEFO pass over the whole canonical group (`.in("item_id", groupIds)` only); per-batch chunk `take = min(batch.qty, remaining / ozPerUnit(batch.unit))` when the batch stores a weight unit, raw decrement otherwise; `remaining -= take * (ozPerUnit ?? 1)`; delete-at-zero (3dp rounding kills float dust), never negative.
+- `previewMealMade` mapping unchanged in shape (passes recipe-space fields through); `made-confirm.tsx` unchanged logic, stale "pool units" comment fixed.
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT yet verified on the Bolognese.
+
+**Gotchas**
+- Blind pooling is intentionally loose (editor semantics): "2 cans" of tomatoes counts against ANY stock of that root regardless of stored unit — accepted per user directive.
+- Holding math (holds subtracted raw from pool) mixes units only when other days hold a different unit of the same root — same class of looseness as the editor; shopping flow untouched (still unit-keyed).
+- Idempotency, optional-never-deducted, never-block-on-shortfall, no-grocery-touch all preserved from part 42.
+
+**Open — next session**
+- Not committed yet (parts 42+43 both uncommitted) — commit + push when user asks.
+- User to re-open Bolognese chef-hat: expect 6/7 "using pantry", only Carrots (or whatever's genuinely out) missing; confirm marks made and deducts sensibly.
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path; PWA white-bar device verification (part 41).
+
+## 2026-10-12 (part 42) — Mark-as-made dialog: recipe-driven ingredients
+
+**Shipped**
+- Root cause: the dialog listed `stock_holds` rows, which only "Shop this week" (`shopDays`) creates — and only for ingredients that were (a) `on_shopping_list`, (b) exact-lowercase name/`item_id` resolvable, (c) >0 pantry stock at shop time. Beef Bolognese's other 5 ingredients were filtered out at one of those stages ("Heavy Cream" vs "Heavy Whipping Cream" never fuzzy-matched at shop time). The "already sent to the grocery list" copy described this design.
+- `app/(app)/plan/actions.ts`: new shared `resolveDayIngredients()` — loads the day's recipe + EVERY `recipe_ingredients` row (shopping flag ignored), resolves each via `item_id → rootOf()` or exact lowercase catalog-name → root (canonical-root pooling identical to shopDays, so existing `canonical_item_id` mappings like Heavy Whipping Cream → Heavy Cream work), pools availability oz-normalized minus other days' holds (this day's own holds excluded), computes needed/available/take/shortfall per ingredient; unmatched names reported, never dropped.
+- `previewMealMade` rewritten on top of it (read-only; no holds/grocery touched); new item shape: recipe name, quantityText, optional, pantryName (shown only when it differs from the recipe name), matched, unit/needed/available/take/shortfall in pool units.
+- `markMealMade`: **idempotent** (already-made day → ok, no re-deduct — new server-side double-submit guard); now deducts `takeParsed` per non-optional ingredient FEFO across the canonical group, same-unit batch filter, delete-at-zero, never negative (established consumption loop, sourced from the recipe instead of holds); still releases the day's holds; never touches the grocery list. Optional ingredients: displayed, never deducted (preserves their established non-participation).
+- `components/plan/made-confirm.tsx`: every ingredient rendered as a card — bold recipe name (+ "optional" tag), recipe quantity text, status line ("Using X from pantry"/"from {pantry item}", "Have X — short Y", "Not in pantry — need X", "Not matched to pantry — nothing will be deducted"). Removed BOTH shopping-list claims (empty-state "Run Shop this week" paragraph + "already sent to the grocery list" footnote). New empty state: recipe has no ingredients → marking just records the meal. Confirm never blocked by shortfalls; open/cancel still deduct nothing.
+- Unchanged: `shopDays`/Shop this week, grocery actions, `unmarkMealMade`, stats (still `made_at`-derived), day-dialog/week-meals wiring (props identical).
+
+**Verify**
+- Manual review only — no tsc/lint/build per request. NOT yet verified on the Bolognese (user must click chef-hat and confirm 7/7 rows + Heavy Cream→Heavy Whipping Cream match).
+
+**Gotchas**
+- Fuzzy `matchCanonical` still NOT auto-applied at cook time (review-only by design); unresolvable names show "not matched" instead.
+- Deduction unit filter = recipe's parsed unit (same as the old hold.unit filter); oz-pooling is display/availability math. Mixed-unit batches (lb recipe vs oz stock) behave exactly as the old hold flow did.
+- Resolution failure after `made_at` is stamped records the meal without deduction (same partial-failure window the old flow had); the idempotency guard means a retry won't deduct later.
+
+**Open — next session**
+- Not committed yet — commit + push when user asks.
+- User to verify acceptance criteria on Beef Bolognese.
+- Still open: Vercel env vars for reminder cron, `Date.now` prerender error, stray untracked dev files, Android PWA scan overlay, sw.js `/icon-192.png` path.
+
 ## 2026-10-12 (part 41) — Installed-PWA white bottom bar (Android/Samsung)
 
 **Shipped**
