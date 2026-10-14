@@ -33,7 +33,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover",
+  viewportFit: "auto",
+  colorScheme: "light dark",
   themeColor: [
     // Parsley green for both schemes; this drives the Android installed-app
     // browser/system UI, including the bottom navigation bar.
