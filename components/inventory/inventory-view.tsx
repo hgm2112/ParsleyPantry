@@ -258,20 +258,6 @@ export function InventoryView({
           >
             <ScanBarcode /> Scan
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 text-xs">
-                Sort: {sortLabel}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {SORT_OPTIONS.map((opt) => (
-                <DropdownMenuItem key={opt.value} onClick={() => setSortKey(opt.value)} className={cn(sortKey === opt.value && "font-medium bg-muted")}>
-                  {opt.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -333,9 +319,25 @@ export function InventoryView({
                   : "border-border bg-background text-muted-foreground hover:bg-accent",
               )}
             >
-              {subcategory.name}
+              {subcategory.label}
             </button>
           ))}
+          <div className="ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 text-xs">
+                  Sort: {sortLabel}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {SORT_OPTIONS.map((opt) => (
+                  <DropdownMenuItem key={opt.value} onClick={() => setSortKey(opt.value)} className={cn(sortKey === opt.value && "font-medium bg-muted")}>
+                    {opt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
