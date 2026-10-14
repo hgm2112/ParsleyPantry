@@ -32,7 +32,7 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: "/icon-192x192.png",
-      badge: "/icon-192x192.png",
+      badge: "/notification-badge-96.png",
       data: { url: payload.url || "/home#leftovers" },
     }),
   );

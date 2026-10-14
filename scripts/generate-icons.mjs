@@ -26,11 +26,15 @@ function iconSvg(size, { radius = 0, logoFrac }) {
 </svg>`;
 }
 
+const badgeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 936 1008">${inner
+  .replaceAll("#009444", "#ffffff")
+  .replaceAll("#005926", "#ffffff")}</svg>`;
 const targets = [
   ["public/icon-192x192.png", iconSvg(192, { radius: 40, logoFrac: 0.72 })],
   ["public/icon-512x512.png", iconSvg(512, { radius: 104, logoFrac: 0.72 })],
   ["public/icon-maskable-512.png", iconSvg(512, { logoFrac: 0.6 })],
   ["app/apple-icon.png", iconSvg(180, { logoFrac: 0.78 })],
+  ["public/notification-badge-96.png", badgeSvg],
 ];
 
 for (const [out, svg] of targets) {
