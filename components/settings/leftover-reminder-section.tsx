@@ -297,7 +297,7 @@ export function LeftoverReminderSection({
         <div className="space-y-0.5">
           <Label htmlFor="reminder-enabled">Daily reminder</Label>
           <p className="text-xs text-muted-foreground">
-            One notification a day about the items on your leftovers list.
+            One notification a day, within about an hour of your chosen time.
           </p>
         </div>
         <Switch
