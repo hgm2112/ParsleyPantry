@@ -67,6 +67,7 @@ type Props = {
   memberships: MembershipRow[];
   settings: HouseholdSettingsRow | null;
   reminder: NotificationSettingsRow | null;
+  pushSubscriptionCount?: number;
   profile: ProfileRow;
   currentUserId: string;
 };
@@ -77,6 +78,7 @@ export function SettingsView({
   memberships,
   settings,
   reminder,
+  pushSubscriptionCount,
   profile,
   currentUserId,
 }: Props) {
@@ -440,7 +442,11 @@ export function SettingsView({
         title="Leftovers reminder"
         description="A daily nudge to enjoy what's still on your leftovers list."
       >
-        <LeftoverReminderSection settings={reminder} />
+        <LeftoverReminderSection
+          settings={reminder}
+          pushSubscriptionCount={pushSubscriptionCount}
+          currentUserId={currentUserId}
+        />
       </Section>
 
       <Section

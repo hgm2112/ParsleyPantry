@@ -66,6 +66,12 @@ async function SettingsContent() {
   ]);
 
   // Robust fetch: separate queries avoid PostgREST embed issues (no FK from user_id -> profiles.id)
+  const { count: pushSubscriptionCount } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("active", true);
+
   let members: MemberRow[] = [];
   if (membersResult.data && membersResult.data.length > 0) {
     const userIds = membersResult.data.map((m) => m.user_id);
@@ -96,6 +102,7 @@ async function SettingsContent() {
       reminder={
         (reminderResult.data ?? null) as NotificationSettingsRow | null
       }
+      pushSubscriptionCount={pushSubscriptionCount ?? 0}
       profile={profile}
       currentUserId={user.id}
     />

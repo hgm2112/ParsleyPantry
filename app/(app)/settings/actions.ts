@@ -6,6 +6,9 @@ import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { LOCATIONS, type Location } from "@/lib/types";
+import webpush from "web-push";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { REMINDER_TITLE } from "@/lib/reminder";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -291,4 +294,173 @@ export async function savePushSubscription(
           : "Could not save this device",
     };
   }
+}
+
+export type ReminderConfigurationStatus = {
+  clientPublicKeyConfigured: boolean;
+  vapidConfiguredOnServer: boolean;
+  vapidSubjectValid: boolean;
+  serviceRoleKeyConfigured: boolean;
+  cronSecretConfigured: boolean;
+};
+
+/**
+ * Safe server-side configuration audit for the daily reminder. Reports only
+ * booleans and presence checks so browser code can show config errors without
+ * exposing VAPID, service-role, or cron secrets.
+ */
+export async function getReminderConfigurationStatus(): Promise<
+  ActionResult<ReminderConfigurationStatus>
+> {
+  try {
+    await requireDal();
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Not authenticated",
+    };
+  }
+  const clientPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+  const status: ReminderConfigurationStatus = {
+    clientPublicKeyConfigured:
+      Boolean(clientPublicKey) &&
+      /^[A-Za-z0-9_-]+$/.test(clientPublicKey ?? ""),
+    vapidConfiguredOnServer: Boolean(clientPublicKey && privateKey && subject),
+    vapidSubjectValid:
+      Boolean(subject) &&
+      (/^mailto:[^\s]+$/i.test(subject ?? "") ||
+        /^https?:\/\/[^\s]+$/i.test(subject ?? "")),
+    serviceRoleKeyConfigured: Boolean(
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    ),
+    cronSecretConfigured: Boolean(process.env.CRON_SECRET),
+  };
+  return { ok: true, data: status };
+}
+
+/**
+ * Sends a real push notification through the same web-push path as the cron
+ * sender. It never claims a daily delivery row and never changes leftovers.
+ */
+export async function sendTestLeftoverReminder(): Promise<
+  ActionResult<{ accepted: number; failed: number; total: number }>
+> {
+  let user;
+  try {
+    ({ user } = await requireDal());
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Not authenticated",
+    };
+  }
+
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+  if (!publicKey || !privateKey || !subject) {
+    return {
+      ok: false,
+      error:
+        "Push is not configured on the server. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT.",
+    };
+  }
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {
+      ok: false,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set, so the test notification could not run.",
+    };
+  }
+
+  const { data: subRows, error: subsError } = await admin
+    .from("push_subscriptions")
+    .select("id, user_id, endpoint, p256dh, auth")
+    .eq("user_id", user.id)
+    .eq("active", true);
+  if (subsError) {
+    return { ok: false, error: "Could not load this user's push subscriptions" };
+  }
+  type TestSubscription = {
+    id: string;
+    user_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  };
+  const subs = (subRows ?? []) as TestSubscription[];
+  if (subs.length === 0) {
+    return {
+      ok: false,
+      error:
+        "No active push subscription is saved for this device. Enable notifications on this device first.",
+    };
+  }
+
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey);
+  } catch {
+    return { ok: false, error: "The configured VAPID keys or subject are invalid." };
+  }
+
+  const payload = JSON.stringify({
+    title: REMINDER_TITLE,
+    body:
+      "This is a test notification from Parsley Pantry. Push delivery to this device was accepted by the server.",
+    url: "/home#leftovers",
+  });
+
+  let accepted = 0;
+  let failed = 0;
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth },
+        },
+        payload,
+        { TTL: 60, urgency: "normal", topic: "leftovers-test" },
+      );
+      accepted++;
+    } catch (error) {
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410 || status === 400 || status === 413) {
+        await admin
+          .from("push_subscriptions")
+          .update({
+            active: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", sub.id);
+      }
+      if (status === 401 || status === 403) {
+        return {
+          ok: false,
+          error:
+            "Push authentication failed. The VAPID public key and private key do not match or VAPID_SUBJECT is invalid.",
+        };
+      }
+      failed++;
+    }
+  }
+
+  if (accepted === 0) {
+    return {
+      ok: false,
+      error: "No test notification was accepted for delivery.",
+    };
+  }
+  return {
+    ok: true,
+    data: { accepted, failed, total: subs.length },
+  };
 }

@@ -24,8 +24,8 @@ create table if not exists public.push_subscriptions (
 );
 
 -- Endpoint identifies a device+browser; re-subscribing replaces keys in place.
-create unique index push_subscriptions_endpoint_key on public.push_subscriptions (endpoint);
-create index push_subscriptions_user_idx on public.push_subscriptions (user_id);
+create unique index if not exists push_subscriptions_endpoint_key on public.push_subscriptions (endpoint);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
 
 create table if not exists public.leftover_reminder_deliveries (
   id uuid primary key default gen_random_uuid(),
@@ -37,12 +37,42 @@ create table if not exists public.leftover_reminder_deliveries (
 
 alter table public.notification_settings enable row level security;
 
-create policy "own notification settings" on public.notification_settings
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'notification_settings'
+      and policyname = 'own notification settings'
+  ) then
+    create policy "own notification settings"
+      on public.notification_settings
+      for all
+      using (user_id = auth.uid())
+      with check (user_id = auth.uid());
+  end if;
+end;
+$$;
 
 alter table public.push_subscriptions enable row level security;
 
-create policy "own push subscriptions" on public.push_subscriptions
-  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'push_subscriptions'
+      and policyname = 'own push subscriptions'
+  ) then
+    create policy "own push subscriptions"
+      on public.push_subscriptions
+      for all
+      using (user_id = auth.uid())
+      with check (user_id = auth.uid());
+  end if;
+end;
+$$;
 
 alter table public.leftover_reminder_deliveries enable row level security;
