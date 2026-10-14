@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -66,6 +66,16 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "freezer", label: "Freezer" },
 ];
 
+const SORT_OPTIONS = [
+  { value: "recent-newest", label: "Recently added — newest first" },
+  { value: "expiry-soonest", label: "Expiration date — soonest first" },
+  { value: "recent-oldest", label: "Recently added — oldest first" },
+  { value: "name-az", label: "Name — A to Z" },
+  { value: "name-za", label: "Name — Z to A" },
+  { value: "qty-low", label: "Quantity — lowest first" },
+  { value: "qty-high", label: "Quantity — highest first" },
+];
+
 export function InventoryView({
   rows,
   subcategories,
@@ -85,11 +95,25 @@ export function InventoryView({
   const [lowOnly, setLowOnly] = useState(false);
   const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<string>(() => {
+    if (typeof window === "undefined") return "recent-newest";
+    try {
+      return localStorage.getItem("parsley-inventory-sort") || "recent-newest";
+    } catch {
+      return "recent-newest";
+    }
+  });
   const [consumeTarget, setConsumeTarget] = useState<{
     item: ItemGroup["item"];
     mode: "partial" | "last";
   } | null>(null);
 
+  const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? "Sort";
+  useEffect(() => {
+    try {
+      localStorage.setItem("parsley-inventory-sort", sortKey);
+    } catch {}
+  }, [sortKey]);
   const groups = useMemo(() => groupByItem(rows), [rows]);
 
   const counts = useMemo(() => {
@@ -128,15 +152,45 @@ export function InventoryView({
       return true;
     });
 
-    return [...result].sort((a, b) =>
-      compareByExpiry(
-        earliestEffective(scopedBatches(a.batches, tab)),
-        a.item.name,
-        earliestEffective(scopedBatches(b.batches, tab)),
-        b.item.name,
-      ),
-    );
-  }, [groups, tab, query, useSoon, lowOnly, subFilter]);
+    const sorted = [...result];
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case "recent-newest": {
+          const aMax = Math.max(...a.batches.map((r) => new Date(r.created_at).getTime()));
+          const bMax = Math.max(...b.batches.map((r) => new Date(r.created_at).getTime()));
+          return bMax - aMax;
+        }
+        case "recent-oldest": {
+          const aMin = Math.min(...a.batches.map((r) => new Date(r.created_at).getTime()));
+          const bMin = Math.min(...b.batches.map((r) => new Date(r.created_at).getTime()));
+          return aMin - bMin;
+        }
+        case "expiry-soonest":
+          return compareByExpiry(
+            earliestEffective(scopedBatches(a.batches, tab)),
+            a.item.name,
+            earliestEffective(scopedBatches(b.batches, tab)),
+            b.item.name,
+          );
+        case "name-az":
+          return a.item.name.localeCompare(b.item.name);
+        case "name-za":
+          return b.item.name.localeCompare(a.item.name);
+        case "qty-low":
+          return (a.totalQuantity ?? 0) - (b.totalQuantity ?? 0);
+        case "qty-high":
+          return (b.totalQuantity ?? 0) - (a.totalQuantity ?? 0);
+        default:
+          return compareByExpiry(
+            earliestEffective(scopedBatches(a.batches, tab)),
+            a.item.name,
+            earliestEffective(scopedBatches(b.batches, tab)),
+            b.item.name,
+          );
+      }
+    });
+    return sorted;
+  }, [groups, tab, query, useSoon, lowOnly, subFilter, sortKey]);
 
   const lowCount = groups.filter((group) => group.low).length;
 
@@ -204,6 +258,20 @@ export function InventoryView({
           >
             <ScanBarcode /> Scan
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 text-xs">
+                Sort: {sortLabel}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {SORT_OPTIONS.map((opt) => (
+                <DropdownMenuItem key={opt.value} onClick={() => setSortKey(opt.value)} className={cn(sortKey === opt.value && "font-medium bg-muted")}>
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
