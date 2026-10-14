@@ -7,7 +7,7 @@ import { requireDal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { LOCATIONS, type Location } from "@/lib/types";
 import webpush from "web-push";
-import { createAdminClient, isServiceRoleKey } from "@/lib/supabase/admin";
+import { createAdminClient, isAdminServiceKey } from "@/lib/supabase/admin";
 import { REMINDER_TITLE } from "@/lib/reminder";
 
 export type ActionResult<T = null> =
@@ -316,7 +316,7 @@ export type ReminderConfigurationStatus = {
   clientPublicKeyConfigured: boolean;
   vapidConfiguredOnServer: boolean;
   vapidSubjectValid: boolean;
-  serviceRoleKeyValid: boolean;
+  adminKeyValid: boolean;
   cronSecretConfigured: boolean;
 };
 
@@ -349,7 +349,7 @@ export async function getReminderConfigurationStatus(): Promise<
       Boolean(subject) &&
       (/^mailto:[^\s]+$/i.test(subject ?? "") ||
         /^https?:\/\/[^\s]+$/i.test(subject ?? "")),
-    serviceRoleKeyValid: isServiceRoleKey(
+    adminKeyValid: isAdminServiceKey(
       process.env.SUPABASE_SERVICE_ROLE_KEY,
     ),
     cronSecretConfigured: Boolean(process.env.CRON_SECRET),
@@ -393,7 +393,7 @@ export async function sendTestLeftoverReminder(): Promise<
     return {
       ok: false,
       error:
-        "SUPABASE_SERVICE_ROLE_KEY is missing or is not a service-role key, so the test notification could not verify subscriptions.",
+        "SUPABASE_SERVICE_ROLE_KEY is missing or is not a valid secret key or legacy service_role key, so the test notification could not verify subscriptions.",
     };
   }
 

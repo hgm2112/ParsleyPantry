@@ -7,11 +7,19 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * The key lives exclusively in the SUPABASE_SERVICE_ROLE_KEY env var.
  */
 /**
- * Checks whether a Supabase key is a JWT whose `role` claim is `service_role`.
- * Never logs or returns the key or its payload.
+ * Checks whether a Supabase key is a current-format secret key (`sb_secret_…`)
+ * or a legacy JWT whose `role` claim is `service_role`. Never logs or returns
+ * the key or its payload.
  */
-export function isServiceRoleKey(serviceKey?: string): boolean {
+export function isAdminServiceKey(serviceKey?: string): boolean {
   if (!serviceKey) return false;
+  if (
+    serviceKey.startsWith("sb_secret_") &&
+    serviceKey.length > "sb_secret_".length &&
+    !/\s/.test(serviceKey)
+  ) {
+    return true;
+  }
   const segments = serviceKey.split(".");
   if (segments.length !== 3) return false;
   try {
@@ -32,9 +40,9 @@ export function createAdminClient() {
       "SUPABASE_SERVICE_ROLE_KEY is not set — the reminder cron cannot run.",
     );
   }
-  if (!isServiceRoleKey(serviceKey)) {
+  if (!isAdminServiceKey(serviceKey)) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is not a service-role key — the reminder cron cannot run.",
+      "SUPABASE_SERVICE_ROLE_KEY is not a valid secret key or legacy service_role key — the reminder cron cannot run.",
     );
   }
   return createSupabaseClient(url, serviceKey, {

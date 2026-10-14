@@ -92,7 +92,7 @@ export function LeftoverReminderSection({
     clientPublicKeyConfigured: boolean;
     vapidConfiguredOnServer: boolean;
     vapidSubjectValid: boolean;
-    serviceRoleKeyValid: boolean;
+    adminKeyValid: boolean;
     cronSecretConfigured: boolean;
   } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -236,7 +236,7 @@ export function LeftoverReminderSection({
     Boolean(config?.clientPublicKeyConfigured) &&
     Boolean(config?.vapidConfiguredOnServer) &&
     Boolean(config?.vapidSubjectValid) &&
-    Boolean(config?.serviceRoleKeyValid) &&
+    Boolean(config?.adminKeyValid) &&
     Boolean(config?.cronSecretConfigured);
 
   const supportMessage =
@@ -285,8 +285,8 @@ export function LeftoverReminderSection({
             ? "VAPID_PRIVATE_KEY and/or VAPID_SUBJECT"
             : null,
           !config.vapidSubjectValid ? "VAPID_SUBJECT mailto subject" : null,
-          !config.serviceRoleKeyValid
-            ? "SUPABASE_SERVICE_ROLE_KEY (must be a service-role key)"
+          !config.adminKeyValid
+            ? "SUPABASE_SERVICE_ROLE_KEY (must be a Supabase secret key or legacy service_role key)"
             : null,
           !config.cronSecretConfigured ? "CRON_SECRET" : null,
         ].filter((value): value is string => Boolean(value));
