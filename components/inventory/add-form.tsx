@@ -103,6 +103,7 @@ export function AddForm({
   // Async lookups resume after a re-render, so "did the user type this?" must
   // live in refs rather than the values captured by the current render.
   const nameDirtyRef = useRef(false);
+  const unitDirtyRef = useRef(false);
   const expiryTouchedRef = useRef(false);
 
   const suggestion = useMemo(() => {
@@ -240,7 +241,8 @@ export function AddForm({
     canonicalTouchedRef.current = false;
     foodTypeTouchedRef.current = false;
     setBarcode(item.barcode ?? barcode);
-    setUnit(item.unit ?? "oz");
+    setUnit(item.unit ?? "");
+    unitDirtyRef.current = false;
     setCategoryId(item.category_id ?? "");
     setSubcategoryId(item.subcategory_id ?? "");
     setLowThreshold(item.low_threshold != null ? String(item.low_threshold) : "");
@@ -273,6 +275,13 @@ export function AddForm({
     const { item, off: product } = result.data;
     if (item) {
       applyItem(item);
+      if (product) {
+        setOff(product);
+        // Only fill fields the household item does not already preserve.
+        if (!item.unit && product.quantity && !unitDirtyRef.current) {
+          setUnit(product.quantity);
+        }
+      }
       toast.success(`Found ${item.name}`);
       return;
     }
@@ -281,7 +290,9 @@ export function AddForm({
       setSelectedItem(null);
       canonicalTouchedRef.current = false;
       if (!nameDirtyRef.current && product.name) setName(product.name);
-      if (product.quantity && !unit) setUnit(product.quantity);
+      if (product.quantity && !unitDirtyRef.current) {
+        setUnit(product.quantity);
+      }
       toast.success(`Product found: ${product.name ?? clean}`);
       return;
     }
@@ -621,7 +632,10 @@ export function AddForm({
               id="unit"
               placeholder="ea, lb, oz…"
               value={unit}
-              onChange={(event) => setUnit(event.target.value)}
+              onChange={(event) => {
+                  setUnit(event.target.value);
+                  unitDirtyRef.current = true;
+                }}
             />
           </div>
 

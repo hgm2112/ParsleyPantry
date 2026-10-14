@@ -131,7 +131,10 @@ export async function resolveBarcode(
       inventory = (rows ?? []) as InventoryRow[];
     }
 
-    const off = item ? null : await lookupOffProduct(code);
+    // Install-free fallback: fetch OFF only when the household item exists but is
+    // missing package-level data, so a past rename still wins when present.
+    const needsOff = !item || item.unit == null || item.brand == null;
+    const off = needsOff ? await lookupOffProduct(code) : null;
     return { ok: true, data: { item, off, inventory } };
   } catch (error) {
     return {
@@ -325,6 +328,15 @@ export async function addToInventory(
       if (input.autoRestock != null) patch.auto_restock = input.autoRestock;
       if (input.categoryId != null) patch.category_id = input.categoryId;
       if (input.subcategoryId != null) patch.subcategory_id = input.subcategoryId;
+      // Household-scoped catalog fields: user edits to the product name or
+      // package amount/unit persist against this household's item only —
+      // they never replace unrelated household items, nor canonical names.
+      if (input.name.trim() && input.name.trim() !== item.name) {
+        patch.name = input.name.trim();
+      }
+      if (input.unit !== undefined && input.unit !== item.unit) {
+        patch.unit = input.unit;
+      }
       // Never overwrite an existing brand or a confirmed canonical mapping.
       if (input.brand && !item.brand) patch.brand = input.brand;
       if (input.freezerFoodType && !item.freezer_food_type) {
