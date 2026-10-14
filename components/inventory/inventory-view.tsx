@@ -319,15 +319,17 @@ export function InventoryView({
                   : "border-border bg-background text-muted-foreground hover:bg-accent",
               )}
             >
-              {subcategory.label}
+              {subcategory.name}
             </button>
           ))}
           <div className="ml-auto">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 text-xs">
-                  Sort: {sortLabel}
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 text-xs" />
+                }
+              >
+                Sort: {sortLabel}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 {SORT_OPTIONS.map((opt) => (
