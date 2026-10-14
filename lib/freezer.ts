@@ -246,7 +246,7 @@ export function formatFreezerQuality(date: string | null): string {
   if (!date) return "Frozen";
   const days = daysUntil(date);
   if (days !== null && days < 0) return "Quality date passed";
-  return `Best quality by ${parseDate(date).toLocaleDateString(undefined, {
+  return `Best by: ${parseDate(date).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   })}`;
