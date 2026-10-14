@@ -77,7 +77,7 @@ export function AddForm({
   const [name, setName] = useState("");
   const [matches, setMatches] = useState<ItemRow[]>([]);
   const [quantity, setQuantity] = useState(1);
-  const [unit, setUnit] = useState("oz");
+  const [unit, setUnit] = useState("");
   const [location, setLocation] = useState<Location>(defaultLocation);
   const [freeze, setFreeze] = useState<FreezeValue>(defaultFreezeValue);
   const [expirationDate, setExpirationDate] = useState("");
@@ -379,7 +379,7 @@ export function AddForm({
     setName("");
     setMatches([]);
     setQuantity(1);
-    setUnit("oz");
+    setUnit("");
     setSubcategoryId("");
     setCategoryId("");
     setLowThreshold("");
