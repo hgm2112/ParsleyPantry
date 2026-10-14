@@ -7,7 +7,7 @@ import { requireDal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { LOCATIONS, type Location } from "@/lib/types";
 import webpush from "web-push";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, isServiceRoleKey } from "@/lib/supabase/admin";
 import { REMINDER_TITLE } from "@/lib/reminder";
 
 export type ActionResult<T = null> =
@@ -283,6 +283,22 @@ export async function savePushSubscription(
     );
     if (error) return { ok: false, error: error.message };
 
+    const { data: savedRow, error: verifyError } = await supabase
+      .from("push_subscriptions")
+      .select("user_id, active")
+      .eq("user_id", user.id)
+      .eq("endpoint", parsed.data.endpoint)
+      .maybeSingle();
+    if (verifyError) {
+      return { ok: false, error: "Could not verify the saved push subscription" };
+    }
+    if (!savedRow || savedRow.user_id !== user.id || savedRow.active !== true) {
+      return {
+        ok: false,
+        error: "The subscription was not saved for this account. Sign out and back in, then enable this device again.",
+      };
+    }
+
     revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (error) {
@@ -300,7 +316,7 @@ export type ReminderConfigurationStatus = {
   clientPublicKeyConfigured: boolean;
   vapidConfiguredOnServer: boolean;
   vapidSubjectValid: boolean;
-  serviceRoleKeyConfigured: boolean;
+  serviceRoleKeyValid: boolean;
   cronSecretConfigured: boolean;
 };
 
@@ -333,7 +349,7 @@ export async function getReminderConfigurationStatus(): Promise<
       Boolean(subject) &&
       (/^mailto:[^\s]+$/i.test(subject ?? "") ||
         /^https?:\/\/[^\s]+$/i.test(subject ?? "")),
-    serviceRoleKeyConfigured: Boolean(
+    serviceRoleKeyValid: isServiceRoleKey(
       process.env.SUPABASE_SERVICE_ROLE_KEY,
     ),
     cronSecretConfigured: Boolean(process.env.CRON_SECRET),
@@ -377,7 +393,7 @@ export async function sendTestLeftoverReminder(): Promise<
     return {
       ok: false,
       error:
-        "SUPABASE_SERVICE_ROLE_KEY is not set, so the test notification could not run.",
+        "SUPABASE_SERVICE_ROLE_KEY is missing or is not a service-role key, so the test notification could not verify subscriptions.",
     };
   }
 
@@ -387,7 +403,11 @@ export async function sendTestLeftoverReminder(): Promise<
     .eq("user_id", user.id)
     .eq("active", true);
   if (subsError) {
-    return { ok: false, error: "Could not load this user's push subscriptions" };
+    return {
+      ok: false,
+      error:
+        "Could not verify this account's push subscriptions. The service-role client may not have access to the database.",
+    };
   }
   type TestSubscription = {
     id: string;
@@ -401,7 +421,7 @@ export async function sendTestLeftoverReminder(): Promise<
     return {
       ok: false,
       error:
-        "No active push subscription is saved for this device. Enable notifications on this device first.",
+        "No active push subscription is saved for this authenticated account. If you enabled this device while signed into a different account, sign out and back in, then enable this device again.",
     };
   }
 

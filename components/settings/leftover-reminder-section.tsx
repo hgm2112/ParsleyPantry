@@ -56,6 +56,11 @@ function timeValue(localTime: string): string {
   return `${hours}:${minutes}`;
 }
 
+function safeErrorText(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  return text.replace(/https?:\/\/[^\s]+/g, "[redacted]");
+}
+
 export function LeftoverReminderSection({
   settings,
   currentUserId,
@@ -87,7 +92,7 @@ export function LeftoverReminderSection({
     clientPublicKeyConfigured: boolean;
     vapidConfiguredOnServer: boolean;
     vapidSubjectValid: boolean;
-    serviceRoleKeyConfigured: boolean;
+    serviceRoleKeyValid: boolean;
     cronSecretConfigured: boolean;
   } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -191,16 +196,19 @@ export function LeftoverReminderSection({
       });
       if (!result.ok) {
         toast.error(result.error);
-        setHasBrowserSubscription(true);
         return;
       }
       setHasBrowserSubscription(true);
-      setSavedSubscriptionCount((count) => Math.max(count, 1));
-      toast.success("This device will get the daily reminder.");
+      toast.success(
+        "This device subscription was saved for your account. You can now send a test notification.",
+      );
       await refreshDiagnostics();
     } catch (error) {
-      console.error("push subscribe failed", error);
-      toast.error("Could not enable notifications on this device.");
+      const reason = safeErrorText(error);
+      console.error("push subscribe failed", reason);
+      toast.error(
+        `Could not enable notifications on this device. ${reason || "Check that notifications are allowed and the browser supports web push."}`,
+      );
     } finally {
       setDeviceBusy(false);
     }
@@ -228,7 +236,7 @@ export function LeftoverReminderSection({
     Boolean(config?.clientPublicKeyConfigured) &&
     Boolean(config?.vapidConfiguredOnServer) &&
     Boolean(config?.vapidSubjectValid) &&
-    Boolean(config?.serviceRoleKeyConfigured) &&
+    Boolean(config?.serviceRoleKeyValid) &&
     Boolean(config?.cronSecretConfigured);
 
   const supportMessage =
@@ -277,8 +285,8 @@ export function LeftoverReminderSection({
             ? "VAPID_PRIVATE_KEY and/or VAPID_SUBJECT"
             : null,
           !config.vapidSubjectValid ? "VAPID_SUBJECT mailto subject" : null,
-          !config.serviceRoleKeyConfigured
-            ? "SUPABASE_SERVICE_ROLE_KEY"
+          !config.serviceRoleKeyValid
+            ? "SUPABASE_SERVICE_ROLE_KEY (must be a service-role key)"
             : null,
           !config.cronSecretConfigured ? "CRON_SECRET" : null,
         ].filter((value): value is string => Boolean(value));
