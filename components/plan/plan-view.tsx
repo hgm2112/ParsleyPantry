@@ -426,7 +426,7 @@ function IngredientsTile({
             Have {summary.inPantry}/{summary.total}
           </span>
           <span className="text-xs text-muted-foreground">
-            {summary.needed > 0 ? `${summary.needed} to buy` : "All in pantry ✓"}
+            {summary.onShoppingList} on the shopping list
           </span>
         </>
       )}

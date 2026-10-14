@@ -34,11 +34,17 @@ export type SummaryLine = {
   covered: boolean;
 };
 
+export type SummaryGroceryRow = {
+  item_id: string | null;
+  name: string;
+};
+
 export type WeekSummary = {
   total: number;
   inPantry: number;
   needed: number;
   lines: SummaryLine[];
+  onShoppingList: number;
 };
 
 export type RecipeCoverage = {
@@ -47,7 +53,7 @@ export type RecipeCoverage = {
 };
 
 export function emptyWeekSummary(): WeekSummary {
-  return { total: 0, inPantry: 0, needed: 0, lines: [] };
+  return { total: 0, inPantry: 0, needed: 0, lines: [], onShoppingList: 0 };
 }
 
 export type PantryPools = {
@@ -115,6 +121,7 @@ export function buildWeekSummary(
   ingredients: SummaryIngredient[],
   inventory: SummaryInventoryRow[],
   items: SummaryItemRow[],
+  groceryItems: SummaryGroceryRow[] = [],
 ): WeekSummary {
   const pools = buildPantryPools(inventory, items);
 
@@ -142,14 +149,63 @@ export function buildWeekSummary(
 
   const lines = pending.map((entry) => entry.line);
   const inPantry = lines.filter((line) => line.covered).length;
-  return { total: lines.length, inPantry, needed: lines.length - inPantry, lines };
+  return {
+    total: lines.length,
+    inPantry,
+    needed: lines.length - inPantry,
+    lines,
+    onShoppingList: countIngredientsOnShoppingList(ingredients, groceryItems, items),
+  };
 }
 
-/**
- * Per-recipe line counts (Have X/Y for one recipe's ingredients), same
- * canonical/oz pools as the week summary — used by /plan day cards.
- */
-export function buildRecipeCoverage(
+  /**
+   * Counts distinct ingredients in a week's planned lines that are currently
+   * present as unchecked rows on the shopping list. Matching uses canonical
+   * item roots (with exact-name fallback) so alternate product names do not
+   * produce duplicates or false matches.
+   */
+  export function countIngredientsOnShoppingList(
+    ingredients: SummaryIngredient[],
+    groceryItems: SummaryGroceryRow[],
+    items: SummaryItemRow[],
+  ): number {
+    const rootLookup = createRootLookup(items);
+    const nameToRoot = new Map<string, string>(
+      items.map((row) => [row.name.trim().toLowerCase(), rootLookup(row.id)]),
+    );
+
+    const plannedKeys = new Set<string>();
+    for (const ingredient of ingredients) {
+      const displayName = splitNameAndQuantity(ingredient.name).name
+        .trim()
+        .toLowerCase();
+      const key = ingredient.itemId
+        ? rootLookup(ingredient.itemId)
+        : (nameToRoot.get(displayName) ?? `name:${displayName}`);
+      plannedKeys.add(key);
+    }
+
+    const groceryKeys = new Set<string>();
+    for (const grocery of groceryItems) {
+      if (grocery.item_id) {
+        groceryKeys.add(rootLookup(grocery.item_id));
+      } else {
+        groceryKeys.add(`name:${grocery.name.trim().toLowerCase()}`);
+      }
+    }
+
+    let count = 0;
+    for (const key of plannedKeys) {
+      if (groceryKeys.has(key)) count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Per-recipe line counts (Have X/Y for one recipe's ingredients), same
+   * canonical/oz pools as the week summary — used by /plan day cards.
+   */
+  export function buildRecipeCoverage(
   ingredients: RecipeSummaryIngredient[],
   inventory: SummaryInventoryRow[],
   items: SummaryItemRow[],

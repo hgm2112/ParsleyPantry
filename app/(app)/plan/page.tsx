@@ -100,7 +100,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
   };
   let coverageById: Record<string, RecipeCoverage> = {};
   if (allRecipeIds.length > 0) {
-    const [ingredientsResult, inventoryResult, itemsResult] = await Promise.all([
+    const [ingredientsResult, inventoryResult, itemsResult, groceryResult] = await Promise.all([
       supabase
         .from("recipe_ingredients")
         .select("recipe_id, name, quantity_text, item_id")
@@ -115,6 +115,11 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
         .from("items")
         .select("id, name, canonical_item_id")
         .eq("household_id", householdId),
+      supabase
+        .from("grocery_items")
+        .select("item_id, name")
+        .eq("household_id", householdId)
+        .eq("checked", false),
     ]);
 
     const ingredientRows = (ingredientsResult.data ?? []) as {
@@ -133,6 +138,10 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       name: string;
       canonical_item_id: string | null;
     }[];
+    const groceryItems = (groceryResult.data ?? []) as {
+      item_id: string | null;
+      name: string;
+    }[];
 
     for (let index = 0; index < 2; index += 1) {
       const start = index === 0 ? weekStart : week2Start;
@@ -144,7 +153,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
           quantityText: row.quantity_text,
           itemId: row.item_id,
         }));
-      summaries[start] = buildWeekSummary(lines, inventory, items);
+      summaries[start] = buildWeekSummary(lines, inventory, items, groceryItems);
     }
 
     coverageById = Object.fromEntries(
