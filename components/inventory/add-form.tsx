@@ -420,7 +420,7 @@ export function AddForm({
           size="sm"
           render={<Link href="/inventory/shop" />}
         >
-          Just bought mode
+          Live scan
         </Button>
       </div>
 

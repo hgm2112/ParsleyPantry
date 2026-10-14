@@ -184,9 +184,6 @@ export function InventoryView({
             <Button variant="outline" size="sm" render={<Link href="/inventory/add" />}>
               <Plus /> Add
             </Button>
-            <Button size="sm" render={<Link href="/inventory/shop" />}>
-              <ShoppingCart /> Just bought
-            </Button>
           </div>
         </div>
 
