@@ -1311,3 +1311,30 @@ for "what changed", this is for "what's true now / what's next".
 
 **Open — next session**
 - (none)
+
+## 2026-10-14
+
+**Shipped**
+- Push notification support hardened and diagnosed:
+  - left-over-reminder Settings UI now converts VAPID public key to Uint8Array,
+    reports full diagnostic states, saves subscription before reporting ready,
+    and adds authenticated "Send test notification" action.
+  - Settings server actions support secret or legacy service_role keys, validate
+    push persistence, safely audit server config, and send test pushes without
+    creating delivery rows or leftovers.
+  - Service worker notification icons updated to existing icon assets.
+- PWA Android navigation bar behavior investigated and improved:
+  - runtime theme-color set green in both modes, then viewport changed to avoid
+    edge-to-edge, and manifest background_color changed to #009444.
+- Reminder copy clarified to "within about an hour" of the configured time.
+- Supabase migration `20261016...` made idempotent and verified against database.
+- All changes committed/pushed to `origin/main`; Vercel redeploy expected.
+
+**Gotchas**
+- Notification test requires real VAPID pair, `SUPABASE_SERVICE_ROLE_KEY`, and cron secret set in Vercel.
+- Scheduling is hourly through Vercel Cron; reminders fire in the local due window, not the exact minute.
+- Changing PWA metadata may require reopening/reinstalling on existing phones.
+
+**Open — next session**
+- Verify new deployment on user's phone after Vercel completes.
+- Confirm Vercel env key is a Supabase secret key (starts `sb_secret_`) if admin access still fails.
