@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
       "Barcode-first pantry inventory, grocery lists, recipes and meal planning for your household.",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
+    background_color: "#009444",
     theme_color: "#009444",
     icons: [
       {
