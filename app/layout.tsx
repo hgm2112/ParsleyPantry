@@ -35,10 +35,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    // Fallback for pre-hydration paint; ThemeColorSync overrides these with
-    // the app theme's --background once the class-based theme applies.
-    { media: "(prefers-color-scheme: light)", color: "#fbfaf7" },
-    { media: "(prefers-color-scheme: dark)", color: "#171A17" },
+    // Parsley green for both schemes; this drives the Android installed-app
+    // browser/system UI, including the bottom navigation bar.
+    { media: "(prefers-color-scheme: light)", color: "#009444" },
+    { media: "(prefers-color-scheme: dark)", color: "#009444" },
   ],
 };
 

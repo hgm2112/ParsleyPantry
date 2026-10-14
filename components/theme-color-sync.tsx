@@ -10,7 +10,7 @@ import { useTheme } from "next-themes";
  * dark app on a light OS (or vice versa) shows a mismatched strip at the
  * bottom. Values mirror the --background tokens in globals.css.
  */
-const COLORS = { light: "#fbfaf7", dark: "#171a17" } as const;
+const COLORS = { light: "#009444", dark: "#009444" } as const;
 
 export function ThemeColorSync() {
   const { resolvedTheme } = useTheme();
