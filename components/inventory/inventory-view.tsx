@@ -181,7 +181,7 @@ export function InventoryView({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" render={<Link href="/inventory/add" />}>
+            <Button variant="default" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" render={<Link href="/inventory/add" />}>
               <Plus /> Add
             </Button>
           </div>
