@@ -60,6 +60,9 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
   const [yields, setYields] = useState(String(recipe?.yields ?? 1));
   const [source, setSource] = useState(recipe?.source ?? "");
   const [tagsText, setTagsText] = useState((recipe?.tags ?? []).join(", "));
+  const [recipeType, setRecipeType] = useState(
+    recipe?.recipe_type === "no_cook" ? "no_cook" : "cooking",
+  );
   const [rows, setRows] = useState<IngredientDraft[]>(
     ingredients.map((ingredient) => ({
       name: ingredient.name,
@@ -93,6 +96,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean),
+      recipe_type: recipeType,
       ingredients: rows
         .filter((row) => row.name.trim())
         .map((row) => ({
@@ -142,6 +146,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
     setYields("1");
     setSource("");
     setTagsText("");
+    setRecipeType("cooking");
     setRows([]);
     router.push(`/recipes/${result.data.id}`);
     router.refresh();
@@ -301,16 +306,41 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="recipe-tags">Tags</Label>
-          <Input
-            id="recipe-tags"
-            value={tagsText}
-            onChange={(event) => setTagsText(event.target.value)}
-            placeholder="quick, vegetarian (comma separated)"
-          />
-        </div>
-      </section>
+          <div className="space-y-2">
+            <Label htmlFor="recipe-tags">Tags</Label>
+            <Input
+              id="recipe-tags"
+              value={tagsText}
+              onChange={(event) => setTagsText(event.target.value)}
+              placeholder="quick, vegetarian (comma separated)"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Recipe type</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={recipeType === "cooking" ? "default" : "outline"}
+                onClick={() => setRecipeType("cooking")}
+              >
+                Cooking Recipe
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={recipeType === "no_cook" ? "default" : "outline"}
+                onClick={() => setRecipeType("no_cook")}
+              >
+                No-Cook Placeholder
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cooking Recipe prepares or cooks a meal. No-Cook Placeholder
+              represents planned days such as Pizza, Eating Out, or No Cooking.
+            </p>
+          </div>
+        </section>
 
       <section className="space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between">

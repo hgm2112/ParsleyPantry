@@ -180,6 +180,7 @@ export interface RecipeRow {
   yields: number;
   source: string | null;
   tags: string[];
+  recipe_type: RecipeType;
 }
 
 export interface RecipeIngredientRow {
@@ -196,6 +197,8 @@ export interface RecipeIngredientRow {
 
 /** Structured non-recipe day: eating out / meal kit / no cooking. */
 export type MealKind = "eating_out" | "meal_kit" | "no_cook";
+
+export type RecipeType = "cooking" | "no_cook";
 
 export interface MealPlanDayRow {
   household_id: string;

@@ -38,7 +38,7 @@ async function StatsContent() {
         .order("day_index", { ascending: true }),
       supabase
         .from("recipes")
-        .select("id, name")
+        .select("id, name, recipe_type")
         .eq("household_id", householdId)
         .order("name", { ascending: true }),
       supabase
@@ -57,7 +57,11 @@ async function StatsContent() {
     ]);
 
   const meals = (mealsResult.data ?? []) as MealPlanDayRow[];
-  const recipes = (recipesResult.data ?? []) as { id: string; name: string }[];
+  const recipes = (recipesResult.data ?? []) as {
+    id: string;
+    name: string;
+    recipe_type: string;
+  }[];
   const inventory = (inventoryResult.data ?? []) as {
     item_id: string;
     quantity: number;

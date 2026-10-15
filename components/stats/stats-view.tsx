@@ -33,7 +33,7 @@ import {
 
 type Props = {
   meals: MealPlanDayRow[];
-  recipes: { id: string; name: string }[];
+  recipes: { id: string; name: string; recipe_type: string }[];
   inventory: {
     item_id: string;
     quantity: number;
@@ -176,21 +176,24 @@ export function StatsView({
     const range = periodRange(period, today);
     const monthRange = { start: monthStart(today), end: today };
 
-    const occurrences = cookedOccurrences(meals, range);
-    const monthOccurrences = cookedOccurrences(meals, monthRange);
-    const allTime = cookedOccurrences(meals, { start: null, end: today });
-    const allDates = cookedDates(meals);
-    const noCook = noCookDates(meals, range);
+    const recipeByType = new Map(
+      recipes.map((recipe) => [recipe.id, recipe.recipe_type]),
+    );
+    const occurrences = cookedOccurrences(meals, range, recipeByType);
+    const monthOccurrences = cookedOccurrences(meals, monthRange, recipeByType);
+    const allTime = cookedOccurrences(meals, { start: null, end: today }, recipeByType);
+    const allDates = cookedDates(meals, recipeByType);
+    const noCook = noCookDates(meals, range, recipeByType);
     const favorites = favoriteMeals(occurrences);
     const uniqueRecipes = new Set(
       occurrences.map((occ) => occ.recipeId).filter(Boolean),
     ).size;
     const buckets = cookedBuckets(occurrences, range, period);
     const activeDay = mostActiveWeekday(occurrences);
-    const firstCooked = firstCookedByRecipe(meals);
+    const firstCooked = firstCookedByRecipe(meals, recipeByType);
     const newTried = newRecipesTried(firstCooked, range);
     const milestones = milestoneState(allTime.length);
-    const planning = planningStats(meals, range, today);
+    const planning = planningStats(meals, range, today, recipeByType);
 
     const periodDays =
       range.start === null

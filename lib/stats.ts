@@ -78,11 +78,18 @@ export type CookedOccurrence = {
 export function cookedOccurrences(
   meals: MealPlanDayRow[],
   range: DateRange,
+  recipeTypes: Map<string, string> = new Map(),
 ): CookedOccurrence[] {
   const out: CookedOccurrence[] = [];
   for (const row of meals) {
-    if (!row.made_at || row.kind !== null) continue;
-    const cookedOn = localDateOfTimestamp(row.made_at);
+    if (
+      !row.made_at ||
+      row.kind === "eating_out" ||
+      row.kind === "no_cook" ||
+      (row.recipe_id !== null && recipeTypes.get(row.recipe_id) === "no_cook")
+    )
+      continue;
+    const cookedOn = scheduledDate(row);
     if (!inRange(cookedOn, range)) continue;
     out.push({
       weekStart: row.week_start,
@@ -95,11 +102,20 @@ export function cookedOccurrences(
 }
 
 /** All-time set of local dates with at least one cooked occurrence. */
-export function cookedDates(meals: MealPlanDayRow[]): Set<string> {
+export function cookedDates(
+  meals: MealPlanDayRow[],
+  recipeTypes: Map<string, string> = new Map(),
+): Set<string> {
   const dates = new Set<string>();
   for (const row of meals) {
-    if (!row.made_at || row.kind !== null) continue;
-    dates.add(localDateOfTimestamp(row.made_at));
+    if (
+      !row.made_at ||
+      row.kind === "eating_out" ||
+      row.kind === "no_cook" ||
+      (row.recipe_id !== null && recipeTypes.get(row.recipe_id) === "no_cook")
+    )
+      continue;
+    dates.add(scheduledDate(row));
   }
   return dates;
 }
@@ -120,10 +136,21 @@ export function cookingStreak(allCookedDates: Set<string>, today: string): numbe
 }
 
 /** Distinct scheduled dates explicitly marked No Cooking in range. */
-export function noCookDates(meals: MealPlanDayRow[], range: DateRange): Set<string> {
+export function noCookDates(
+  meals: MealPlanDayRow[],
+  range: DateRange,
+  recipeTypes: Map<string, string> = new Map(),
+): Set<string> {
   const dates = new Set<string>();
   for (const row of meals) {
-    if (row.kind !== "no_cook") continue;
+    if (!isPlanned(row)) continue;
+    const isNoCook =
+      row.kind === "no_cook" ||
+      row.kind === "eating_out" ||
+      (row.recipe_id !== null &&
+        recipeTypes.get(row.recipe_id) === "no_cook" &&
+        row.kind !== "meal_kit");
+    if (!isNoCook) continue;
     const iso = scheduledDate(row);
     if (inRange(iso, range)) dates.add(iso);
   }
@@ -248,11 +275,21 @@ export function mostActiveWeekday(occurrences: CookedOccurrence[]): WeekdayStat 
 }
 
 /** Earliest-ever cooked local date per recipe (full history). */
-export function firstCookedByRecipe(meals: MealPlanDayRow[]): Map<string, string> {
+export function firstCookedByRecipe(
+  meals: MealPlanDayRow[],
+  recipeTypes: Map<string, string> = new Map(),
+): Map<string, string> {
   const first = new Map<string, string>();
   for (const row of meals) {
-    if (!row.made_at || row.kind !== null || !row.recipe_id) continue;
-    const cookedOn = localDateOfTimestamp(row.made_at);
+    if (
+      !row.made_at ||
+      row.kind === "eating_out" ||
+      row.kind === "no_cook" ||
+      !row.recipe_id ||
+      recipeTypes.get(row.recipe_id) === "no_cook"
+    )
+      continue;
+    const cookedOn = scheduledDate(row);
     const current = first.get(row.recipe_id);
     if (!current || cookedOn < current) first.set(row.recipe_id, cookedOn);
   }
@@ -314,6 +351,7 @@ export function planningStats(
   meals: MealPlanDayRow[],
   range: DateRange,
   today: string,
+  recipeTypes: Map<string, string> = new Map(),
 ): PlanningStats {
   let planned = 0;
   let cooked = 0;
@@ -332,7 +370,13 @@ export function planningStats(
     planned += 1;
     weeks.add(row.week_start);
 
-    if (row.kind === "no_cook") noCook += 1;
+    if (
+      row.kind === "no_cook" ||
+      (row.recipe_id !== null &&
+        recipeTypes.get(row.recipe_id) === "no_cook" &&
+        row.kind !== "meal_kit")
+    )
+      noCook += 1;
     else if (row.kind === "eating_out") eatingOut += 1;
     else if (row.kind === "meal_kit") mealKit += 1;
     else {
@@ -352,7 +396,13 @@ export function planningStats(
         cooked: 0,
       };
       entry.planned += 1;
-      if (row.made_at && row.kind === null) entry.cooked += 1;
+      if (
+        row.made_at &&
+        row.kind === null &&
+        (row.recipe_id === null ||
+          recipeTypes.get(row.recipe_id) !== "no_cook")
+      )
+        entry.cooked += 1;
       byRecipe.set(row.recipe_id, entry);
     }
   }

@@ -18,6 +18,8 @@ const ingredientSchema = z.object({
   on_shopping_list: z.boolean().default(true),
 });
 
+const recipeTypeSchema = z.enum(["cooking", "no_cook"]).default("cooking");
+
 const recipeFormSchema = z.object({
   name: z.string().trim().min(1).max(160),
   description: z.string().max(4000).default(""),
@@ -26,6 +28,7 @@ const recipeFormSchema = z.object({
   yields: z.number().int().min(1).max(999).default(1),
   source: z.string().trim().max(200).nullish(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  recipe_type: recipeTypeSchema,
   ingredients: z.array(ingredientSchema).max(100).default([]),
 });
 
@@ -76,6 +79,7 @@ export async function createRecipe(
         yields: form.yields,
         source: form.source || null,
         tags: form.tags,
+        recipe_type: form.recipe_type,
         created_by: user.id,
       })
       .select("id")
@@ -126,14 +130,15 @@ export async function updateRecipe(
     const { error: recipeError } = await supabase
       .from("recipes")
       .update({
-        name: form.name,
         description: form.description,
+        name: form.name,
         prep_time: form.prep_time,
         cook_time: form.cook_time,
         time: form.prep_time + form.cook_time,
         yields: form.yields,
         source: form.source || null,
         tags: form.tags,
+        recipe_type: form.recipe_type,
       })
       .eq("id", recipeId)
       .eq("household_id", householdId);

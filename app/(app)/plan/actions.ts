@@ -268,7 +268,7 @@ async function shopDays(
       recipe_id: string;
       made_at: null;
     };
-    const planDays = ((dayRows ?? []) as {
+    let planDays = ((dayRows ?? []) as {
       week_start: string;
       day_index: number;
       recipe_id: string | null;
@@ -290,6 +290,23 @@ async function shopDays(
     }
 
     const recipeIds = Array.from(new Set(planDays.map((day) => day.recipe_id)));
+    const { data: recipeTypeRows } = await supabase
+      .from("recipes")
+      .select("id, recipe_type")
+      .eq("household_id", householdId)
+      .in("id", recipeIds);
+    const noCookRecipeIds = new Set(
+      (recipeTypeRows ?? [])
+        .filter(
+          (row: { id: string; recipe_type: string }) =>
+            row.recipe_type === "no_cook",
+        )
+        .map((row: { id: string }) => row.id),
+    );
+    planDays = planDays.filter((day) => !noCookRecipeIds.has(day.recipe_id));
+    if (planDays.length === 0) {
+      return { ok: false, error: "Planned recipes have no cooking days" };
+    }
     const { data: ingredientRows } = await supabase
       .from("recipe_ingredients")
       .select("name, item_id, quantity_text, on_shopping_list, recipe_id")
@@ -567,6 +584,18 @@ async function resolveDayIngredients(
   const recipeId =
     (dayRow as { recipe_id: string | null } | null)?.recipe_id ?? null;
   if (!recipeId) return empty;
+
+  const { data: recipeTypeRow } = await supabase
+    .from("recipes")
+    .select("recipe_type")
+    .eq("household_id", householdId)
+    .eq("id", recipeId)
+    .maybeSingle();
+  if (
+    (recipeTypeRow as { recipe_type: string | null } | null)?.recipe_type === "no_cook"
+  ) {
+    return { ...empty, recipeId };
+  }
 
   const [ingredientsResult, inventoryResult, holdsResult, itemsResult] =
     await Promise.all([
