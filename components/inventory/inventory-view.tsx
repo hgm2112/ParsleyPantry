@@ -241,27 +241,18 @@ export function InventoryView({
           </div>
           <div className="flex items-center gap-2">
             <Popover>
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                className="h-9 gap-1.5"
-              >
+              <div className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-sm font-semibold text-foreground hover:bg-muted hover:text-foreground">
                 <Link href="/inventory/normalize" className="inline-flex items-center gap-1.5">
                   Name Matching
                 </Link>
                 <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="What is Name Matching?"
-                      className="inline-flex items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    >
-                      <Info className="h-4 w-4" />
-                    </button>
-                  }
-                />
-              </Button>
+                  type="button"
+                  aria-label="What is Name Matching?"
+                  className="inline-flex items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <Info className="h-4 w-4" />
+                </PopoverTrigger>
+              </div>
               <PopoverContent align="end" sideOffset={6} className="max-w-xs space-y-1">
                 <p className="text-sm font-semibold">What is Name Matching?</p>
                 <p className="text-xs text-muted-foreground">
@@ -703,10 +694,12 @@ function InventoryItemCard({
             {canonicalName ? (
               <Popover open={infoOpen} onOpenChange={handleInfoOpenChange}>
                 <PopoverTrigger
-                  render={
-                    <Info className="h-3.5 w-3.5 shrink-0 cursor-pointer text-muted-foreground hover:text-foreground" />
-                  }
-                />
+                  type="button"
+                  aria-label={`Info for ${item.name}`}
+                  className="inline-flex shrink-0 items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <Info className="h-3.5 w-3.5 cursor-pointer" />
+                </PopoverTrigger>
                 <PopoverContent align="start" sideOffset={4} className="max-w-xs">
                   {editingCanonical ? (
                     <form
@@ -782,10 +775,12 @@ function InventoryItemCard({
           {low ? (
             <Popover>
               <PopoverTrigger
-                render={
-                  <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300 cursor-pointer" />
-                }
-              />
+                type="button"
+                aria-label="Running low"
+                className="inline-flex shrink-0 items-center rounded-sm text-amber-600 transition-colors hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:text-amber-300"
+              >
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+              </PopoverTrigger>
               <PopoverContent align="start" sideOffset={4} className="max-w-xs">
                 <p className="text-sm font-medium">Running low</p>
                 <p className="text-xs text-muted-foreground">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -46,20 +47,31 @@ export function ThemePicker() {
 /** Compact icon button that cycles Light → Dark → System. */
 export function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const current: ThemeValue =
-    theme === "light" || theme === "dark" ? theme : "system";
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
+  const current: ThemeValue = !mounted
+    ? "system"
+    : theme === "light" || theme === "dark"
+      ? theme
+      : "system";
   const next: ThemeValue =
     current === "light" ? "dark" : current === "dark" ? "system" : "light";
   const currentLabel =
     THEME_OPTIONS.find((option) => option.value === current)?.label ?? "System";
   const nextLabel =
     THEME_OPTIONS.find((option) => option.value === next)?.label ?? "Light";
-  const Icon =
-    current === "system"
+  const Icon = !mounted
+    ? Monitor
+    : current === "system"
       ? Monitor
       : resolvedTheme === "dark"
         ? Moon
         : Sun;
+
   return (
     <button
       type="button"
