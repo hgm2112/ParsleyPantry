@@ -14,6 +14,17 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 0
 fi
 
+printf 'pre-push: running npx next typegen ...\n' >&2
+
+npx next typegen
+status=$?
+
+if [ "${status}" -ne 0 ]; then
+  printf '\npre-push: Route type generation failed (exit %d).\n' "${status}" >&2
+  printf 'Fix the errors above before pushing to main.\n' >&2
+  exit "${status}"
+fi
+
 printf 'pre-push: running npx tsc --noEmit ...\n' >&2
 
 npx tsc --noEmit
