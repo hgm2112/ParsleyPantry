@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -57,15 +57,68 @@ export function Greeting({ name }: { name: string | null }) {
   );
 }
 
-export function SearchForm({ className }: { className?: string }) {
+export function SearchForm({
+  className,
+  autoFocus = false,
+}: {
+  className?: string;
+  autoFocus?: boolean;
+}) {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+  const previousPathnameRef = useRef(pathname);
+
+  // A route change away from /search is the only thing that should reset the
+  // shared search input. Re-renders and result updates never match this.
+  useEffect(() => {
+    if (pathname === previousPathnameRef.current) return;
+    previousPathnameRef.current = pathname;
+    if (pathname !== "/search") {
+      setQuery("");
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  function targetFor(value: string) {
+    const trimmed = value.trim();
+    return trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search";
+  }
+
+  function searchNow(value: string, pushHistory: boolean) {
+    requestIdRef.current += 1;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (pushHistory) router.push(targetFor(value));
+    else router.replace(targetFor(value));
+  }
+
+  function scheduleSearch(value: string) {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const requestId = ++requestIdRef.current;
+    timerRef.current = setTimeout(() => {
+      if (requestId !== requestIdRef.current) return;
+      timerRef.current = null;
+      router.replace(targetFor(value));
+    }, 300);
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+    searchNow(query, true);
   }
 
   return (
@@ -78,7 +131,11 @@ export function SearchForm({ className }: { className?: string }) {
       <input
         type="search"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        autoFocus={autoFocus}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          scheduleSearch(event.target.value);
+        }}
         placeholder="Search for recipes, ingredients, or meals…"
         className="h-9 w-full rounded-full border border-input bg-muted/60 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/40"
       />

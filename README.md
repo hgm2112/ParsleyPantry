@@ -58,6 +58,8 @@ cp .env.example .env.local
 
 ### 3. Run
 
+Use Node.js 22 or later (`nvm use` / install with `nvm install 22`).
+
 ```bash
 npm install
 npm run dev

@@ -7,6 +7,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { requireDal } from "@/lib/auth";
+import { SearchForm } from "@/app/(app)/nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CanonicalInfo } from "@/components/canonical-info";
 import { groupByItem } from "@/lib/batches";
@@ -304,21 +305,9 @@ async function SearchWrapper({ searchParams }: { searchParams: SearchParams }) {
     <div className="space-y-3">
       {/* Mobile: the nav only has a search icon, so this page owns the input.
           Desktop has the persistent nav SearchForm — hide the duplicate. */}
-      <form
-        action="/search"
-        method="GET"
-        className="relative max-w-lg md:hidden"
-      >
-        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          name="q"
-          defaultValue={query}
-          autoFocus
-          placeholder="Search for recipes, ingredients, or meals…"
-          className="h-10 w-full rounded-full border border-input bg-background pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"
-        />
-      </form>
+      <div className="relative max-w-lg md:hidden">
+        <SearchForm className="w-full" autoFocus />
+      </div>
 
       {query ? (
         <Suspense fallback={<SearchSkeleton />} key={query}>
