@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# parsleypantry-pre-push-hook
+#
+# Fail the push when TypeScript compilation fails. This is versioned so
+# every contributor gets the same check; `scripts/install-hooks.sh`
+# copies (and preserves) this script into .git/hooks/pre-push.
+#
+# Fast by design: typecheck only, no lint, no full build. Those run in CI.
+
+set -u
+
+if ! command -v npx >/dev/null 2>&1; then
+  printf 'pre-push: npx not found; skipping TypeScript check.\n' >&2
+  exit 0
+fi
+
+printf 'pre-push: running npx tsc --noEmit ...\n' >&2
+
+npx tsc --noEmit
+status=$?
+
+if [ "${status}" -ne 0 ]; then
+  printf '\npre-push: TypeScript check failed (exit %d).\n' "${status}" >&2
+  printf 'Fix the errors above before pushing to main.\n' >&2
+  exit "${status}"
+fi
+
+printf 'pre-push: TypeScript check passed.\n' >&2
+exit 0

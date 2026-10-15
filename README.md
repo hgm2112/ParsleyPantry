@@ -158,6 +158,24 @@ npx tsc --noEmit   # typecheck
 npx next typegen   # regenerate typed route helpers after adding routes
 ```
 
+### Quality gates (local + CI)
+
+Install the Git pre-push hook locally (once per clone) — it runs `npx tsc
+--noEmit` before every push and aborts the push on any type error:
+
+```bash
+bash scripts/install-hooks.sh
+```
+
+Every push to `main` and every pull request targeting `main` is also checked
+by the **"Typecheck and Production Build"** GitHub Actions workflow
+(`.github/workflows/typecheck-build.yml`), which runs `npm ci`, `npx tsc --noEmit`,
+and `npm run build`.
+
+To make the check required for merges: **Settings → Branches → Branch protection
+rules → main → Require status checks to pass before merging**, then add
+"Typecheck and Production Build / build".
+
 Notes for working in this codebase:
 
 - Next.js 16 rules apply: no `export const dynamic`, DB reads and
