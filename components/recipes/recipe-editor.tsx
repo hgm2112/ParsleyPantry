@@ -60,9 +60,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
   const [yields, setYields] = useState(String(recipe?.yields ?? 1));
   const [source, setSource] = useState(recipe?.source ?? "");
   const [tagsText, setTagsText] = useState((recipe?.tags ?? []).join(", "));
-  const [recipeType, setRecipeType] = useState(
-    recipe?.recipe_type === "no_cook" ? "no_cook" : "cooking",
-  );
+  const [recipeType, setRecipeType] = useState<"cooking" | "no_cook">(recipe?.recipe_type === "no_cook" ? "no_cook" : "cooking");
   const [rows, setRows] = useState<IngredientDraft[]>(
     ingredients.map((ingredient) => ({
       name: ingredient.name,
