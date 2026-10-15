@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -32,6 +32,8 @@ import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { ScanSheet } from "@/components/scan-sheet";
+import { AddForm } from "@/components/inventory/add-form";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   addInventoryToGrocery,
   consumeFromItem,
@@ -79,11 +81,13 @@ const SORT_OPTIONS = [
 export function InventoryView({
   rows,
   subcategories,
+  defaultLocation = "pantry",
   holdsByItem,
   canonicalNames,
 }: {
   rows: InventoryEntry[];
   subcategories: SubcategoryRow[];
+  defaultLocation?: Location;
   holdsByItem: Record<string, number>;
   /** Item id → display name of its generic ingredient ("as Ground Beef"). */
   canonicalNames: Record<string, string>;
@@ -95,6 +99,7 @@ export function InventoryView({
   const [lowOnly, setLowOnly] = useState(false);
   const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [addOverlayOpen, setAddOverlayOpen] = useState(false);
   const [sortKey, setSortKey] = useState<string>(() => {
     if (typeof window === "undefined") return "recent-newest";
     try {
@@ -216,7 +221,7 @@ export function InventoryView({
     }
     setScanOpen(false);
     router.push(
-      `/inventory/add?barcode=${encodeURIComponent(clean)}&scan=${Date.now()}`,
+      `/inventory/add?barcode=${encodeURIComponent(clean)}&scan=${Date.now()}&returnTo=%2Finventory`,
     );
   }
 
@@ -235,7 +240,47 @@ export function InventoryView({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="default" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" render={<Link href="/inventory/add" />}>
+            <Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                className="h-9 gap-1.5"
+              >
+                <Link href="/inventory/normalize" className="inline-flex items-center gap-1.5">
+                  Name Matching
+                </Link>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="What is Name Matching?"
+                      className="inline-flex items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  }
+                />
+              </Button>
+              <PopoverContent align="end" sideOffset={6} className="max-w-xs space-y-1">
+                <p className="text-sm font-semibold">What is Name Matching?</p>
+                <p className="text-xs text-muted-foreground">
+                  Name Matching helps Parsley Pantry recognize when differently
+                  named items refer to the same ingredient. For example,
+                  “100% Grass Fed Ground Beef” and “Ground Beef” can be matched so
+                  your pantry inventory is correctly recognized by recipes and meal
+                  planning. Review and manage matches here to improve ingredient
+                  availability and shopping-list accuracy.
+                </p>
+              </PopoverContent>
+            </Popover>
+            <Button
+              variant="default"
+              size="sm"
+              type="button"
+              className="h-9 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={() => setScanOpen(true)}
+            >
               <Plus /> Add
             </Button>
           </div>
@@ -251,13 +296,6 @@ export function InventoryView({
               className="h-9 pl-8 pr-3"
             />
           </div>
-          <Button
-            size="sm"
-            className="hidden h-9 gap-1.5 sm:inline-flex sm:border-border sm:bg-background sm:text-foreground sm:hover:bg-muted sm:hover:text-foreground sm:dark:border-input sm:dark:bg-input/30 sm:dark:hover:bg-input/50"
-            onClick={() => setScanOpen(true)}
-          >
-            <ScanBarcode /> Scan
-          </Button>
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -378,9 +416,33 @@ export function InventoryView({
         open={scanOpen}
         onOpenChange={setScanOpen}
         onBarcode={handleBarcode}
+        onManualEntry={() => setAddOverlayOpen(true)}
         title="Scan an item"
         description="Opens the add form with this barcode looked up — you review and save."
       />
+
+      <Dialog open={addOverlayOpen} onOpenChange={setAddOverlayOpen}>
+        <DialogContent
+          className="max-h-none w-full max-w-[calc(100%-2rem)] box-border overflow-visible p-6 sm:max-w-xl"
+          showCloseButton
+        >
+          <Suspense>
+            <AddForm
+              subcategories={subcategories}
+              defaultLocation={defaultLocation ?? "pantry"}
+              initialBarcode={null}
+              lookupKey={null}
+              returnTo="/inventory"
+              onSaved={() => setAddOverlayOpen(false)}
+              onCancel={() => setAddOverlayOpen(false)}
+              onScanAgain={() => {
+                setAddOverlayOpen(false);
+                setScanOpen(true);
+              }}
+            />
+          </Suspense>
+        </DialogContent>
+      </Dialog>
 
       {consumeTarget ? (
         <ConsumeDialog

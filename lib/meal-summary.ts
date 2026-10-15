@@ -2,7 +2,6 @@ import { createRootLookup } from "@/lib/canonical";
 import {
   parseQuantityText,
   splitNameAndQuantity,
-  stockPoolKey,
   toOunces,
 } from "@/lib/stock";
 
@@ -60,11 +59,14 @@ export type PantryPools = {
   rootOf: (id: string) => string;
   nameToRoot: Map<string, string>;
   stock: Map<string, number>;
+  stockUnitByRoot?: Map<string, string | null>;
 };
 
 /**
  * Stock pooled by canonical identity: every product under one generic root
- * shares a pool, quantities normalized to ounces when units convert.
+ * shares a pool. Mixed units collapse the common unit to null, exactly like
+ * the recipe editor and the mark-as-made dialog, so aggregate pantry
+ * quantities are compared with one consistent unit at a time.
  */
 export function buildPantryPools(
   inventory: SummaryInventoryRow[],
@@ -77,46 +79,44 @@ export function buildPantryPools(
   }
 
   const stock = new Map<string, number>();
+  const stockUnitByRoot = new Map<string, string | null>();
+  const unitSeen = new Set<string>();
   for (const row of inventory) {
-    const oz = toOunces(row.quantity, row.unit);
-    const q = oz != null ? oz : row.quantity;
-    const u = oz != null ? "oz" : row.unit;
-    const key = stockPoolKey(rootOf(row.item_id), u);
-    stock.set(key, (stock.get(key) ?? 0) + q);
+    if (row.quantity <= 0) continue;
+    const root = rootOf(row.item_id);
+    stock.set(root, (stock.get(root) ?? 0) + row.quantity);
+    if (!unitSeen.has(root)) {
+      unitSeen.add(root);
+      stockUnitByRoot.set(root, row.unit);
+    } else if (stockUnitByRoot.get(root) !== row.unit) {
+      stockUnitByRoot.set(root, null);
+    }
   }
 
-  return { rootOf, nameToRoot, stock };
+  return { rootOf, nameToRoot, stock, stockUnitByRoot };
 }
 
 export function resolveLine(
   ingredient: SummaryIngredient,
   pools: PantryPools,
 ): { poolKey: string; quantity: number; resolved: boolean } {
-  const parsed = parseQuantityText(ingredient.quantityText);
-  const root = ingredient.itemId
+  const resolvedRoot = ingredient.itemId
     ? pools.rootOf(ingredient.itemId)
     : (pools.nameToRoot.get(
         splitNameAndQuantity(ingredient.name).name.trim().toLowerCase(),
       ) ?? null);
-  const oz = toOunces(parsed.quantity, parsed.unit);
-  const q = oz != null ? oz : parsed.quantity;
-  const u = oz != null ? "oz" : parsed.unit;
-  if (!root) {
+  const parsed = parseQuantityText(ingredient.quantityText);
+  const quantity = toOunces(parsed.quantity, parsed.unit) ?? parsed.quantity;
+  if (!resolvedRoot) {
     return {
       poolKey: `name:${ingredient.name.trim().toLowerCase()}`,
-      quantity: q,
+      quantity,
       resolved: false,
     };
   }
-  return { poolKey: stockPoolKey(root, u), quantity: q, resolved: true };
+  return { poolKey: resolvedRoot, quantity, resolved: true };
 }
 
-/**
- * Pantry coverage for one set of planned ingredient lines (already filtered
- * to on_shopping_list + un-made days). Mirrors the shop action's canonical/oz
- * pooling. Raw pantry sufficiency — other days' stock holds are ignored,
- * like Quick Bites.
- */
 export function buildWeekSummary(
   ingredients: SummaryIngredient[],
   inventory: SummaryInventoryRow[],
@@ -125,117 +125,127 @@ export function buildWeekSummary(
 ): WeekSummary {
   const pools = buildPantryPools(inventory, items);
 
-  const pending: { line: SummaryLine; poolKey: string }[] = [];
-  const needByPool = new Map<string, number>();
+  const needByRoot = new Map<string, number>();
+  const firstIngredientByKey = new Map<string, SummaryIngredient>();
+
   for (const ingredient of ingredients) {
     const { poolKey, quantity } = resolveLine(ingredient, pools);
-    needByPool.set(poolKey, (needByPool.get(poolKey) ?? 0) + quantity);
-    pending.push({
-      poolKey,
-      line: {
-        name: ingredient.name,
-        quantityText: ingredient.quantityText,
-        covered: false,
-      },
+    needByRoot.set(poolKey, (needByRoot.get(poolKey) ?? 0) + quantity);
+    if (!firstIngredientByKey.has(poolKey)) {
+      firstIngredientByKey.set(poolKey, ingredient);
+    }
+  }
+
+  const coveredKeys = new Set<string>();
+  const lines: SummaryLine[] = [];
+  for (const poolKey of firstIngredientByKey.keys()) {
+    const ingredient = firstIngredientByKey.get(poolKey)!;
+    const resolved = !poolKey.startsWith("name:");
+    const rawHave = pools.stock.get(poolKey) ?? 0;
+    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
+    const have = toOunces(rawHave, commonUnit) ?? rawHave;
+    const need = needByRoot.get(poolKey) ?? 0;
+    const covered = resolved && have >= need - 1e-6;
+    if (covered) coveredKeys.add(poolKey);
+    lines.push({
+      name: ingredient.name,
+      quantityText: ingredient.quantityText,
+      covered,
     });
   }
 
-  for (const entry of pending) {
-    if (entry.poolKey.startsWith("name:")) continue;
-    const have = pools.stock.get(entry.poolKey) ?? 0;
-    const need = needByPool.get(entry.poolKey) ?? 0;
-    entry.line.covered = have >= need - 1e-6;
-  }
-
-  const lines = pending.map((entry) => entry.line);
-  const inPantry = lines.filter((line) => line.covered).length;
   return {
     total: lines.length,
-    inPantry,
-    needed: lines.length - inPantry,
+    inPantry: coveredKeys.size,
+    needed: lines.length - coveredKeys.size,
     lines,
-    onShoppingList: countIngredientsOnShoppingList(ingredients, groceryItems, items),
+    onShoppingList: countIngredientsOnShoppingList(
+      ingredients,
+      groceryItems,
+      items,
+      coveredKeys,
+    ),
   };
 }
 
-  /**
-   * Counts distinct ingredients in a week's planned lines that are currently
-   * present as unchecked rows on the shopping list. Matching uses canonical
-   * item roots (with exact-name fallback) so alternate product names do not
-   * produce duplicates or false matches.
-   */
-  export function countIngredientsOnShoppingList(
-    ingredients: SummaryIngredient[],
-    groceryItems: SummaryGroceryRow[],
-    items: SummaryItemRow[],
-  ): number {
-    const rootLookup = createRootLookup(items);
-    const nameToRoot = new Map<string, string>(
-      items.map((row) => [row.name.trim().toLowerCase(), rootLookup(row.id)]),
-    );
+export function countIngredientsOnShoppingList(
+  ingredients: SummaryIngredient[],
+  groceryItems: SummaryGroceryRow[],
+  items: SummaryItemRow[],
+  coveredKeys?: Set<string> | null,
+): number {
+  const rootLookup = createRootLookup(items);
+  const nameToRoot = new Map<string, string>(
+    items.map((row) => [row.name.trim().toLowerCase(), rootLookup(row.id)]),
+  );
 
-    const plannedKeys = new Set<string>();
-    for (const ingredient of ingredients) {
-      const displayName = splitNameAndQuantity(ingredient.name).name
-        .trim()
-        .toLowerCase();
-      const key = ingredient.itemId
-        ? rootLookup(ingredient.itemId)
-        : (nameToRoot.get(displayName) ?? `name:${displayName}`);
-      plannedKeys.add(key);
-    }
-
-    const groceryKeys = new Set<string>();
-    for (const grocery of groceryItems) {
-      if (grocery.item_id) {
-        groceryKeys.add(rootLookup(grocery.item_id));
-      } else {
-        groceryKeys.add(`name:${grocery.name.trim().toLowerCase()}`);
-      }
-    }
-
-    let count = 0;
-    for (const key of plannedKeys) {
-      if (groceryKeys.has(key)) count += 1;
-    }
-    return count;
+  const plannedKeys = new Set<string>();
+  for (const ingredient of ingredients) {
+    const displayName = splitNameAndQuantity(ingredient.name).name
+      .trim()
+      .toLowerCase();
+    const key = ingredient.itemId
+      ? rootLookup(ingredient.itemId)
+      : (nameToRoot.get(displayName) ?? `name:${displayName}`);
+    plannedKeys.add(key);
   }
 
-  /**
-   * Per-recipe line counts (Have X/Y for one recipe's ingredients), same
-   * canonical/oz pools as the week summary — used by /plan day cards.
-   */
-  export function buildRecipeCoverage(
+  const groceryKeys = new Set<string>();
+  for (const grocery of groceryItems) {
+    if (grocery.item_id) {
+      groceryKeys.add(rootLookup(grocery.item_id));
+    } else {
+      groceryKeys.add(`name:${grocery.name.trim().toLowerCase()}`);
+    }
+  }
+
+  const safeCovered = coveredKeys ?? new Set<string>();
+  let count = 0;
+  for (const key of plannedKeys) {
+    if (safeCovered.has(key)) continue;
+    if (groceryKeys.has(key)) count += 1;
+  }
+  return count;
+}
+
+export function buildRecipeCoverage(
   ingredients: RecipeSummaryIngredient[],
   inventory: SummaryInventoryRow[],
   items: SummaryItemRow[],
 ): Map<string, RecipeCoverage> {
   const pools = buildPantryPools(inventory, items);
 
-  const pending: { recipeId: string; key: string }[] = [];
-  const needByKey = new Map<string, number>(); // `${recipeId}|${poolKey}`
+  const pending: { recipeId: string; poolKey: string; quantity: number }[] = [];
+  const needByKey = new Map<string, number>();
   for (const ingredient of ingredients) {
     const { poolKey, quantity } = resolveLine(ingredient, pools);
     const key = `${ingredient.recipeId}|${poolKey}`;
     needByKey.set(key, (needByKey.get(key) ?? 0) + quantity);
-    pending.push({ recipeId: ingredient.recipeId, key });
+    pending.push({ recipeId: ingredient.recipeId, poolKey, quantity });
   }
 
   const coveredByKey = new Map<string, boolean>();
   for (const [key, need] of needByKey) {
     const poolKey = key.slice(key.indexOf("|") + 1);
-    coveredByKey.set(
-      key,
-      !poolKey.startsWith("name:") &&
-        (pools.stock.get(poolKey) ?? 0) >= need - 1e-6,
-    );
+    const resolved = !poolKey.startsWith("name:");
+    const rawHave = pools.stock.get(poolKey) ?? 0;
+    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
+    const have = toOunces(rawHave, commonUnit) ?? rawHave;
+    coveredByKey.set(key, resolved && have >= need - 1e-6);
   }
 
   const out = new Map<string, RecipeCoverage>();
+  const seenIngredientKeys = new Map<string, Set<string>>();
   for (const entry of pending) {
+    const key = `${entry.recipeId}|${entry.poolKey}`;
     const stats = out.get(entry.recipeId) ?? { total: 0, inPantry: 0 };
-    stats.total += 1;
-    if (coveredByKey.get(entry.key)) stats.inPantry += 1;
+    const seen = seenIngredientKeys.get(entry.recipeId) ?? new Set<string>();
+    if (!seen.has(entry.poolKey)) {
+      stats.total += 1;
+      if (coveredByKey.get(key)) stats.inPantry += 1;
+      seen.add(entry.poolKey);
+    }
+    seenIngredientKeys.set(entry.recipeId, seen);
     out.set(entry.recipeId, stats);
   }
   return out;

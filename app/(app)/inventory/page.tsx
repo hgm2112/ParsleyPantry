@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { buildCanonicalNameMap } from "@/lib/canonical";
 import { stockPoolKey } from "@/lib/stock";
 import { compareByExpiry } from "@/lib/expiry";
-import type { InventoryEntry, StockHoldRow, SubcategoryRow } from "@/lib/types";
+import type { InventoryEntry, Location, StockHoldRow, SubcategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Pantry" };
 
@@ -33,7 +33,7 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [inventoryResult, holdsResult, subsResult, itemsResult] =
+  const [inventoryResult, holdsResult, subsResult, settingsResult, itemsResult] =
     await Promise.all([
       supabase
         .from("inventory")
@@ -49,6 +49,11 @@ async function InventoryContent() {
         .select("*")
         .eq("household_id", householdId)
         .order("sort_order", { ascending: true }),
+      supabase
+        .from("household_settings")
+        .select("default_location")
+        .eq("household_id", householdId)
+        .maybeSingle(),
       supabase
         .from("items")
         .select("id, name, canonical_item_id")
@@ -85,6 +90,10 @@ async function InventoryContent() {
     <InventoryView
       rows={rows}
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
+      defaultLocation={
+        ((settingsResult.data as { default_location?: string } | null)
+          ?.default_location ?? "pantry") as Location
+      }
       holdsByItem={holdsByItem}
       canonicalNames={canonicalNames}
     />

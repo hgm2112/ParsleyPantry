@@ -33,6 +33,12 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
   // route instance was kept alive by <Activity>.
   const itemParam =
     typeof params.item === "string" ? params.item.trim() : null;
+  const returnToParam =
+    typeof params.returnTo === "string" ? params.returnTo.trim() : null;
+  const returnTo =
+    returnToParam && returnToParam.startsWith("/") && !returnToParam.startsWith("//")
+      ? returnToParam
+      : "/inventory";
   const lookupKey =
     typeof params.scan === "string" ? params.scan.slice(0, 40) : null;
   const { supabase, householdId } = await requireDal();
@@ -70,6 +76,7 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
       initialBarcode={initialItem ? (initialItem.barcode ?? null) : initialBarcode}
       lookupKey={lookupKey}
       initialItem={initialItem}
+      returnTo={returnTo}
     />
   );
 }

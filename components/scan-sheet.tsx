@@ -9,13 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Scanner } from "@/components/scanner";
 
 type ScanSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBarcode: (barcode: string) => void;
+  onManualEntry?: () => void;
   title?: string;
   description?: string;
 };
@@ -28,10 +29,10 @@ export function ScanSheet({
   open,
   onOpenChange,
   onBarcode,
+  onManualEntry,
   title = "Scan barcode",
   description = "Point the camera at the barcode on the package.",
 }: ScanSheetProps) {
-  const [manual, setManual] = useState("");
   const lastRef = useRef(0);
 
   function emit(barcode: string) {
@@ -45,7 +46,6 @@ export function ScanSheet({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) setManual("");
         onOpenChange(next);
       }}
     >
@@ -59,24 +59,17 @@ export function ScanSheet({
           onDetect={emit}
           className="aspect-[4/3] w-full"
         />
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (manual.trim()) emit(manual);
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            onOpenChange(false);
+            onManualEntry?.();
           }}
         >
-          <Input
-            inputMode="numeric"
-            pattern="[0-9]*"
-            placeholder="Enter barcode manually"
-            value={manual}
-            onChange={(event) => setManual(event.target.value)}
-          />
-          <button type="submit" className="sr-only">
-            Look up
-          </button>
-        </form>
+          Enter Manually
+        </Button>
       </DialogContent>
     </Dialog>
   );

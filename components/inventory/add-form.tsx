@@ -67,6 +67,10 @@ type Props = {
    * instance survived navigation (Next keeps ~3 routes in <Activity>).
    */
   lookupKey?: string | null;
+  returnTo?: string | null;
+  onSaved?: (() => void) | null;
+  onCancel?: (() => void) | null;
+  onScanAgain?: (() => void) | null;
 };
 
 export function AddForm({
@@ -75,9 +79,17 @@ export function AddForm({
   initialBarcode,
   initialItem = null,
   lookupKey = null,
+  returnTo = "/inventory",
+  onSaved = null,
+  onCancel = null,
+  onScanAgain = null,
 }: Props) {
   use(io());
   const router = useRouter();
+  const safeReturnTo =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+      ? returnTo
+      : "/inventory";
   const [barcode, setBarcode] = useState(initialBarcode ?? "");
   const [selectedItem, setSelectedItem] = useState<ItemRow | null>(null);
   const [name, setName] = useState("");
@@ -343,8 +355,7 @@ export function AddForm({
     }, 250);
   }
 
-  async function submit(event?: React.FormEvent) {
-    event?.preventDefault();
+  async function saveCurrent(mode: "navigate" | "scan-again" | "stay" = "stay") {
     // Ref guard: a double click / double Enter can fire before the disabled
     // button re-renders, and one submit must mean one addition.
     if (busyRef.current) return;
@@ -410,7 +421,15 @@ export function AddForm({
     foodTypeTouchedRef.current = false;
     nameDirtyRef.current = false;
     expiryTouchedRef.current = false;
-    router.refresh();
+    if (mode === "navigate") {
+      if (onSaved) onSaved();
+      else router.push(safeReturnTo);
+    } else if (mode === "scan-again") {
+      if (onScanAgain) onScanAgain();
+      else setScanOpen(true);
+    } else {
+      router.refresh();
+    }
   }
 
   return (
@@ -441,7 +460,13 @@ export function AddForm({
         </Button>
       </div>
 
-      <form onSubmit={submit} className="space-y-4">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveCurrent("navigate");
+          }}
+          className="space-y-4"
+        >
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
           <div className="relative">
@@ -677,18 +702,42 @@ export function AddForm({
           </div>
         </section>
 
-        <div className="flex gap-2">
-          <Button type="submit" className="flex-1" disabled={busy}>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            className="flex-1"
+            disabled={busy}
+            onClick={() => void saveCurrent("navigate")}
+          >
             {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-            Add to {location}
+            + Add to Inventory
           </Button>
           <Button
             type="button"
-            variant="outline"
-            render={<Link href="/inventory" />}
+            className="flex-1"
+            disabled={busy}
+            onClick={() => void saveCurrent("scan-again")}
           >
-            Cancel
+            {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+            + Add to Inventory & Scan Again
           </Button>
+          {onCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              render={<Link href={safeReturnTo} />}
+            >
+              Cancel
+            </Button>
+          )}
         </div>
       </form>
 

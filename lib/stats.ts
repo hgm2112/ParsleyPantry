@@ -396,11 +396,8 @@ function subtractPool(
   pools: PantryPools,
   row: { item_id: string; quantity: number; unit: string | null },
 ) {
-  const oz = toOunces(row.quantity, row.unit);
-  const q = oz != null ? oz : row.quantity;
-  const u = oz != null ? "oz" : row.unit;
-  const key = stockPoolKey(pools.rootOf(row.item_id), u);
-  stock.set(key, (stock.get(key) ?? 0) - q);
+  const key = pools.rootOf(row.item_id);
+  stock.set(key, (stock.get(key) ?? 0) - row.quantity);
 }
 
 /**

@@ -266,7 +266,7 @@ async function SearchContent({ query }: { query: string }) {
                 >
                   <div className="flex items-center gap-1.5">
 <Link
-                        href={`/inventory/add?item=${item.id}`}
+                        href={`/inventory/add?item=${item.id}&returnTo=/search?q=${encodeURIComponent(query)}`}
                         className="block min-w-0 truncate text-sm font-semibold after:absolute after:inset-0 after:content-['']"
                         aria-label={`Add ${item.name} to inventory`}
                       >
