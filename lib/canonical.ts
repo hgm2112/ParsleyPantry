@@ -253,15 +253,12 @@ export interface RootableItem {
 export function buildCanonicalNameMap(
   rows: { id: string; name: string; canonical_item_id: string | null }[],
 ): Record<string, string> {
-  const rootOf = createRootLookup(rows);
   const nameById = new Map(rows.map((row) => [row.id, row.name]));
   const out: Record<string, string> = {};
   for (const row of rows) {
     if (!row.canonical_item_id || row.canonical_item_id === row.id) continue;
-    const root = rootOf(row.id);
-    if (root === row.id) continue;
-    const name = nameById.get(root);
-    if (name) out[row.id] = name;
+    const parent = nameById.get(row.canonical_item_id);
+    if (parent) out[row.id] = parent;
   }
   return out;
 }
