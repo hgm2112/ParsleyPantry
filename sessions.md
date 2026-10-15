@@ -4,6 +4,65 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-14 (part 3) — Vercel deploy failures: root cause + pre-push/CI type gates
+
+**Shipped**
+- Investigated 4 failed Vercel Production deploys (`aa78e60` → `e748f58` →
+  `fb347de` → `ebffee2`, all failing after green `631e37f`): local
+  `tsc --noEmit` reproduced exactly one error — `recipe-editor.tsx:99`
+  `useState` widened `recipeType` to `string`, colliding with the
+  `"cooking" | "no_cook"` union required by `recipe_type`. Introduced by
+  `aa78e60`; the later 3 failed deploys inherited it (no new problems —
+  verified: a single tsc error at `ebffee2`).
+- Fix: explicit generic `useState<"cooking" | "no_cook">(...)` in
+  `components/recipes/recipe-editor.tsx` — commit `803164d`, pushed →
+  Production **Ready**.
+- Deeper pattern (this was the 2nd recurrence): cluster 1 was
+  `DropdownMenuTrigger asChild` (Base UI uses `render`) + `subcategory.label`
+  (row type has `name`), introduced by `a94650e`/`fb767ac`, fixed together in
+  `8354034`. Systemic root cause = no pre-push/CI type gate (no hooks, no
+  `.github/workflows`; 22× "no tsc/lint/build per request" in this journal) —
+  Vercel's production build was the first type-checker to see the code.
+- Safeguards added:
+  - `scripts/githooks/pre-push` (versioned, marker `parsleypantry-pre-push-hook`):
+    runs `npx tsc --noEmit` only (~seconds), prints errors + abort message,
+    exits non-zero on failure; no lint, no build.
+  - `scripts/install-hooks.sh`: installs the hook into `.git/hooks/pre-push`,
+    preserves any foreign hook as `pre-push.bak.<timestamp>` (never overwrites
+    a backup), idempotent for its own managed hook.
+  - `.github/workflows/typecheck-build.yml`: **"Typecheck and Production
+    Build"** (job `build`) on push/PR → `main`; `permissions: contents: read`
+    only, no secrets; Node 22 (repo has no `engines`/`.nvmrc`; supabase-js +
+    Vercel default want 22+); `npm ci` → `npx tsc --noEmit` → `npm run build`
+    with public `NEXT_PUBLIC_*` placeholders (CI has no `.env.local`).
+  - README: "Quality gates" section — hook install command, CI description,
+    how to make the check required.
+- Verified before commit: hook success path (direct run) + failure path
+  (stub `npx` on `PATH` → clear errors + exit 1); installer preservation +
+  idempotency in a throwaway `/tmp` repo; workflow YAML parse + content
+  assertions (name, triggers, permissions, exact commands, no `secrets.`);
+  CI-equivalent `npm ci` → tsc → placeholder `npm run build` all green;
+  `npm ls` clean (lockfile in sync).
+- Committed `9037df1` (exactly the 4 reviewed files) and pushed with the hook
+  running normally (tsc passed); `main` in sync with `origin/main`.
+
+**Gotchas**
+- The hook is local-only until each contributor runs
+  `bash scripts/install-hooks.sh` (README documents it).
+- Next 16 `next build` does NOT run ESLint — the 11 pre-existing lint errors
+  cannot fail a deploy; only TypeScript errors block builds (both clusters).
+- Any push (including this write-up) triggers a Vercel deploy; docs-only
+  commits still burn a build slot.
+- Stray untracked assets/logs untouched (user decision pending).
+
+**Open — next session**
+- Verify the "Typecheck and Production Build / build" check appears on
+  GitHub for `9037df1`, then make it required:
+  Settings → Branches → main → Require status checks to pass before merging.
+- Carried over: apply `20261017120000_recipe_type.sql` (stats/plan select
+  `recipe_type` until then); stray untracked file cleanup; optional cleanup
+  of the 11 pre-existing lint errors (non-blocking).
+
 ## 2026-10-12 (part 46) — Planner shopping: meal-count grocery lines + pantry coverage fix; picker footer hardening
 
 **Shipped**
