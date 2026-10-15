@@ -1,0 +1,58 @@
+
+> parsleypantry@0.1.0 dev
+> next dev
+
+▲ Next.js 16.4.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.255.255.254:3000
+- Environments: .env.local
+✓ Ready in 292ms
+✓ Running next.config.ts took 28ms
+- Cache Components enabled
+- Partial Prefetching enabled
+
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+ GET /home 200 in 3.3s (next.js: 1126ms, proxy.ts: 105ms, application-code: 2.1s)
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+⚠️  Node.js 20 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 22 or later. For more information, visit: https://github.com/orgs/supabase/discussions/45715
+ GET /settings 200 in 3.9s (next.js: 2.2s, proxy.ts: 36ms, application-code: 1699ms)
+✓ Compiled in 139ms
+ GET /settings 200 in 716ms (next.js: 68ms, proxy.ts: 7ms, application-code: 641ms)
+✓ Compiled in 149ms
+✓ Compiled in 13ms
+ GET /settings 200 in 423ms (next.js: 33ms, proxy.ts: 4ms, application-code: 386ms)
+Route /settings is rendering with server caches disabled. For this navigation, Component Metadata in React DevTools will not accurately reflect what is statically prerenderable and runtime prefetchable. See more info here: https://nextjs.org/docs/messages/cache-bypass-in-dev
+ GET /settings 200 in 1148ms (next.js: 28ms, proxy.ts: 10ms, application-code: 1110ms)
+[browser] Image with src "/parsleypantrylogov2.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+ GET /settings 200 in 938ms (next.js: 12ms, proxy.ts: 6ms, application-code: 920ms)
+[browser] Image with src "/parsleypantrylogov2.svg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+✓ Compiled in 27ms
+⨯ ReferenceError: membersResult is not defined
+    at SettingsContent (app/(app)/settings/page.tsx:59:3)
+  57 |   // Robust fetch: separate queries avoid PostgREST embed issues (no FK from user_id -> profiles.id)
+  58 |   let members: MemberRow[] = [];
+> 59 |   if (membersResult.data && membersResult.data.length > 0) {
+     |   ^
+  60 |     const userIds = membersResult.data.map((m) => m.user_id);
+  61 |     const { data: profilesData, error: profilesError } = await supabase
+  62 |       .from("profiles") {
+  digest: '3124130126'
+}
+ GET /settings 200 in 817ms (next.js: 9ms, proxy.ts: 4ms, application-code: 805ms)
+[browser] Uncaught ReferenceError: membersResult is not defined
+    at SettingsContent (app/(app)/settings/page.tsx:59:3)
+  57 |   // Robust fetch: separate queries avoid PostgREST embed issues (no FK from user_id -> profiles.id)
+  58 |   let members: MemberRow[] = [];
+> 59 |   if (membersResult.data && membersResult.data.length > 0) {
+     |   ^
+  60 |     const userIds = membersResult.data.map((m) => m.user_id);
+  61 |     const { data: profilesData, error: profilesError } = await supabase
+  62 |       .from("profiles")
+✓ Compiled in 19ms
+ GET /settings 200 in 1069ms (next.js: 11ms, proxy.ts: 3ms, application-code: 1055ms)
+✓ Compiled in 25ms
+✓ Compiled in 17ms
+[?25h

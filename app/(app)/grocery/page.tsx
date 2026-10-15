@@ -41,8 +41,11 @@ function GrocerySkeleton() {
 }
 
 async function GroceryContent() {
+  const t0 = Date.now();
   const { supabase, householdId } = await requireDal();
+  console.log("requireDal:", Date.now() - t0, "ms");
 
+  const t1 = Date.now();
   const [
     groceryResult,
     storesResult,
@@ -113,8 +116,10 @@ async function GroceryContent() {
     supabase
       .from("grocery_item_stores")
       .select("grocery_item_id, store_id")
-      .eq("household_id", householdId),
+      .eq("household_id", householdId), 
   ]);
+  console.log("grocery queries:", Date.now() - t1, "ms");
+  
 
   const items = (groceryResult.data ?? []) as unknown as (GroceryItemRow & {
     item: {
