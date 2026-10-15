@@ -1338,3 +1338,79 @@ for "what changed", this is for "what's true now / what's next".
 **Open — next session**
 - Verify new deployment on user's phone after Vercel completes.
 - Confirm Vercel env key is a Supabase secret key (starts `sb_secret_`) if admin access still fails.
+
+## 2026-10-14 (part 2)
+
+**Shipped**
+- Cooking statistics now attribute each completed meal to its originally
+  scheduled date (`week_start + day_index`), not the check-off timestamp:
+  - `cookedOccurrences`, `cookedDates`, and `firstCookedByRecipe` in
+    `lib/stats.ts` use `scheduledDate(row)`; `made_at` stays the actual
+    completion timestamp and is only the "completed" marker.
+  - Late/batched completions (e.g. marking Tuesday's Meal Kit after midnight)
+    count on their scheduled day; streak, Meals This Month, Cooking Habits,
+    Most Active Day, unique/different recipes, and New Recipes Tried all key
+    off scheduled dates with range filters unchanged.
+  - Plan row stays source of truth: `setMealDay`/`saveMealNote` reset
+    `made_at` when an entry changes, so replacements can't leave duplicate
+    cooking occurrences. No schema change needed.
+- Recipe classification added: `recipes.recipe_type` (`cooking` default |
+  `no_cook`):
+  - migration `20261017120000_recipe_type.sql` (check constraint, household/
+    type index, conservative name-only backfill for pizza / eating out /
+    no cooking placeholders).
+  - Recipe editor gains a Cooking Recipe / No-Cook Placeholder field
+    (defaults Cooking) persisted through create/update actions.
+  - Stats: no-cook recipes excluded from cooked occurrences and first-cooked;
+    `noCookDates` counts `no_cook`, `eating_out`, and planned no-cook
+    recipes (never meal kits) on scheduled dates.
+  - Plan shopping / mark-made flows skip no-cook recipes; stats page loads
+    `recipe_type` and passes it through StatsView.
+- Pantry canonical tooltip consistency:
+  - `buildCanonicalNameMap` (`lib/canonical.ts`) maps each item to its direct
+    `canonical_item_id` target's name — same source as the detail card —
+    instead of walking to the ultimate root (root cause of "Cheese" tooltip
+    vs "American Cheese" detail label). Stock/root matching untouched.
+- Smart Actions low-stock now evaluates availability per canonical ingredient:
+  - `components/home/smart-actions.tsx` pools quantities by
+    `canonical root + unit basis` for the low check only; product groups stay
+    item-level for display/edit/stock actions.
+  - Identical normalized units (incl. null/null) sum; weights convert via
+    `toOunces`/`fromOunces`; different bases form separate pools (never
+    summed); mixed-batch or batch≠item unit groups fall back to per-product
+    `isItemLow`.
+  - Manual `is_low` flags always win; ignored IDs, grocery matching, and
+    sorting unchanged.
+  - User's actual warning was a manual `is_low` flag on Yellow American
+    Cheese (`low_threshold` is null) — user cleared it; the unit-basis
+    refinement keeps mixed "8 oz" / "8 ea" / null siblings from disabling
+    the root pool.
+- Commits pushed to `origin/main`: `aa78e60` (scheduled dates + recipe
+  type), `e748f58` (canonical tooltip), `fb347de` (Smart Actions pooling).
+
+**Gotchas**
+- `20261017120000_recipe_type.sql` is committed but NOT yet applied to the
+  database (no DB password/service key in repo) — `/stats` selects
+  `recipe_type` and will error until it runs (`supabase db push` or SQL
+  editor).
+- Cooking stats no longer expose check-off time via `cookedOn` — read
+  `made_at` directly for "when was it checked off".
+- `toOunces("8 oz")` strips the pack-size prefix (treats as 1); pooled oz
+  round-trips through `fromOunces`, so threshold comparisons stay consistent
+  with `isItemLow`'s unit-blind semantics — don't treat pooled oz as true
+  ounces.
+- Live DB rows for the Mon/Tue/Wed streak could not be queried (RLS blocks
+  anon key, no service key in repo); streak fix verified by code analysis
+  only.
+- No tests, lint, type checks, or builds run all session (per instructions).
+
+**Open — next session**
+- Apply `20261017120000_recipe_type.sql`, then verify /stats loads and the
+  cooking streak shows 3 for the user's Mon/Tue/Wed records.
+- Review remaining recipes for uncertain no-cook classification (only
+  obvious names were backfilled) and flip clear placeholders in the editor.
+- Verify deployed tooltip, Smart Actions, and scheduled-date stats after
+  Vercel deploy.
+- Decide fate of stray untracked files (`PPmessedup.jpg`, `dev.log`,
+  `example-thisweeksdinner.jpg`, top-level `parsley2.svg`,
+  `shoppinglistpage.jpg`, `supabase/.temp/`).
