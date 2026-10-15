@@ -41,11 +41,8 @@ function GrocerySkeleton() {
 }
 
 async function GroceryContent() {
-  const t0 = performance.now();
   const { supabase, householdId } = await requireDal();
-  console.log("requireDal:", Math.round(performance.now() - t0), "ms");
 
-  const t1 = performance.now();
   const [
     groceryResult,
     storesResult,
@@ -118,7 +115,6 @@ async function GroceryContent() {
       .select("grocery_item_id, store_id")
       .eq("household_id", householdId), 
   ]);
-  console.log("grocery queries:", Math.round(performance.now() - t1), "ms");
   
 
   const items = (groceryResult.data ?? []) as unknown as (GroceryItemRow & {
