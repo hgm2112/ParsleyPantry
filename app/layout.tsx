@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   },
   description:
     "Barcode-first pantry inventory, grocery lists, recipes and meal planning for your household.",
+  icons: {
+    icon: "/parsley2.svg",
+  },
   appleWebApp: {
     capable: true,
     title: "Parsley Pantry",
