@@ -37,7 +37,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
   const { supabase, householdId } = await requireDal();
   const week2Start = addDays(weekStart, 7);
 
-  const [mealsResult, recipesResult] = await Promise.all([
+  const [mealsResult, recipesResult, inventoryResult, itemsResult, groceryResult] = await Promise.all([
     supabase
       .from("meal_plan_days")
       .select("*")
@@ -48,6 +48,19 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       .select("id, name, time, tags, recipe_ingredients(id)")
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
+    supabase
+      .from("inventory")
+      .select("item_id, quantity, unit")
+      .eq("household_id", householdId),
+    supabase
+      .from("items")
+      .select("id, name, canonical_item_id")
+      .eq("household_id", householdId),
+    supabase
+      .from("grocery_items")
+      .select("item_id, name")
+      .eq("household_id", householdId)
+      .eq("checked", false),
   ]);
 
   const meals = (mealsResult.data ?? []) as MealPlanDayRow[];
@@ -100,27 +113,12 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
   };
   let coverageById: Record<string, RecipeCoverage> = {};
   if (allRecipeIds.length > 0) {
-    const [ingredientsResult, inventoryResult, itemsResult, groceryResult] = await Promise.all([
-      supabase
-        .from("recipe_ingredients")
-        .select("recipe_id, name, quantity_text, item_id")
-        .eq("household_id", householdId)
-        .eq("on_shopping_list", true)
-        .in("recipe_id", allRecipeIds),
-      supabase
-        .from("inventory")
-        .select("item_id, quantity, unit")
-        .eq("household_id", householdId),
-      supabase
-        .from("items")
-        .select("id, name, canonical_item_id")
-        .eq("household_id", householdId),
-      supabase
-        .from("grocery_items")
-        .select("item_id, name")
-        .eq("household_id", householdId)
-        .eq("checked", false),
-    ]);
+    const ingredientsResult = await supabase
+      .from("recipe_ingredients")
+      .select("recipe_id, name, quantity_text, item_id")
+      .eq("household_id", householdId)
+      .eq("on_shopping_list", true)
+      .in("recipe_id", allRecipeIds);
 
     const ingredientRows = (ingredientsResult.data ?? []) as {
       recipe_id: string;
