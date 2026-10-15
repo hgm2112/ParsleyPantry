@@ -15,9 +15,89 @@ import { useLocalStorage } from "@/lib/use-local-storage";
 import type { HomeMeal } from "@/lib/types";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type { InventoryEntry } from "@/lib/types";
-import { groupByItem } from "@/lib/batches";
+import { groupByItem, type ItemGroup } from "@/lib/batches";
+import { fromOunces, toOunces } from "@/lib/stock";
 
 const EXPIRING_DAYS = 5;
+
+/** Normalize unit text for compatibility checks (never merges synonyms). */
+function normalizeUnit(unit: string | null): string | null {
+  if (unit == null) return null;
+  const normalized = unit.trim().toLowerCase().replace(/\.$/, "").trim();
+  return normalized || null;
+}
+
+type CanonicalStock = {
+  quantity: number;
+  mode: "raw" | "oz";
+};
+
+/** Pool basis for one product group; null = not safely poolable. */
+type StockBasis = {
+  key: string;
+  mode: "raw" | "oz";
+  unit: string | null;
+};
+
+/**
+ * The unit basis of one product group, when it can be safely compared with
+ * sibling products. Batch units must be uniform and must match the item's
+ * configured unit; otherwise the group falls back to per-product low-stock
+ * behavior (isItemLow semantics).
+ */
+function groupStockUnit(group: ItemGroup): {
+  unit: string | null;
+  mode: "raw" | "oz";
+  compatible: boolean;
+} {
+  const batchUnits = new Set(group.batches.map((row) => normalizeUnit(row.unit)));
+  if (batchUnits.size > 1) return { unit: null, mode: "raw", compatible: false };
+  const batchUnit = [...batchUnits][0] ?? null;
+  const itemUnit = normalizeUnit(group.item.unit);
+  if (batchUnit !== itemUnit) return { unit: null, mode: "raw", compatible: false };
+  if (batchUnit != null && toOunces(1, batchUnit) != null) {
+    return { unit: batchUnit, mode: "oz", compatible: true };
+  }
+  return { unit: batchUnit, mode: "raw", compatible: true };
+}
+
+/**
+ * Pool key = canonical root + unit basis. Same-basis siblings pool; a
+ * different basis forms its own pool instead of disabling the root, so
+ * incompatible units are never summed together.
+ */
+function stockBasisOf(
+  group: ItemGroup,
+  rootOf: (id: string) => string,
+): StockBasis | null {
+  const { unit, mode, compatible } = groupStockUnit(group);
+  if (!compatible) return null;
+  const basis = mode === "oz" ? "oz" : `raw:${unit ?? ""}`;
+  return { key: `${rootOf(group.item.id)}|${basis}`, mode, unit };
+}
+
+/**
+ * Pool quantities per canonical root + unit basis for low-stock evaluation
+ * only. Stock stays in product groups; only identical normalized units (or
+ * weights convertible via toOunces) share a pool.
+ */
+function buildCanonicalStock(
+  groups: ItemGroup[],
+  rootOf: (id: string) => string,
+): Map<string, CanonicalStock> {
+  const pools = new Map<string, CanonicalStock>();
+  for (const group of groups) {
+    const basis = stockBasisOf(group, rootOf);
+    if (!basis) continue;
+    const quantity =
+      basis.mode === "oz" ? toOunces(group.totalQuantity, basis.unit) : group.totalQuantity;
+    if (quantity == null) continue;
+    const pool = pools.get(basis.key);
+    if (pool) pool.quantity += quantity;
+    else pools.set(basis.key, { quantity, mode: basis.mode });
+  }
+  return pools;
+}
 
 /** "Milk (2d ago) · Spinach (today)" — days < 0 read as ago, 0 as today. */
 function formatExpiryList(rows: InventoryEntry[]): string {
@@ -126,6 +206,24 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       }
       return current;
     };
+    const canonicalStock = buildCanonicalStock(groups, rootOf);
+    const isLowForSmartAction = (group: ItemGroup) => {
+      if (!group.low) return false;
+      // Explicit manual low-stock flags are never overridden by aggregation.
+      if (group.batches.some((row) => row.is_low)) return true;
+      if (group.item.low_threshold == null) return true;
+      const basis = stockBasisOf(group, rootOf);
+      if (!basis) return true;
+      const pool = canonicalStock.get(basis.key);
+      if (!pool) return true;
+      let available = pool.quantity;
+      if (pool.mode === "oz") {
+        const converted = fromOunces(pool.quantity, basis.unit);
+        if (converted == null) return true;
+        available = converted;
+      }
+      return available <= group.item.low_threshold;
+    };
     const listedIds = new Set(
       [
         ...grocery.filter((g) => !g.checked).map((g) => g.item_id).filter(Boolean) as string[],
@@ -137,7 +235,7 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
         (group) =>
           !listedIds.has(rootOf(group.item.id)) && !ignored.includes(group.item.id),
       )
-      .filter((group) => group.low)
+      .filter((group) => isLowForSmartAction(group))
       .sort((a, b) => a.totalQuantity - b.totalQuantity)[0] ?? null;
   }, [groups, grocery, addedLocal, ignored]);
 
