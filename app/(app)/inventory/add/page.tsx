@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddForm } from "@/components/inventory/add-form";
-import type { Location, SubcategoryRow } from "@/lib/types";
+import type { ItemRow, Location, SubcategoryRow } from "@/lib/types";
 
 export const metadata = { title: "Add to inventory" };
 
@@ -31,12 +31,13 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
       : null;
   // Bumped by the scanner so a fresh scan re-runs the lookup even when this
   // route instance was kept alive by <Activity>.
+  const itemParam =
+    typeof params.item === "string" ? params.item.trim() : null;
   const lookupKey =
     typeof params.scan === "string" ? params.scan.slice(0, 40) : null;
-
   const { supabase, householdId } = await requireDal();
 
-  const [settingsResult, subsResult] = await Promise.all([
+  const [settingsResult, subsResult, itemResult] = await Promise.all([
     supabase
       .from("household_settings")
       .select("default_location")
@@ -47,18 +48,28 @@ async function AddContent({ searchParams }: { searchParams: SearchParams }) {
       .select("*")
       .eq("household_id", householdId)
       .order("sort_order", { ascending: true }),
+    itemParam
+      ? supabase
+          .from("items")
+          .select("*")
+          .eq("household_id", householdId)
+          .eq("id", itemParam)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const defaultLocation =
     (settingsResult.data as { default_location: Location } | null)
       ?.default_location ?? "pantry";
+  const initialItem = (itemResult.data as ItemRow | null) ?? null;
 
   return (
     <AddForm
       subcategories={(subsResult.data ?? []) as SubcategoryRow[]}
       defaultLocation={defaultLocation}
-      initialBarcode={initialBarcode}
+      initialBarcode={initialItem ? (initialItem.barcode ?? null) : initialBarcode}
       lookupKey={lookupKey}
+      initialItem={initialItem}
     />
   );
 }

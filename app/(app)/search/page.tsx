@@ -265,16 +265,13 @@ async function SearchContent({ query }: { query: string }) {
                   className="relative rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
                 >
                   <div className="flex items-center gap-1.5">
-                    <Link
-                      href={
-                        item.barcode
-                          ? `/inventory/add?barcode=${item.barcode}`
-                          : "/inventory/add"
-                      }
-                      className="block min-w-0 truncate text-sm font-semibold after:absolute after:inset-0 after:content-['']"
-                    >
-                      {item.name}
-                    </Link>
+<Link
+                        href={`/inventory/add?item=${item.id}`}
+                        className="block min-w-0 truncate text-sm font-semibold after:absolute after:inset-0 after:content-['']"
+                        aria-label={`Add ${item.name} to inventory`}
+                      >
+                        {item.name}
+                      </Link>
                     {canonical ? (
                       <span className="relative z-10">
                         <CanonicalInfo name={canonical} />

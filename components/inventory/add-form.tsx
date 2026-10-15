@@ -58,6 +58,11 @@ type Props = {
   defaultLocation: Location;
   initialBarcode: string | null;
   /**
+   * Existing catalog item to prefill when opening the form from search. This
+   * reuses the existing item record instead of a barcode lookup.
+   */
+  initialItem?: ItemRow | null;
+  /**
    * Changes when a *new* scan should re-run the lookup even if this route
    * instance survived navigation (Next keeps ~3 routes in <Activity>).
    */
@@ -68,6 +73,7 @@ export function AddForm({
   subcategories,
   defaultLocation,
   initialBarcode,
+  initialItem = null,
   lookupKey = null,
 }: Props) {
   use(io());
@@ -116,6 +122,17 @@ export function AddForm({
     if (off) return suggestExpiration(off.categories, off.name ?? name);
     return null;
   }, [selectedItem, off, name]);
+
+  const initialItemId = initialItem?.id ?? null;
+
+  // Prefill from an existing household catalog item (e.g. opened from search),
+  // so it can be re-added without a barcode scan. applyItem() preserves the
+  // saved name/unit/category/brand and merge into the selected batch on save.
+  useEffect(() => {
+    if (initialItem) applyItem(initialItem);
+    // Only prefill once per selected item; cleanup is harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialItemId]);
 
   const lookupToken = initialBarcode ? `${initialBarcode}|${lookupKey ?? ""}` : null;
 
