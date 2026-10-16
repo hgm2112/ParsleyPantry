@@ -18,6 +18,7 @@ import { StatsSummary } from "@/components/stats/stats-summary";
 import type { RecipeOption } from "@/components/plan/day-dialog";
 import type {
   CategoryRow,
+  CustomMealRow,
   HomeMeal,
   HouseholdSettingsRow,
   InventoryEntry,
@@ -58,6 +59,8 @@ export function HomeView({
   itemStores,
   settings,
   recipes,
+  customMeals,
+  recipeTypeById,
   recipeIngredients,
   leftovers,
 }: {
@@ -73,6 +76,8 @@ export function HomeView({
   itemStores: { grocery_item_id: string; store_id: string }[];
   settings: HouseholdSettingsRow | null;
   recipes: RecipeOption[];
+  customMeals?: CustomMealRow[];
+  recipeTypeById?: Map<string, string>;
   recipeIngredients: Array<{
     recipe_id: string;
     item_id: string;
@@ -85,11 +90,11 @@ export function HomeView({
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="lg:hidden">
-        <CompactDinners meals={meals} recipes={recipes} />
+        <CompactDinners meals={meals} recipes={recipes} customMeals={customMeals} />
       </div>
 
       <div className="hidden lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block">
-        <WeekMeals meals={meals} recipes={recipes} />
+        <WeekMeals meals={meals} recipes={recipes} customMeals={customMeals} />
       </div>
 
       <div className="lg:col-start-3 lg:row-start-1">
@@ -106,7 +111,7 @@ export function HomeView({
         />
         <PantryInsights rows={pantry} subcategories={subcategories} />
         <MiniCalendar meals={meals} recipes={recipes} />
-        <StatsSummary meals={meals} />
+        <StatsSummary meals={meals} recipeTypeById={recipeTypeById} />
         <PromoCard />
       </div>
 

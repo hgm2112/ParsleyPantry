@@ -9,6 +9,7 @@ import type {
   HouseholdSettingsRow,
   InventoryEntry,
   LeftoverRow,
+  CustomMealRow,
   RecipeRow,
   StoreAisleRow,
   StoreRow,
@@ -56,7 +57,7 @@ async function HomeContent() {
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
-      .select("*, recipe:recipes(id, name, time, tags)")
+      .select("*, recipe:recipes(id, name, time, tags, recipe_type)")
       .eq("household_id", householdId)
       .order("week_start", { ascending: false }),
     supabase
@@ -101,7 +102,7 @@ async function HomeContent() {
     supabase
       .from("recipes")
       .select(
-        `id, name, time, tags, recipe_ingredients(id, item_id, name, quantity_text, optional, sort_order)`,
+        `id, name, time, tags, recipe_type, recipe_ingredients(id, item_id, name, quantity_text, optional, sort_order)`,
       )
       .eq("household_id", householdId)
       .order("name", { ascending: true }),
@@ -126,6 +127,16 @@ async function HomeContent() {
   const leftovers = leftoversResult.error
     ? null
     : ((leftoversResult.data ?? []) as LeftoverRow[]);
+
+  const { data: customMealsData, error: customMealsError } = await supabase
+    .from("custom_meals")
+    .select("id, name, icon, classification")
+    .eq("household_id", householdId)
+    .order("name", { ascending: true });
+  if (customMealsError) {
+    throw new Error(customMealsError.message);
+  }
+  const customMeals = (customMealsData ?? []) as CustomMealRow[];
 
   const meals = (mealsResult.data ?? []) as unknown as HomeMeal[];
   const pantry = (inventoryResult.data ?? []) as InventoryEntry[];
@@ -158,6 +169,15 @@ const recipes = (recipesResult.data ?? []).map(
     })
   );
 
+  const recipeTypeById = new Map(
+    (recipesResult.data ?? [])
+      .map((recipe) => {
+        const typed = recipe as { id: string | null; recipe_type: string | null };
+        return typed.id ? [typed.id, typed.recipe_type ?? ""] : null;
+      })
+      .filter((entry): entry is [string, string] => Boolean(entry)),
+  );
+
 const recipeIngredients = (recipesResult.data ?? [])
   .flatMap((recipe: any) =>
     (recipe.recipe_ingredients ?? []).map((ig: any) => ({
@@ -183,6 +203,8 @@ const recipeIngredients = (recipesResult.data ?? [])
       itemStores={itemStores}
       settings={settings}
       recipes={recipes}
+      customMeals={customMeals}
+      recipeTypeById={recipeTypeById}
       recipeIngredients={recipeIngredients}
       leftovers={leftovers}
     />

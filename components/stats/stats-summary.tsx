@@ -14,20 +14,27 @@ import { useToday } from "@/lib/use-now";
 import type { MealPlanDayRow } from "@/lib/types";
 
 /** Compact "Your Stats" card for the Home right-hand stack. */
-export function StatsSummary({ meals }: { meals: MealPlanDayRow[] }) {
+export function StatsSummary({
+  meals,
+  recipeTypeById,
+}: {
+  meals: MealPlanDayRow[];
+  recipeTypeById?: Map<string, string>;
+}) {
   const today = useToday();
 
   const stats = useMemo(() => {
-    const allTime = cookedOccurrences(meals, { start: null, end: today });
+    const typeMap = recipeTypeById ?? new Map();
+    const allTime = cookedOccurrences(meals, { start: null, end: today }, typeMap);
     const monthStartIso = monthStart(today);
     const monthCount = cookedOccurrences(meals, {
       start: monthStartIso,
       end: today,
-    }).length;
-    const streak = cookingStreak(cookedDates(meals), today);
-    const noCookDays = noCookDates(meals, { start: null, end: today }).size;
+    }, typeMap).length;
+    const streak = cookingStreak(cookedDates(meals, typeMap), today);
+    const noCookDays = noCookDates(meals, { start: null, end: today }, typeMap).size;
     return { total: allTime.length, monthCount, streak, noCookDays };
-  }, [meals, today]);
+  }, [meals, recipeTypeById, today]);
 
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -64,7 +71,7 @@ export function StatsSummary({ meals }: { meals: MealPlanDayRow[] }) {
           <p className="text-lg font-extrabold tabular-nums leading-none">
             {stats.noCookDays}
           </p>
-          <p className="mt-1 text-[10px] text-muted-foreground">No-cook</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">No-cook days</p>
         </div>
       </div>
     </section>

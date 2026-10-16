@@ -16,14 +16,33 @@ import { Button } from "@/components/ui/button";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MadeConfirmDialog } from "@/components/plan/made-confirm";
 import { MealIcon } from "@/components/plan/meal-icon";
-import type { HomeMeal } from "@/lib/types";
+import { customMealIcon, BUILTIN_OTHER_MEALS } from "@/lib/custom-meal-icons";
+import type { HomeMeal, CustomMealRow } from "@/lib/types";
+
+
+function customIconForMeal(
+  meal: HomeMeal | null,
+  customMeals: CustomMealRow[] | undefined,
+): ReturnType<typeof customMealIcon> {
+  const name = meal?.custom_meal_name?.trim();
+  if (!name) return null;
+  const source =
+    meal?.custom_meal_id
+      ? (customMeals ?? []).find((entry) => entry.id === meal.custom_meal_id) ?? null
+      : (customMeals ?? []).find((entry) => entry.name === name) ??
+        BUILTIN_OTHER_MEALS.find((entry) => entry.name === name) ??
+        null;
+  return source ? customMealIcon(source.icon) : null;
+}
 
 export function WeekMeals({
   meals,
   recipes,
+  customMeals,
 }: {
   meals: HomeMeal[];
   recipes: RecipeOption[];
+  customMeals?: CustomMealRow[];
 }) {
   const today = useToday();
   const [offset, setOffset] = useState(0);
@@ -104,6 +123,7 @@ export function WeekMeals({
             : kindInfo
               ? kindInfo.tint
               : NOTE_TINT;
+          const customIcon = customIconForMeal(meal, customMeals);
           const planned = isPlanned(meal);
           const title = dayTitle(meal, recipe?.name);
           const showNote = meal?.note && meal.note !== title;
@@ -138,6 +158,7 @@ export function WeekMeals({
                         today={today}
                         meal={meal}
                         recipe={recipe}
+                        customIcon={customIcon}
                         onMark={stopAndMark}
                       />
                     </span>
@@ -208,9 +229,11 @@ export function WeekMeals({
 export function CompactDinners({
   meals,
   recipes,
+  customMeals,
 }: {
   meals: HomeMeal[];
   recipes: RecipeOption[];
+  customMeals?: CustomMealRow[];
 }) {
   const today = useToday();
   const [openDate, setOpenDate] = useState<string | null>(null);
@@ -257,6 +280,7 @@ export function CompactDinners({
           const recipe = meal?.recipe ?? null;
           const note = meal?.note ?? null;
           const kindInfo = mealKindInfo(meal?.kind);
+          const customIcon = customIconForMeal(meal, customMeals);
           const planned = isPlanned(meal);
           const title = dayTitle(meal, recipe?.name);
 
