@@ -4,7 +4,7 @@ import { io } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileRow } from "@/lib/types";
-
+import { cache } from "react";
 export type Dal = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   user: User;
@@ -17,7 +17,7 @@ export type Dal = {
  * Falls back to the first membership if current_household_id is unset.
  * Returns null when signed out (callers decide whether to redirect).
  */
-export async function getDal(): Promise<Dal | null> {
+export const getDal = cache(async function getDal(): Promise<Dal | null> {
   await io();
   const supabase = await createClient();
 
@@ -60,7 +60,7 @@ export async function getDal(): Promise<Dal | null> {
   if (!householdId) return null;
 
   return { supabase, user, householdId, profile };
-}
+});
 
 export async function requireDal(): Promise<Dal> {
   const dal = await getDal();
