@@ -25,7 +25,10 @@ import type { CustomMealRow, MealPlanDayRow } from "@/lib/types";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MealIcon } from "@/components/plan/meal-icon";
 import { ShopDaysDialog } from "@/components/plan/shop-days-dialog";
-import { WeekIngredientsDialog } from "@/components/plan/week-ingredients-dialog";
+import {
+  WeekIngredientsDialog,
+  type WeekIngredientGroup,
+} from "@/components/plan/week-ingredients-dialog";
 import { RecipeIngredientsDialog } from "@/components/plan/recipe-ingredients-dialog";
 
 export type PlannedDay = {
@@ -166,6 +169,39 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
     }),
   }));
 
+  // Sum of the per-recipe card counts for each week (a shared ingredient
+  // counts once per recipe, matching what the cards show).
+  const weekCoverage = weeks.map((week) =>
+    week.days.reduce(
+      (acc, day) => {
+        const recipeId = day.entry?.recipe_id;
+        if (!recipeId || day.entry?.made_at) return acc;
+        const coverage = coverageById[recipeId];
+        if (!coverage) return acc;
+        acc.total += coverage.total;
+        acc.inPantry += coverage.inPantry;
+        return acc;
+      },
+      { total: 0, inPantry: 0 },
+    ),
+  );
+
+  const viewWeekIngredientGroups: WeekIngredientGroup[] = viewWeek
+    ? viewWeek.days
+        .map((day) => {
+          const recipeId = day.entry?.recipe_id;
+          if (!recipeId || day.entry?.made_at) return null;
+          const coverage = coverageById[recipeId];
+          if (!coverage || coverage.total === 0) return null;
+          return {
+            recipeId,
+            recipeName: recipeById.get(recipeId)?.name ?? "Recipe",
+            coverage,
+          };
+        })
+        .filter((group): group is WeekIngredientGroup => group !== null)
+    : [];
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -241,6 +277,7 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
             ))}
             <IngredientsTile
               summary={week.summary}
+              coverage={weekCoverage[weekIndex] ?? { total: 0, inPantry: 0 }}
               onView={() => setViewWeekStart(week.start)}
             />
           </div>
@@ -297,7 +334,7 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
             if (!next) setViewWeekStart(null);
           }}
           rangeLabel={`Week ${weeks.indexOf(viewWeek) + 1} · ${weekRangeLabel(viewWeek.start)}`}
-          summary={viewWeek.summary}
+          groups={viewWeekIngredientGroups}
         />
       ) : null}
     </div>
@@ -433,25 +470,33 @@ function DayCard({
 
 function IngredientsTile({
   summary,
+  coverage,
   onView,
 }: {
   summary: WeekSummary;
+  coverage: { total: number; inPantry: number };
   onView: () => void;
 }) {
+  const showCoverage = coverage.total > 0;
   return (
     <div className="flex h-full min-h-24 flex-col rounded-xl border bg-card p-3 shadow-sm">
       <span className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
         Ingredients
       </span>
-      {summary.total === 0 ? (
+      {!showCoverage ? (
         <span className="mt-2 text-xs text-muted-foreground">
           Plan a recipe day to build this list.
         </span>
       ) : (
         <>
-          <span className="mt-1 text-base font-extrabold tabular-nums">
-            Have {summary.inPantry}/{summary.total}
-          </span>
+          <button
+            type="button"
+            onClick={onView}
+            aria-label={`View ingredients: ${coverage.inPantry} of ${coverage.total} available`}
+            className="mt-1 self-start rounded text-base font-extrabold tabular-nums transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-70"
+          >
+            Have {coverage.inPantry}/{coverage.total}
+          </button>
           <span className="text-xs text-muted-foreground">
             {summary.onShoppingList} on the shopping list
           </span>

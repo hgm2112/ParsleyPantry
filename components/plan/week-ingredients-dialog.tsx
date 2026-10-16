@@ -8,20 +8,36 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { WeekSummary } from "@/lib/meal-summary";
+import type { RecipeCoverage } from "@/lib/meal-summary";
+import { STATUS_BADGE } from "@/components/plan/recipe-ingredients-dialog";
+
+export type WeekIngredientGroup = {
+  recipeId: string;
+  recipeName: string;
+  coverage: RecipeCoverage;
+};
 
 export function WeekIngredientsDialog({
   open,
   onOpenChange,
   rangeLabel,
-  summary,
+  groups,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** "Week 1 · Oct 13 – Oct 19" */
+  /** "Oct 19 – Oct 25" */
   rangeLabel: string;
-  summary: WeekSummary;
+  groups: WeekIngredientGroup[];
 }) {
+  const totals = groups.reduce(
+    (acc, group) => ({
+      total: acc.total + group.coverage.total,
+      inPantry: acc.inPantry + group.coverage.inPantry,
+    }),
+    { total: 0, inPantry: 0 },
+  );
+  const hasIngredients = totals.total > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
@@ -29,46 +45,68 @@ export function WeekIngredientsDialog({
           <DialogTitle>Ingredients</DialogTitle>
           <DialogDescription>
             {rangeLabel}
-            {summary.total > 0
-              ? ` · Have ${summary.inPantry}/${summary.total} in pantry`
+            {hasIngredients
+              ? ` · Have ${totals.inPantry}/${totals.total} in pantry`
               : ""}
           </DialogDescription>
         </DialogHeader>
 
-        {summary.lines.length === 0 ? (
+        {!hasIngredients ? (
           <p className="text-sm text-muted-foreground">
             Nothing to shop for yet — plan a recipe day.
           </p>
         ) : (
-          <ul className="divide-y rounded-lg border bg-background">
-            {summary.lines.map((line, index) => (
-              <li
-                key={`${line.name}-${index}`}
-                className="flex items-center justify-between gap-2 px-3 py-2"
+          <div className="space-y-3">
+            {groups.map((group, groupIndex) => (
+              <section
+                key={`${group.recipeId}-${groupIndex}`}
+                className="space-y-1"
               >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">
-                    {line.name}
-                  </span>
-                  {line.quantityText ? (
-                    <span className="block text-xs text-muted-foreground">
-                      {line.quantityText}
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold",
-                    line.covered
-                      ? "bg-primary/10 text-primary"
-                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-                  )}
-                >
-                  {line.covered ? "✓ pantry" : "needed"}
-                </span>
-              </li>
+                <h3 className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
+                  {group.recipeName} · {group.coverage.inPantry}/
+                  {group.coverage.total}
+                </h3>
+                <ul className="divide-y rounded-lg border bg-background">
+                  {group.coverage.lines.map((line, index) => {
+                    const badge =
+                      STATUS_BADGE[line.status] ?? STATUS_BADGE.missing;
+                    return (
+                      <li
+                        key={`${line.name}-${index}`}
+                        className="flex items-center justify-between gap-2 px-3 py-2"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">
+                            {line.name}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {[
+                              line.quantityText,
+                              line.status === "partial" &&
+                                line.haveQuantity > 0 &&
+                                line.haveUnit
+                                ? `Have ${line.haveQuantity} ${line.haveUnit}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold",
+                            badge.className,
+                          )}
+                        >
+                          {badge.label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </DialogContent>
     </Dialog>

@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { RecipeCoverage } from "@/lib/meal-summary";
 
-const STATUS_BADGE: Record<
+export const STATUS_BADGE: Record<
   string,
   { label: string; className: string }
 > = {
