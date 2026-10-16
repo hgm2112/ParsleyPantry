@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -15,6 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  ExpirationEntries,
+  entriesToBatches,
+  newExpirationEntry,
+  type ExpirationEntryValue,
+} from "@/components/inventory/entry-fields";
 import { locationLabel } from "@/components/location-badge";
 import { FreezeDialog } from "@/components/inventory/freeze-dialog";
 import {
@@ -69,9 +74,15 @@ export function BatchDialog({
   const editing = batch ?? null;
   const wasFrozen = editing?.location === "freezer";
 
-  const [quantity, setQuantity] = useState(editing?.quantity ?? 1);
-  const [date, setDate] = useState(editing?.expiration_date ?? addDays(7));
+  const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
+    newExpirationEntry(
+      editing?.expiration_date ?? addDays(7),
+      editing ? String(editing.quantity) : "",
+    ),
+  ]);
   const [location, setLocation] = useState<Location>(editing?.location ?? "pantry");
+  // Editing touches one batch; the freezer flow hands off per batch too.
+  const single = Boolean(editing) || location === "freezer";
   const [busy, setBusy] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [freezeRow, setFreezeRow] = useState<InventoryEntry | null>(null);
@@ -84,19 +95,20 @@ export function BatchDialog({
   }
 
   async function confirm() {
-    const qty = Number(quantity);
-    if (!Number.isFinite(qty) || qty < 0.01 || qty > 9999) {
-      toast.error("Quantity must be at least 0.01");
+    const batches = entriesToBatches(single ? entries.slice(0, 1) : entries);
+    if (batches.length === 0) {
+      toast.error("Enter a quantity");
       return;
     }
     setBusy(true);
 
     const wantsFreezer = location === "freezer" && !wasFrozen;
     if (editing) {
+      const batch = batches[0];
       const result = await updateInventory({
         inventoryId: editing.id,
-        quantity: qty,
-        expirationDate: date || null,
+        quantity: batch.quantity,
+        expirationDate: batch.expirationDate,
         location,
       });
       setBusy(false);
@@ -124,8 +136,7 @@ export function BatchDialog({
       itemId: item.id,
       name: item.name,
       location,
-      quantity: qty,
-      expirationDate: date || undefined,
+      batches,
       unit: item.unit ?? undefined,
     });
     setBusy(false);
@@ -133,16 +144,25 @@ export function BatchDialog({
       toast.error(result.error);
       return;
     }
-    const row = asEntry(result.data.inventory);
-    if (!row) {
-      toast.error("Could not add batch");
-      return;
-    }
+
     if (wantsFreezer) {
+      const row = asEntry(result.data.inventory);
+      if (!row) {
+        toast.error("Could not add batch");
+        return;
+      }
       handOffToFreeze(row);
       return;
     }
-    onSaved(row);
+
+    const rows = result.data.inventories
+      .map(asEntry)
+      .filter((row): row is InventoryEntry => row != null);
+    if (rows.length === 0) {
+      toast.error("Could not add batch");
+      return;
+    }
+    for (const row of rows) onSaved(row);
     onOpenChange(false);
     toast.success(`Batch added to ${locationLabel(location)}`);
   }
@@ -182,53 +202,17 @@ export function BatchDialog({
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Quantity</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="Decrease quantity"
-                  disabled={quantity <= 0.01}
-                  onClick={() =>
-                    setQuantity((value) => Math.max(0.01, Math.round((value - 1) * 100) / 100))
-                  }
-                >
-                  −
-                </Button>
-                <span className="w-12 text-center text-lg font-extrabold tabular-nums">
-                  {quantity % 1 === 0 ? quantity : quantity.toFixed(2).replace(/0$/, "")}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="Increase quantity"
-                  onClick={() => setQuantity((value) => Math.round((value + 1) * 100) / 100)}
-                >
-                  +
-                </Button>
-              </div>
-            </div>
+            <ExpirationEntries
+              entries={single ? entries.slice(0, 1) : entries}
+              onChange={setEntries}
+              single={single}
+            />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="batch-expiry">Expiration date</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="batch-expiry"
-                  type="date"
-                  value={date ?? ""}
-                  onChange={(event) => setDate(event.target.value)}
-                />
-                <Button variant="outline" onClick={() => setDate(addDays(7))}>
-                  +7d
-                </Button>
-              </div>
-              {freezerBatch ? (
-                <p className="text-xs text-muted-foreground">
-                  Refrigerated date — kept while frozen; the quality date governs.
-                </p>
-              ) : null}
-            </div>
+            {freezerBatch ? (
+              <p className="text-xs text-muted-foreground">
+                Refrigerated date — kept while frozen; the quality date governs.
+              </p>
+            ) : null}
 
             <div className="space-y-2">
               <Label>Location</Label>

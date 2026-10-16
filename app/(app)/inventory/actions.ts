@@ -44,13 +44,32 @@ const addInputSchema = z.object({
     .transform((value) => (value ? value : null)),
   categoryId: z.string().uuid().nullish(),
   location: locationSchema,
-  quantity: z.number().min(0).max(9999),
+  /** Single-batch quantity. Ignored when `batches` is provided. */
+  quantity: z.number().min(0).max(9999).optional(),
   unit: z.string().trim().max(32).nullish(),
   expirationDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullish()
     .transform((value) => (value ? value : null)),
+  /**
+   * One entry per dated quantity. When present, each entry becomes (or merges
+   * into) its own batch under the same location/storage history; `quantity` and
+   * `expirationDate` are then ignored.
+   */
+  batches: z
+    .array(
+      z.object({
+        quantity: z.number().min(0).max(9999),
+        expirationDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .nullish()
+          .transform((value) => (value ? value : null)),
+      }),
+    )
+    .max(50)
+    .optional(),
   source: z.string().trim().max(60).nullish(),
   notes: z.string().trim().max(500).nullish(),
   lowThreshold: z.number().min(0).nullish(),
@@ -234,7 +253,13 @@ function freezeColumnsForAdd(input: {
 /** Adds to stock, merging into an existing row for that location when present. */
 export async function addToInventory(
   rawInput: AddToInventoryInput,
-): Promise<ActionResult<{ inventory: InventoryWithItem; createdItem: boolean }>> {
+): Promise<
+  ActionResult<{
+    inventory: InventoryWithItem;
+    inventories: InventoryWithItem[];
+    createdItem: boolean;
+  }>
+> {
   try {
     const parsed = addInputSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -245,14 +270,20 @@ export async function addToInventory(
 
     const freeze = freezeColumnsForAdd(input);
 
-    const imperial = toImperialStock(input.quantity, input.unit ?? null);
-    const quantity = imperial.quantity;
-    const unit = imperial.unit;
+    // The converted unit is batch-independent (only the quantity scales).
+    const unit = toImperialStock(1, input.unit ?? null).unit;
     const thresholdFactor = imperialFactor(input.unit ?? null);
     const lowThreshold =
       input.lowThreshold != null && thresholdFactor != null
         ? Math.round(input.lowThreshold * thresholdFactor * 10) / 10
         : (input.lowThreshold ?? null);
+
+    // One entry per batch: explicit `batches` win, otherwise fall back to the
+    // single quantity/expirationDate pair used by older callers.
+    const batchList =
+      input.batches && input.batches.length > 0
+        ? input.batches
+        : [{ quantity: input.quantity ?? 0, expirationDate: input.expirationDate }];
 
     const canonicalRoot = input.canonicalName
       ? await resolveCanonicalRoot(supabase, householdId, input.canonicalName, {
@@ -351,58 +382,67 @@ export async function addToInventory(
       }
     }
 
+    if (!item) return { ok: false, error: "Could not create item" };
+    const targetItemId = item.id;
+
     // Batch key: same item + location + expiration date + freezing history
     // (including the purchased-frozen flag) = the same batch. Anything else
     // starts a new batch — an add never overwrites another batch's frozen
     // status, dates, or quantity.
-    const { data: existingRows } = await supabase
-      .from("inventory")
-      .select("*")
-      .eq("household_id", householdId)
-      .eq("item_id", item.id)
-      .eq("location", input.location);
-
-    const findExisting = (rows: InventoryRow[]) =>
+    const findExisting = (rows: InventoryRow[], expirationDate: string | null) =>
       rows.find(
         (row) =>
-          row.expiration_date === input.expirationDate &&
+          row.expiration_date === expirationDate &&
           row.frozen_at === freeze.frozen_at &&
           row.freezer_duration_months === freeze.freezer_duration_months &&
           row.purchased_frozen === freeze.purchased_frozen,
       ) ?? null;
 
-    const existing = findExisting((existingRows ?? []) as InventoryRow[]);
-    let inventoryId: string;
-
-    if (existing) {
-      const mergedQuantity = existing.quantity + quantity;
-      const { data: updated, error: updateError } = await supabase
+    async function addBatch(
+      batchQuantity: number,
+      expirationDate: string | null,
+    ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+      const { data: existingRows } = await supabase
         .from("inventory")
-        .update({
-          quantity: mergedQuantity,
-          expiration_date: earliest(existing.expiration_date, input.expirationDate),
-          unit: unit ?? existing.unit,
-          source: input.source ?? existing.source,
-          notes: input.notes ?? existing.notes,
-          added_by: user.id,
-        })
-        .eq("id", existing.id)
-        .select("id")
-        .single();
-      if (updateError || !updated) {
-        return { ok: false, error: updateError?.message ?? "Update failed" };
+        .select("*")
+        .eq("household_id", householdId)
+        .eq("item_id", targetItemId)
+        .eq("location", input.location);
+
+      const existing = findExisting(
+        (existingRows ?? []) as InventoryRow[],
+        expirationDate,
+      );
+
+      if (existing) {
+        const { data: updated, error: updateError } = await supabase
+          .from("inventory")
+          .update({
+            quantity: existing.quantity + batchQuantity,
+            expiration_date: earliest(existing.expiration_date, expirationDate),
+            unit: unit ?? existing.unit,
+            source: input.source ?? existing.source,
+            notes: input.notes ?? existing.notes,
+            added_by: user.id,
+          })
+          .eq("id", existing.id)
+          .select("id")
+          .single();
+        if (updateError || !updated) {
+          return { ok: false, error: updateError?.message ?? "Update failed" };
+        }
+        return { ok: true, id: (updated as { id: string }).id };
       }
-      inventoryId = (updated as { id: string }).id;
-    } else {
+
       const { data: insertedRow, error: insertRowError } = await supabase
         .from("inventory")
         .insert({
           household_id: householdId,
-          item_id: item.id,
+          item_id: targetItemId,
           location: input.location,
-          quantity,
+          quantity: batchQuantity,
           unit,
-          expiration_date: input.expirationDate,
+          expiration_date: expirationDate,
           source: input.source ?? null,
           notes: input.notes ?? null,
           added_by: user.id,
@@ -410,55 +450,75 @@ export async function addToInventory(
         })
         .select("id")
         .single();
-      if (insertRowError || !insertedRow) {
-        if (insertRowError?.code === "23505") {
-          // A concurrent identical batch won the race — merge into it.
-          const { data: raceRows } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("household_id", householdId)
-            .eq("item_id", item.id)
-            .eq("location", input.location);
-          const raced = findExisting((raceRows ?? []) as InventoryRow[]);
-          if (raced) {
-            const { data: merged, error: mergeError } = await supabase
-              .from("inventory")
-              .update({
-                quantity: raced.quantity + quantity,
-                unit: unit ?? raced.unit,
-                source: input.source ?? raced.source,
-                notes: input.notes ?? raced.notes,
-                added_by: user.id,
-              })
-              .eq("id", raced.id)
-              .select("id")
-              .single();
-            if (!mergeError && merged) {
-              inventoryId = (merged as { id: string }).id;
-            } else {
-              return { ok: false, error: mergeError?.message ?? insertRowError.message };
-            }
-          } else {
-            return { ok: false, error: insertRowError.message };
-          }
-        } else {
-          return {
-            ok: false,
-            error: insertRowError?.message ?? "Could not add to inventory",
-          };
-        }
-      } else {
-        inventoryId = (insertedRow as { id: string }).id;
+
+      if (!insertRowError && insertedRow) {
+        return { ok: true, id: (insertedRow as { id: string }).id };
       }
+
+      if (insertRowError?.code === "23505") {
+        // A concurrent identical batch won the race — merge into it.
+        const { data: raceRows } = await supabase
+          .from("inventory")
+          .select("*")
+          .eq("household_id", householdId)
+          .eq("item_id", targetItemId)
+          .eq("location", input.location);
+        const raced = findExisting(
+          (raceRows ?? []) as InventoryRow[],
+          expirationDate,
+        );
+        if (raced) {
+          const { data: merged, error: mergeError } = await supabase
+            .from("inventory")
+            .update({
+              quantity: raced.quantity + batchQuantity,
+              unit: unit ?? raced.unit,
+              source: input.source ?? raced.source,
+              notes: input.notes ?? raced.notes,
+              added_by: user.id,
+            })
+            .eq("id", raced.id)
+            .select("id")
+            .single();
+          if (!mergeError && merged) {
+            return { ok: true, id: (merged as { id: string }).id };
+          }
+          return { ok: false, error: mergeError?.message ?? insertRowError.message };
+        }
+      }
+
+      return {
+        ok: false,
+        error: insertRowError?.message ?? "Could not add to inventory",
+      };
     }
 
-    const result = await loadInventory(supabase, householdId, inventoryId);
-    if (!result) return { ok: false, error: "Could not load updated item" };
+    const inventories: InventoryWithItem[] = [];
+    for (const batch of batchList) {
+      if (batch.quantity <= 0) continue;
+      const converted = toImperialStock(batch.quantity, input.unit ?? null).quantity;
+      if (converted <= 0) continue;
+      const outcome = await addBatch(converted, batch.expirationDate);
+      if (!outcome.ok) return { ok: false, error: outcome.error };
+      const row = await loadInventory(supabase, householdId, outcome.id);
+      if (!row) return { ok: false, error: "Could not load updated item" };
+      await maybeAutoRestock(supabase, householdId, row);
+      inventories.push(row);
+    }
 
-    await maybeAutoRestock(supabase, householdId, result);
+    if (inventories.length === 0) {
+      return { ok: false, error: "Enter a quantity to add" };
+    }
 
     revalidatePath("/inventory");
-    return { ok: true, data: { inventory: result, createdItem } };
+    return {
+      ok: true,
+      data: {
+        inventory: inventories[inventories.length - 1],
+        inventories,
+        createdItem,
+      },
+    };
   } catch (error) {
     return {
       ok: false,

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -43,9 +42,12 @@ import {
 import {
   LOCATIONS,
   LocationPicker,
-  QuantityStepper,
+  ExpirationEntries,
   FreezerFields,
+  entriesToBatches,
   freezeInputFor,
+  newExpirationEntry,
+  type ExpirationEntryValue,
   type FreezeInput,
   type FreezeValue,
 } from "@/components/inventory/entry-fields";
@@ -118,6 +120,17 @@ function isTrip(value: unknown): value is TripEntry[] {
     );
   });
 }
+
+/** One batch saved from a scan (a scan may add several dated batches). */
+type SavedAdd = {
+  inventoryId: string;
+  itemId: string;
+  name: string;
+  amount: number;
+  location: Location;
+  expirationDate: string | null;
+  freezeInput: FreezeInput;
+};
 
 export function ShopSession({ defaultLocation }: { defaultLocation: Location }) {
   const router = useRouter();
@@ -441,13 +454,15 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
           source={source}
           onClose={() => setConfirm(null)}
           onSaved={(saved) => {
-            recordAdd(saved);
-            showFlash(saved.name);
+            for (const row of saved) recordAdd(row);
+            const name = saved[0]?.name ?? confirm.item.name;
+            showFlash(name);
             setConfirm(null);
-            toast.success(`Added ${saved.name}`, {
+            toast.success(`Added ${name}`, {
               action: {
                 label: "Undo",
-                onClick: () => void undoEntry(saved.inventoryId, saved.amount),
+                onClick: () =>
+                  saved.forEach((row) => void undoEntry(row.inventoryId, row.amount)),
               },
               duration: 5000,
             });
@@ -478,21 +493,20 @@ function ConfirmItemSheet({
   location: Location;
   source: string;
   onClose: () => void;
-  onSaved: (saved: {
-    inventoryId: string;
-    itemId: string;
-    name: string;
-    amount: number;
-    location: Location;
-    expirationDate: string | null;
-    freezeInput: FreezeInput;
-  }) => void;
+  onSaved: (saved: SavedAdd[]) => void;
 }) {
   use(io());
   const [location, setLocation] = useState<Location>(initialLocation);
-  const [quantity, setQuantity] = useState(1);
-  const [expiryTouched, setExpiryTouched] = useState(false);
-  const [manualExpiry, setManualExpiry] = useState("");
+  const suggestion = suggestExpiration(off?.categories ?? [], item.name);
+  const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
+    newExpirationEntry(
+      item.expiration_days != null
+        ? addDays(item.expiration_days)
+        : suggestion
+          ? addDays(suggestion.days)
+          : null,
+    ),
+  ]);
   const [freeze, setFreeze] = useState<FreezeValue>(() => ({
     frozen: true,
     mode: "now",
@@ -504,16 +518,12 @@ function ConfirmItemSheet({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
 
-  const suggestion = suggestExpiration(off?.categories ?? [], item.name);
-  const defaultExpiry =
-    item.expiration_days != null
-      ? addDays(item.expiration_days)
-      : suggestion
-        ? addDays(suggestion.days)
-        : "";
-  const expirationDate = expiryTouched ? manualExpiry : defaultExpiry;
-
   async function save() {
+    const batches = entriesToBatches(entries);
+    if (batches.length === 0) {
+      toast.error("Enter a quantity");
+      return;
+    }
     // Ref guard: a double tap must not add twice.
     if (busyRef.current) return;
     busyRef.current = true;
@@ -526,8 +536,7 @@ function ConfirmItemSheet({
         name: item.name,
         barcode: item.barcode ?? barcode,
         location,
-        quantity,
-        expirationDate: expirationDate || null,
+        batches,
         source: source === "Other" ? null : source,
         ...freezeInput,
       });
@@ -544,16 +553,18 @@ function ConfirmItemSheet({
       return;
     }
 
-    const inventory = result.data.inventory;
-    onSaved({
-      inventoryId: inventory.id,
-      itemId: inventory.item_id,
-      name: inventory.item?.name ?? item.name,
-      amount: quantity,
-      location,
-      expirationDate: inventory.expiration_date,
-      freezeInput,
-    });
+    const inventories = result.data.inventories;
+    onSaved(
+      inventories.map((inventory, index) => ({
+        inventoryId: inventory.id,
+        itemId: inventory.item_id,
+        name: inventory.item?.name ?? item.name,
+        amount: batches[index]?.quantity ?? inventory.quantity,
+        location,
+        expirationDate: inventory.expiration_date,
+        freezeInput,
+      })),
+    );
   }
 
   return (
@@ -569,39 +580,11 @@ function ConfirmItemSheet({
 
         <div className="space-y-4 px-4">
           <div className="space-y-2">
-            <Label>Quantity</Label>
-            <QuantityStepper value={quantity} onChange={setQuantity} />
-          </div>
-
-          <div className="space-y-2">
             <Label>Location</Label>
             <LocationPicker value={location} onChange={setLocation} />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm-expiry">Expiration</Label>
-            <Input
-              id="confirm-expiry"
-              type="date"
-              value={expirationDate}
-              onChange={(event) => {
-                setExpiryTouched(true);
-                setManualExpiry(event.target.value);
-              }}
-            />
-            {suggestion && !expiryTouched ? (
-              <button
-                type="button"
-                className="text-xs font-semibold text-primary"
-                onClick={() => {
-                  setExpiryTouched(true);
-                  setManualExpiry(addDays(suggestion.days));
-                }}
-              >
-                Use {suggestion.days}d ({suggestion.reason})
-              </button>
-            ) : null}
-          </div>
+          <ExpirationEntries entries={entries} onChange={setEntries} />
 
           <FreezerFields
             location={location}

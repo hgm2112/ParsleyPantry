@@ -25,11 +25,14 @@ import {
 } from "@/components/ui/select";
 import { ScanSheet } from "@/components/scan-sheet";
 import {
+  ExpirationEntries,
   FreezerFields,
   LocationPicker,
-  QuantityStepper,
   defaultFreezeValue,
+  entriesToBatches,
   freezeInputFor,
+  newExpirationEntry,
+  type ExpirationEntryValue,
   type FreezeValue,
 } from "@/components/inventory/entry-fields";
 import { addDays, suggestExpiration } from "@/lib/expiry";
@@ -94,12 +97,12 @@ export function AddForm({
   const [selectedItem, setSelectedItem] = useState<ItemRow | null>(null);
   const [name, setName] = useState("");
   const [matches, setMatches] = useState<ItemRow[]>([]);
-  const [quantity, setQuantity] = useState(1);
+  const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
+    newExpirationEntry(),
+  ]);
   const [unit, setUnit] = useState("");
   const [location, setLocation] = useState<Location>(defaultLocation);
   const [freeze, setFreeze] = useState<FreezeValue>(defaultFreezeValue);
-  const [expirationDate, setExpirationDate] = useState("");
-  const [expiryTouched, setExpiryTouched] = useState(false);
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
   const [lowThreshold, setLowThreshold] = useState("");
@@ -160,9 +163,8 @@ export function AddForm({
     setCanonicalName("");
     canonicalTouchedRef.current = false;
     nameDirtyRef.current = false;
-    setExpiryTouched(false);
     expiryTouchedRef.current = false;
-    setExpirationDate("");
+    setEntries([newExpirationEntry()]);
     void lookupBarcode(initialBarcode ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupToken, initialBarcode]);
@@ -255,11 +257,18 @@ export function AddForm({
     return "Optional — the generic ingredient recipes should match on.";
   })();
 
-  const effectiveExpiry = expiryTouched
-    ? expirationDate
-    : suggestion
-      ? addDays(suggestion.days)
-      : "";
+  // Keep the first row's date synced to the shelf-life suggestion until the
+  // user edits any date themselves.
+  useEffect(() => {
+    if (expiryTouchedRef.current) return;
+    const suggestedDate = suggestion ? addDays(suggestion.days) : null;
+    setEntries((current) => {
+      if (current.length === 0 || current[0].date === suggestedDate) return current;
+      const next = [...current];
+      next[0] = { ...next[0], date: suggestedDate };
+      return next;
+    });
+  }, [suggestion]);
 
   function applyItem(item: ItemRow) {
     setSelectedItem(item);
@@ -278,8 +287,12 @@ export function AddForm({
     setAutoRestock(item.auto_restock);
     setLocation(item.default_location);
     setOff(null);
-    if (item.expiration_days != null && !expiryTouchedRef.current) {
-      setExpirationDate(addDays(item.expiration_days));
+    if (!expiryTouchedRef.current) {
+      setEntries([
+        newExpirationEntry(
+          item.expiration_days != null ? addDays(item.expiration_days) : null,
+        ),
+      ]);
     }
   }
 
@@ -364,6 +377,11 @@ export function AddForm({
       toast.error("Give the item a name");
       return;
     }
+    const batches = entriesToBatches(entries);
+    if (batches.length === 0) {
+      toast.error("Enter a quantity for at least one date");
+      return;
+    }
     busyRef.current = true;
     setBusy(true);
     let result: Awaited<ReturnType<typeof addToInventory>>;
@@ -375,9 +393,8 @@ export function AddForm({
         categoryId: categoryId || null,
         subcategoryId: subcategoryId || null,
         location,
-        quantity,
+        batches,
         unit: unit.trim() || null,
-        expirationDate: effectiveExpiry || null,
         lowThreshold: lowThreshold ? Number(lowThreshold) : null,
         autoRestock,
         canonicalName: canonicalName.trim() || null,
@@ -406,15 +423,13 @@ export function AddForm({
     setSelectedItem(null);
     setName("");
     setMatches([]);
-    setQuantity(1);
+    setEntries([newExpirationEntry()]);
     setUnit("");
     setSubcategoryId("");
     setCategoryId("");
     setLowThreshold("");
     setAutoRestock(false);
     setOff(null);
-    setExpiryTouched(false);
-    setExpirationDate("");
     setCanonicalName("");
     setFreeze(defaultFreezeValue());
     canonicalTouchedRef.current = false;
@@ -570,11 +585,6 @@ export function AddForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Quantity</Label>
-            <QuantityStepper value={quantity} onChange={setQuantity} />
-          </div>
-
-          <div className="space-y-2">
             <Label>Location</Label>
             <LocationPicker value={location} onChange={setLocation} />
           </div>
@@ -586,56 +596,13 @@ export function AddForm({
             onChange={setFreeze}
           />
 
-          <div className="space-y-2">
-            <Label htmlFor="expiry">Expiration</Label>
-            <Input
-              id="expiry"
-              type="date"
-              value={expirationDate}
-              onChange={(event) => {
-                setExpiryTouched(true);
-                expiryTouchedRef.current = true;
-                setExpirationDate(event.target.value);
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {suggestion ? (
-                <button
-                  type="button"
-                  className="rounded-full border border-primary px-2 py-0.5 font-semibold text-primary"
-                  onClick={() => {
-                    setExpiryTouched(true);
-                    expiryTouchedRef.current = true;
-                    setExpirationDate(addDays(suggestion.days));
-                  }}
-                >
-                  Suggested: {suggestion.days}d ({suggestion.reason})
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
-                onClick={() => {
-                  setExpiryTouched(true);
-                  expiryTouchedRef.current = true;
-                  setExpirationDate("");
-                }}
-              >
-                No expiry
-              </button>
-              <button
-                type="button"
-                className="rounded-full border-2 px-2 py-0.5 text-muted-foreground"
-                onClick={() => {
-                  setExpiryTouched(true);
-                  expiryTouchedRef.current = true;
-                  setExpirationDate(addDays(7));
-                }}
-              >
-                +7 days
-              </button>
-            </div>
-          </div>
+          <ExpirationEntries
+            entries={entries}
+            onChange={(next) => {
+              expiryTouchedRef.current = true;
+              setEntries(next);
+            }}
+          />
         </section>
 
         <section className="space-y-3 rounded-xl border bg-background p-4">

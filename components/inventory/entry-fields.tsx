@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { startOfToday, toDateString } from "@/lib/expiry";
+import { addDays, startOfToday, toDateString } from "@/lib/expiry";
 import {
   FREEZER_FOOD_TYPES,
   FREEZER_GROUPS,
@@ -290,6 +291,326 @@ export function FreezerFields({
             replaces it{name ? ` for ${name}` : ""}.
           </p>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+const MONTH_LABELS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+type DateParts = { year: number | null; month: number | null; day: number | null };
+
+function partsFromIso(value: string | null): DateParts {
+  if (!value) return { year: null, month: null, day: null };
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return { year: null, month: null, day: null };
+  return { year, month, day };
+}
+
+function isoFromParts(parts: DateParts): string | null {
+  if (parts.year == null || parts.month == null || parts.day == null) return null;
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+/**
+ * Month / Day / Year dropdowns that emit an ISO date (or null while incomplete).
+ * Days clamp to the selected month and the year list spans current−1…current+10.
+ * Key callers by the value so an external change (chips) resets the dropdowns.
+ */
+export function DateSelect({
+  value,
+  onChange,
+  className,
+  disabled,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const [parts, setParts] = useState<DateParts>(() => partsFromIso(value));
+
+  const currentYear = startOfToday().getFullYear();
+  const years: number[] = [];
+  for (let year = currentYear + 10; year >= currentYear - 1; year -= 1) {
+    years.push(year);
+  }
+
+  function commit(next: DateParts) {
+    let day = next.day;
+    if (next.month != null && day != null) {
+      const maxDay = daysInMonth(next.year ?? currentYear, next.month);
+      if (day > maxDay) day = maxDay;
+    }
+    const clamped: DateParts = { ...next, day };
+    setParts(clamped);
+    onChange(isoFromParts(clamped));
+  }
+
+  const monthItems = MONTH_LABELS.map((label, index) => ({
+    value: String(index + 1),
+    label,
+  }));
+  const maxDay = daysInMonth(parts.year ?? currentYear, parts.month ?? 1);
+  const dayItems = Array.from({ length: maxDay }, (_, index) => ({
+    value: String(index + 1),
+    label: String(index + 1),
+  }));
+  const yearItems = years.map((year) => ({ value: String(year), label: String(year) }));
+
+  return (
+    <div className={cn("grid grid-cols-[1.6fr_0.8fr_1fr] gap-1.5", className)}>
+      <Select
+        value={parts.month != null ? String(parts.month) : null}
+        items={monthItems}
+        onValueChange={(next) => commit({ ...parts, month: next ? Number(next) : null })}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Month" />
+        </SelectTrigger>
+        <SelectContent>
+          {monthItems.map((entry) => (
+            <SelectItem key={entry.value} value={entry.value}>
+              {entry.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={parts.day != null ? String(parts.day) : null}
+        items={dayItems}
+        onValueChange={(next) => commit({ ...parts, day: next ? Number(next) : null })}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Day" />
+        </SelectTrigger>
+        <SelectContent>
+          {dayItems.map((entry) => (
+            <SelectItem key={entry.value} value={entry.value}>
+              {entry.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={parts.year != null ? String(parts.year) : null}
+        items={yearItems}
+        onValueChange={(next) => commit({ ...parts, year: next ? Number(next) : null })}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Year" />
+        </SelectTrigger>
+        <SelectContent>
+          {yearItems.map((entry) => (
+            <SelectItem key={entry.value} value={entry.value}>
+              {entry.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** One dated quantity line: blank-by-default quantity + M/D/Y date + quick chips. */
+export type ExpirationEntryValue = {
+  id: string;
+  quantity: string;
+  date: string | null;
+  /** Bumped by chip/clear clicks so the date dropdowns reset to the new value. */
+  bump?: number;
+};
+
+export function newExpirationEntry(
+  date: string | null = null,
+  quantity = "",
+): ExpirationEntryValue {
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return { id, quantity, date, bump: 0 };
+}
+
+function formatTotal(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+}
+
+/** Collapses blank/zero rows and merges duplicate dates into dated batches. */
+export function entriesToBatches(
+  entries: ExpirationEntryValue[],
+): { quantity: number; expirationDate: string | null }[] {
+  const merged = new Map<string, { quantity: number; expirationDate: string | null }>();
+  for (const entry of entries) {
+    const quantity = Number(entry.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) continue;
+    const key = entry.date ?? "__none__";
+    const existing = merged.get(key);
+    if (existing) existing.quantity += quantity;
+    else merged.set(key, { quantity, expirationDate: entry.date });
+  }
+  return [...merged.values()];
+}
+
+const EXPIRY_CHIP =
+  "rounded-full border-2 px-2 py-0.5 text-muted-foreground disabled:opacity-50";
+
+/**
+ * Repeatable expiration rows: a quantity per date, chips under each date, and a
+ * read-only running total. `single` locks it to one row for edit/patch flows.
+ */
+export function ExpirationEntries({
+  entries,
+  onChange,
+  single = false,
+  disabled = false,
+}: {
+  entries: ExpirationEntryValue[];
+  onChange: (entries: ExpirationEntryValue[]) => void;
+  single?: boolean;
+  disabled?: boolean;
+}) {
+  const total = entries.reduce((sum, entry) => {
+    const value = Number(entry.quantity);
+    return Number.isFinite(value) && value > 0 ? sum + value : sum;
+  }, 0);
+
+  function update(id: string, patch: Partial<ExpirationEntryValue>) {
+    onChange(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
+  }
+
+  /** Chip/clear edits bump so the dropdowns remount even when the date is unchanged. */
+  function setDate(id: string, date: string | null) {
+    onChange(
+      entries.map((entry) =>
+        entry.id === id
+          ? { ...entry, date, bump: (entry.bump ?? 0) + 1 }
+          : entry,
+      ),
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label>Expiration</Label>
+        {!single ? (
+          <span className="text-xs text-muted-foreground">Quantity for each date</span>
+        ) : null}
+      </div>
+
+      {entries.map((entry) => (
+        <div key={entry.id} className="space-y-2 rounded-lg border bg-muted/20 p-2.5">
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              placeholder="Qty"
+              aria-label="Quantity for this date"
+              value={entry.quantity}
+              onChange={(event) => update(entry.id, { quantity: event.target.value })}
+              disabled={disabled}
+              className="w-16 shrink-0 text-center"
+            />
+            <DateSelect
+              key={`${entry.id}:${entry.date ?? "none"}:${entry.bump ?? 0}`}
+              value={entry.date}
+              onChange={(date) => update(entry.id, { date })}
+              disabled={disabled}
+              className="flex-1"
+            />
+            {!single && entries.length > 1 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remove this date"
+                onClick={() => onChange(entries.filter((row) => row.id !== entry.id))}
+                disabled={disabled}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              className={EXPIRY_CHIP}
+              onClick={() => setDate(entry.id, null)}
+              disabled={disabled}
+            >
+              No expiry
+            </button>
+            <button
+              type="button"
+              className={EXPIRY_CHIP}
+              onClick={() => setDate(entry.id, addDays(7))}
+              disabled={disabled}
+            >
+              +7 days
+            </button>
+            <button
+              type="button"
+              className={EXPIRY_CHIP}
+              onClick={() => setDate(entry.id, addDays(14))}
+              disabled={disabled}
+            >
+              +14 days
+            </button>
+            <button
+              type="button"
+              className={EXPIRY_CHIP}
+              onClick={() => setDate(entry.id, addDays(21))}
+              disabled={disabled}
+            >
+              +21 days
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {!single ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full border-dashed"
+          onClick={() => onChange([...entries, newExpirationEntry()])}
+          disabled={disabled}
+        >
+          <Plus className="h-4 w-4" /> another date
+        </Button>
+      ) : null}
+
+      {!single ? (
+        <p className="w-fit rounded-md border bg-muted/40 px-3 py-1.5 text-sm font-semibold tabular-nums">
+          Total Quantity: {formatTotal(total)}
+        </p>
       ) : null}
     </div>
   );
