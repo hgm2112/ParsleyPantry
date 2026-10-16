@@ -4,6 +4,63 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-16 — /stats Other Meals section + /home staleness and widget fixes
+
+**Shipped**
+- `/stats` Other Meals (commit `642a814`):
+  - `lib/stats.ts`: `cookedDates` excludes every Other Meal (built-in or user
+    created, including Leftovers-classified Cooking) so Other Meals never
+    extend the active-cooking streak; updated doc comments to match the
+    stated rule. `cookedOccurrences` and `planningStats` unchanged.
+  - New `otherMealOccurrences(...)` counts consumed Other Meals by
+    snapshotted `custom_meal_name` within the active period; returns total,
+    cooking count, no-cooking count, and ranked names. Built-ins + user
+    meals only — legacy kinds (Eating Out, Meal Kit, No Cooking) stay in
+    their existing stats and never double-count.
+  - `components/stats/stats-view.tsx`: new "Other Meals" section after
+    Meal Planning with `Meals eaten` / `Cooking` / `No Cooking` cards plus a
+    top-five ranked list with "last eaten" and "+N more", empty state for no
+    made Other Meals.
+- `/home` freshness and widget alignment (commit `b83b654`):
+  - Root cause identified on user's machine was cached/partial-prerendered
+    home data under `cacheComponents`, leaving the No-cook tile at 1 while
+    `/stats` showed 2 for two past no-cook days. Fixed by adding
+    `await connection()` at the top of `HomeContent` so `meal_plan_days`,
+    inventory, and recipe queries run per request instead of baking into
+    the partially prerendered shell.
+  - Home now also reads `custom_meals` and `recipe_type`, passes them
+    through `HomeView` → `WeekMeals`/`CompactDinners` so the dinners widget
+    shows the correct custom-meal icon (e.g. Pizza) and the
+    `StatsSummary` gets a `recipeTypeById` map matching `/stats`.
+  - `StatsSummary` now threads the recipe-type map into `cookedOccurrences`,
+    `cookedDates`, and `noCookDates`; relabeled the widget's "No-cook" tile
+    to "No-cook days" with subtext clearer.
+  - Ran `npx tsc --noEmit`, `npm run build`, and `npm run lint`
+    (12 pre-existing unrelated errors; no new errors). pre-push hook passed.
+- Diagnostics: added and removed a temporary
+  `app/api/debug/no-cook` route; no debug code remains in tree.
+
+**Gotchas**
+- Next 16 `cacheComponents` with `partialPrefetching`: do not export
+  `dynamic = "force-dynamic"` from a page/route — it is a build error.
+  Use `await connection()` or `io()` instead. This was discovered while
+  adding the temporary diagnostic route.
+- No-cook/Set dimensions: `noCookDates` is distinct *scheduled days*; the
+  home widget can therefore legitimately show 1 even when the same is 2 on
+  Meal Planning rows if days differ, but with the refreshed home data it now
+  includes all rows.
+- `recipe_type` is read inside the recipe join and type map but no migration
+  logic changed this session.
+- `lint` baseline remains 12 errors in unrelated files (`home/page.tsx`,
+  `nav.tsx`, `quick-bites-widget`, `smart-actions`, `shop-days-dialog`,
+  `settings-view`, `use-local-storage`, `settings/leftover-reminder-section`).
+
+**Open — next session**
+- Monitor the user's deployed `/stats` and `/home` after pushing; re-check
+  No-cook count and Pizza icon on a fresh browser session.
+- Optional cleanup of stray untracked files and the 12 unrelated lint
+  errors; consider optional fast tests around custom-meal stats aggregation.
+
 ## 2026-10-14 (part 3) — Vercel deploy failures: root cause + pre-push/CI type gates
 
 **Shipped**
