@@ -146,7 +146,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
     setTagsText("");
     setRecipeType("cooking");
     setRows([]);
-    router.push(`/recipes/${result.data.id}`);
+    router.push("/recipes");
     router.refresh();
   }
 
@@ -232,10 +232,6 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
               </Button>
             </>
           ) : null}
-          <Button type="submit" size="sm" disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" /> : null}
-            {isEdit ? "Save" : "Create recipe"}
-          </Button>
         </div>
       </div>
 
