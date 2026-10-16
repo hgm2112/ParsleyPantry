@@ -200,6 +200,18 @@ export type MealKind = "eating_out" | "meal_kit" | "no_cook";
 
 export type RecipeType = "cooking" | "no_cook";
 
+export interface CustomMealRow {
+  id: string;
+  household_id: string;
+  name: string;
+  icon: string;
+  classification: CustomMealClassification;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CustomMealClassification = "cooking" | "no_cook";
+
 export interface MealPlanDayRow {
   household_id: string;
   week_start: string;
@@ -208,6 +220,9 @@ export interface MealPlanDayRow {
   kind: MealKind | null;
   note: string | null;
   made_at: string | null;
+  custom_meal_id: string | null;
+  custom_meal_name: string | null;
+  custom_meal_classification: CustomMealClassification | null;
 }
 
 export interface StockHoldRow {

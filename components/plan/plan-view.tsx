@@ -7,23 +7,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ListChecks,
-  Loader2,
-  ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayLabel, addDays, dateLabel, mondayOf } from "@/lib/plan";
 import { dayTitle, isPlanned, mealKindInfo, NOTE_TINT } from "@/lib/meal-kind";
+import { customMealIcon } from "@/lib/custom-meal-icons";
 import { tintFor } from "@/lib/tints";
 import { useToday } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
 import {
   planDaysToGrocery,
-  planWeekToGrocery,
 } from "@/app/(app)/plan/actions";
 import type { RecipeCoverage, WeekSummary } from "@/lib/meal-summary";
-import type { MealPlanDayRow } from "@/lib/types";
+import type { CustomMealRow, MealPlanDayRow } from "@/lib/types";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MealIcon } from "@/components/plan/meal-icon";
 import { ShopDaysDialog } from "@/components/plan/shop-days-dialog";
@@ -45,11 +43,12 @@ type Props = {
   weekStart: string | null;
   weeks: WeekPlan[];
   recipes: RecipeOption[];
+  customMeals?: CustomMealRow[];
   /** Per-recipe pantry coverage ("6/9") for planned recipe days. */
   coverageById: Record<string, RecipeCoverage>;
 };
 
-type ShopResult = Awaited<ReturnType<typeof planWeekToGrocery>>;
+type ShopResult = Awaited<ReturnType<typeof planDaysToGrocery>>;
 
 /** "Oct 13 – Oct 19" */
 function weekRangeLabel(start: string): string {
@@ -58,7 +57,7 @@ function weekRangeLabel(start: string): string {
   return `${a.month} ${a.dayOfMonth} – ${b.month} ${b.dayOfMonth}`;
 }
 
-export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
+export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverageById }: Props) {
   const router = useRouter();
   const today = useToday();
   const [openDay, setOpenDay] = useState<{
@@ -90,19 +89,6 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
     return true;
   }
 
-  function shopThisWeek() {
-    if (!weekStart) return;
-    void runShop(() => planWeekToGrocery(weekStart));
-  }
-
-  function shopBothWeeks() {
-    const days = weeks.flatMap((week) =>
-      week.days.map((day) => ({ weekStart: week.start, dayIndex: day.index })),
-    );
-    if (days.length === 0) return;
-    void runShop(() => planDaysToGrocery(days));
-  }
-
   async function shopSelectedDays(
     days: { weekStart: string; dayIndex: number }[],
   ): Promise<boolean> {
@@ -130,6 +116,7 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
   const windowStart = dateLabel(weekStart);
   const windowEnd = dateLabel(addDays(weekStart, 13));
   const recipeById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const customMealById = new Map(customMeals.map((meal) => [meal.id, meal]));
 
   const openWeek = openDay
     ? (weeks.find((week) => week.start === openDay.weekStart) ?? null)
@@ -152,7 +139,11 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
       const recipe = day.entry?.recipe_id
         ? (recipeById.get(day.entry.recipe_id) ?? null)
         : null;
-      const title = dayTitle(day.entry, recipe?.name);
+      const customMeal =
+        day.entry?.custom_meal_id
+          ? (customMealById.get(day.entry.custom_meal_id) ?? null)
+          : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ?? null;
+      const title = dayTitle(day.entry, recipe?.name ?? customMeal?.name);
       const made = Boolean(day.entry?.made_at);
       const planned = isPlanned(day.entry);
       return {
@@ -177,18 +168,6 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" onClick={shopThisWeek} disabled={shopping}>
-            {shopping ? <Loader2 className="animate-spin" /> : <ShoppingCart />}
-            Shop this week
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={shopBothWeeks}
-            disabled={shopping}
-          >
-            Shop both weeks
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -243,6 +222,7 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
                 weekStart={week.start}
                 day={day}
                 recipeById={recipeById}
+                customMeals={customMeals}
                 today={today}
                 coverageById={coverageById}
                 onOpen={(openWeekStart, dayIndex) =>
@@ -274,6 +254,7 @@ export function PlanView({ weekStart, weeks, recipes, coverageById }: Props) {
           weekStart={openDay.weekStart}
           day={openDayEntry}
           recipes={recipes}
+          customMeals={customMeals}
           onDone={() => setOpenDay(null)}
         />
       ) : null}
@@ -307,6 +288,7 @@ function DayCard({
   weekStart,
   day,
   recipeById,
+  customMeals,
   today,
   coverageById,
   onOpen,
@@ -314,6 +296,7 @@ function DayCard({
   weekStart: string;
   day: PlannedDay;
   recipeById: Map<string, RecipeOption>;
+  customMeals: CustomMealRow[];
   today: string;
   coverageById: Record<string, RecipeCoverage>;
   onOpen: (weekStart: string, dayIndex: number) => void;
@@ -323,8 +306,13 @@ function DayCard({
   const recipe = day.entry?.recipe_id
     ? (recipeById.get(day.entry.recipe_id) ?? null)
     : null;
+  const customMeal =
+    day.entry?.custom_meal_id
+      ? customMeals.find((meal) => meal.id === day.entry?.custom_meal_id) ?? null
+      : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ?? null;
+  const customIcon = customMeal ? customMealIcon(customMeal.icon) : null;
   const kindInfo = mealKindInfo(day.entry?.kind);
-  const title = dayTitle(day.entry, recipe?.name);
+  const title = dayTitle(day.entry, recipe?.name ?? customMeal?.name);
   const note = day.entry?.note ?? null;
   const planned = isPlanned(day.entry);
   const tint = recipe
@@ -365,6 +353,7 @@ function DayCard({
             today={today}
             meal={day.entry}
             recipe={recipe ? { name: recipe.name } : null}
+            customIcon={customIcon}
           />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-extrabold leading-snug">

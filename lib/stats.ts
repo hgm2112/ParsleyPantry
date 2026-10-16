@@ -86,6 +86,7 @@ export function cookedOccurrences(
       !row.made_at ||
       row.kind === "eating_out" ||
       row.kind === "no_cook" ||
+      row.custom_meal_classification === "no_cook" ||
       (row.recipe_id !== null && recipeTypes.get(row.recipe_id) === "no_cook")
     )
       continue;
@@ -112,6 +113,7 @@ export function cookedDates(
       !row.made_at ||
       row.kind === "eating_out" ||
       row.kind === "no_cook" ||
+      row.custom_meal_classification === "no_cook" ||
       (row.recipe_id !== null && recipeTypes.get(row.recipe_id) === "no_cook")
     )
       continue;
@@ -147,6 +149,7 @@ export function noCookDates(
     const isNoCook =
       row.kind === "no_cook" ||
       row.kind === "eating_out" ||
+      row.custom_meal_classification === "no_cook" ||
       (row.recipe_id !== null &&
         recipeTypes.get(row.recipe_id) === "no_cook" &&
         row.kind !== "meal_kit");
@@ -372,6 +375,7 @@ export function planningStats(
 
     if (
       row.kind === "no_cook" ||
+      row.custom_meal_classification === "no_cook" ||
       (row.recipe_id !== null &&
         recipeTypes.get(row.recipe_id) === "no_cook" &&
         row.kind !== "meal_kit")

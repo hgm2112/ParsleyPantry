@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { KeyboardEvent } from "react";
 import { Check, ChefHat, StickyNote } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NOTE_TINT, mealKindInfo } from "@/lib/meal-kind";
 import { tintFor } from "@/lib/tints";
@@ -19,6 +20,7 @@ export function MealIcon({
   today,
   meal,
   recipe,
+  customIcon,
   onMark,
   size = "lg",
 }: {
@@ -26,6 +28,7 @@ export function MealIcon({
   today: string;
   meal: Pick<MealPlanDayRow, "kind" | "made_at"> | null;
   recipe: { name: string } | null;
+  customIcon?: LucideIcon | null;
   onMark?: (event: {
     stopPropagation: () => void;
     preventDefault: () => void;
@@ -34,6 +37,7 @@ export function MealIcon({
 }) {
   const kindInfo = mealKindInfo(meal?.kind);
   const KindIcon = kindInfo?.Icon;
+  const CustomIcon = customIcon ?? null;
   const tint = recipe
     ? tintFor(recipe.name)
     : kindInfo
@@ -99,6 +103,8 @@ export function MealIcon({
         />
       ) : KindIcon ? (
         <KindIcon className={cn(icon, "text-white")} />
+      ) : CustomIcon ? (
+        <CustomIcon className={cn(icon, "text-white")} />
       ) : (
         <StickyNote className={cn(icon, "text-white")} />
       )}

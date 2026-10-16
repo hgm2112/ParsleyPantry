@@ -14,7 +14,7 @@ import {
   type RecipeCoverage,
   type WeekSummary,
 } from "@/lib/meal-summary";
-import type { MealPlanDayRow, RecipeRow } from "@/lib/types";
+import type { CustomMealRow, MealPlanDayRow, RecipeRow } from "@/lib/types";
 
 export const metadata = { title: "Meal plan" };
 
@@ -37,7 +37,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
   const { supabase, householdId } = await requireDal();
   const week2Start = addDays(weekStart, 7);
 
-  const [mealsResult, recipesResult, inventoryResult, itemsResult, groceryResult] = await Promise.all([
+  const [mealsResult, recipesResult, inventoryResult, itemsResult, groceryResult, customMealsResult, customUsageResult] = await Promise.all([
     supabase
       .from("meal_plan_days")
       .select("*")
@@ -61,9 +61,28 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       .select("item_id, name")
       .eq("household_id", householdId)
       .eq("checked", false),
+    supabase
+      .from("custom_meals")
+      .select("id, name, icon, classification, created_at, updated_at")
+      .eq("household_id", householdId)
+      .order("name", { ascending: true }),
+    supabase
+      .from("meal_plan_days")
+      .select("custom_meal_id")
+      .eq("household_id", householdId),
   ]);
 
   const meals = (mealsResult.data ?? []) as MealPlanDayRow[];
+  const rawCustomMeals = (customMealsResult.data ?? []) as CustomMealRow[];
+  const usageCounts = new Map<string, number>();
+  for (const row of (customUsageResult.data ?? []) as { custom_meal_id: string | null }[]) {
+    if (!row.custom_meal_id) continue;
+    usageCounts.set(row.custom_meal_id, (usageCounts.get(row.custom_meal_id) ?? 0) + 1);
+  }
+  const customMeals = [...rawCustomMeals].sort((a, b) =>
+    (usageCounts.get(b.id) ?? 0) - (usageCounts.get(a.id) ?? 0) ||
+    a.name.localeCompare(b.name),
+  );
 
   const buildDays = (start: string): PlannedDay[] => {
     const byDay = new Map<number, MealPlanDayRow>(
@@ -179,6 +198,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       weeks={weeks}
       recipes={recipes}
       coverageById={coverageById}
+      customMeals={customMeals}
     />
   );
 }

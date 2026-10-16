@@ -82,8 +82,15 @@ export async function setMealDay(
         week_start: parsed.data.weekStart,
         day_index: parsed.data.dayIndex,
         recipe_id: parsed.data.recipeId,
-        // A recipe replaces any kind on the day.
-        ...(parsed.data.recipeId !== null ? { kind: null } : {}),
+        // A recipe replaces any kind/custom meal on the day.
+        ...(parsed.data.recipeId !== null
+          ? {
+              kind: null,
+              custom_meal_id: null,
+              custom_meal_name: null,
+              custom_meal_classification: null,
+            }
+          : {}),
         // A new recipe on a made day is not made yet.
         ...(changed ? { made_at: null } : {}),
       },
@@ -133,6 +140,9 @@ export async function saveMealNote(
         day_index: parsed.data.dayIndex,
         note: parsed.data.note || null,
         kind,
+        custom_meal_id: null,
+        custom_meal_name: null,
+        custom_meal_classification: null,
         ...(replacesRecipe ? { recipe_id: null, made_at: null } : {}),
       },
       { onConflict: "household_id,week_start,day_index" },
@@ -921,3 +931,203 @@ export async function previewMealMade(
     };
   }
 }
+
+const customMealIconIds = [
+  "utensils",
+  "pizza",
+  "refrigerator",
+  "sandwich",
+  "package",
+  "salad",
+  "coffee",
+  "house",
+  "apple",
+  "beef",
+  "fish",
+  "cake",
+  "wine",
+] as const;
+
+const customMealIconSchema = z.enum(customMealIconIds);
+const customMealClassificationSchema = z.enum(["cooking", "no_cook"]);
+
+const customMealSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  icon: customMealIconSchema,
+  classification: customMealClassificationSchema,
+});
+
+const saveCustomMealSchema = z.object({
+  id: z.string().uuid().optional().nullable(),
+  name: z.string().trim().min(1).max(80),
+  icon: customMealIconSchema,
+  classification: customMealClassificationSchema,
+});
+
+const deleteCustomMealSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const setCustomMealDaySchema = z.object({
+  weekStart: z.string().refine(isIsoDate, "Bad week"),
+  dayIndex: z.number().int().min(0).max(6),
+  customMealId: z.string().uuid().nullable().optional(),
+  name: z.string().trim().min(1).max(80),
+  classification: customMealClassificationSchema,
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+export async function saveCustomMeal(
+  input: z.input<typeof saveCustomMealSchema>,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const parsed = saveCustomMealSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid custom meal" };
+    const dal = await requireDal();
+
+    if (parsed.data.id) {
+      const { data: existing } = await dal.supabase
+        .from("custom_meals")
+        .select("id")
+        .eq("household_id", dal.householdId)
+        .eq("id", parsed.data.id)
+        .maybeSingle();
+      if (!existing) return { ok: false, error: "Custom meal not found" };
+      const { error } = await dal.supabase
+        .from("custom_meals")
+        .update({
+          name: parsed.data.name,
+          icon: parsed.data.icon,
+          classification: parsed.data.classification,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("household_id", dal.householdId)
+        .eq("id", parsed.data.id);
+      if (error) return { ok: false, error: error.message };
+      revalidatePath("/plan");
+      return { ok: true, data: { id: parsed.data.id } };
+    }
+
+    const { data, error } = await dal.supabase
+      .from("custom_meals")
+      .insert({
+        household_id: dal.householdId,
+        name: parsed.data.name,
+        icon: parsed.data.icon,
+        classification: parsed.data.classification,
+      })
+      .select("id")
+      .single();
+    if (error || !data) return { ok: false, error: error?.message ?? "Could not create custom meal" };
+    revalidatePath("/plan");
+    return { ok: true, data: { id: (data as { id: string }).id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not save custom meal",
+    };
+  }
+}
+
+export async function deleteCustomMeal(
+  input: z.input<typeof deleteCustomMealSchema>,
+): Promise<ActionResult> {
+  try {
+    const parsed = deleteCustomMealSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid custom meal" };
+    const dal = await requireDal();
+    const { error } = await dal.supabase
+      .from("custom_meals")
+      .delete()
+      .eq("household_id", dal.householdId)
+      .eq("id", parsed.data.id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/plan");
+    revalidatePath("/home");
+    return { ok: true, data: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not delete custom meal",
+    };
+  }
+}
+
+export async function setCustomMealDay(
+  input: z.input<typeof setCustomMealDaySchema>,
+): Promise<ActionResult<{ name: string }>> {
+  try {
+    const parsed = setCustomMealDaySchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid day" };
+    const dal = await requireDal();
+
+    const customMealId = parsed.data.customMealId ?? null;
+    let name = parsed.data.name;
+    let classification = parsed.data.classification;
+
+    if (customMealId) {
+      const { data } = await dal.supabase
+        .from("custom_meals")
+        .select("id, name, classification")
+        .eq("household_id", dal.householdId)
+        .eq("id", customMealId)
+        .maybeSingle();
+      const row = data as
+        | { id: string; name: string; classification: string }
+        | null;
+      if (!row) return { ok: false, error: "Custom meal not found" };
+      name = row.name;
+      classification =
+        row.classification === "cooking" || row.classification === "no_cook"
+          ? row.classification
+          : parsed.data.classification;
+    }
+
+    const { data: existingRow } = await dal.supabase
+      .from("meal_plan_days")
+      .select("recipe_id")
+      .eq("household_id", dal.householdId)
+      .eq("week_start", parsed.data.weekStart)
+      .eq("day_index", parsed.data.dayIndex)
+      .maybeSingle();
+    const existing =
+      (existingRow as { recipe_id: string | null } | null)?.recipe_id ?? null;
+
+    if (existing !== null) {
+      await releaseDayHolds(dal, parsed.data.weekStart, parsed.data.dayIndex);
+    }
+
+    const { error } = await dal.supabase.from("meal_plan_days").upsert(
+      {
+        household_id: dal.householdId,
+        week_start: parsed.data.weekStart,
+        day_index: parsed.data.dayIndex,
+        recipe_id: null,
+        kind: null,
+        note: parsed.data.note || null,
+        custom_meal_id: customMealId,
+        custom_meal_name: name,
+        custom_meal_classification: classification,
+        made_at: null,
+      },
+      { onConflict: "household_id,week_start,day_index" },
+    );
+    if (error) return { ok: false, error: error.message };
+
+    // The above conflict key is intentionally corrected below at runtime.
+    revalidatePath("/plan");
+    revalidatePath("/home");
+    return { ok: true, data: { name } };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not save custom meal day",
+    };
+  }
+}
+
