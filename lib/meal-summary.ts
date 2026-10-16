@@ -46,9 +46,21 @@ export type WeekSummary = {
   onShoppingList: number;
 };
 
+export type RecipeIngredientLine = SummaryLine & {
+  status: "available" | "partial" | "missing";
+  /** Raw pantry quantity in the pool's common unit (0 when none). */
+  haveQuantity: number;
+  /** Common unit of the pantry pool, null when mixed/unknown. */
+  haveUnit: string | null;
+  /** Whether the ingredient resolved to a canonical pantry pool. */
+  matched: boolean;
+};
+
 export type RecipeCoverage = {
   total: number;
   inPantry: number;
+  /** One line per canonical pantry pool, same dedupe as the counts. */
+  lines: RecipeIngredientLine[];
 };
 
 export function emptyWeekSummary(): WeekSummary {
@@ -215,38 +227,45 @@ export function buildRecipeCoverage(
 ): Map<string, RecipeCoverage> {
   const pools = buildPantryPools(inventory, items);
 
-  const pending: { recipeId: string; poolKey: string; quantity: number }[] = [];
   const needByKey = new Map<string, number>();
+  const firstByKey = new Map<string, RecipeSummaryIngredient>();
   for (const ingredient of ingredients) {
     const { poolKey, quantity } = resolveLine(ingredient, pools);
     const key = `${ingredient.recipeId}|${poolKey}`;
     needByKey.set(key, (needByKey.get(key) ?? 0) + quantity);
-    pending.push({ recipeId: ingredient.recipeId, poolKey, quantity });
-  }
-
-  const coveredByKey = new Map<string, boolean>();
-  for (const [key, need] of needByKey) {
-    const poolKey = key.slice(key.indexOf("|") + 1);
-    const resolved = !poolKey.startsWith("name:");
-    const rawHave = pools.stock.get(poolKey) ?? 0;
-    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
-    const have = toOunces(rawHave, commonUnit) ?? rawHave;
-    coveredByKey.set(key, resolved && have >= need - 1e-6);
+    if (!firstByKey.has(key)) firstByKey.set(key, ingredient);
   }
 
   const out = new Map<string, RecipeCoverage>();
-  const seenIngredientKeys = new Map<string, Set<string>>();
-  for (const entry of pending) {
-    const key = `${entry.recipeId}|${entry.poolKey}`;
-    const stats = out.get(entry.recipeId) ?? { total: 0, inPantry: 0 };
-    const seen = seenIngredientKeys.get(entry.recipeId) ?? new Set<string>();
-    if (!seen.has(entry.poolKey)) {
-      stats.total += 1;
-      if (coveredByKey.get(key)) stats.inPantry += 1;
-      seen.add(entry.poolKey);
-    }
-    seenIngredientKeys.set(entry.recipeId, seen);
-    out.set(entry.recipeId, stats);
+  for (const [key, need] of needByKey) {
+    const sep = key.indexOf("|");
+    const recipeId = key.slice(0, sep);
+    const poolKey = key.slice(sep + 1);
+    const matched = !poolKey.startsWith("name:");
+    const rawHave = pools.stock.get(poolKey) ?? 0;
+    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
+    const have = toOunces(rawHave, commonUnit) ?? rawHave;
+    const covered = matched && have >= need - 1e-6;
+    const status: RecipeIngredientLine["status"] = covered
+      ? "available"
+      : matched && have > 0
+        ? "partial"
+        : "missing";
+
+    const first = firstByKey.get(key)!;
+    const stats = out.get(recipeId) ?? { total: 0, inPantry: 0, lines: [] };
+    stats.total += 1;
+    if (covered) stats.inPantry += 1;
+    stats.lines.push({
+      name: first.name,
+      quantityText: first.quantityText,
+      covered,
+      status,
+      haveQuantity: rawHave,
+      haveUnit: commonUnit,
+      matched,
+    });
+    out.set(recipeId, stats);
   }
   return out;
 }

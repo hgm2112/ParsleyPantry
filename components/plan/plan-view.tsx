@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayLabel, addDays, dateLabel, mondayOf } from "@/lib/plan";
 import { dayTitle, isPlanned, mealKindInfo, NOTE_TINT } from "@/lib/meal-kind";
-import { customMealIcon } from "@/lib/custom-meal-icons";
+import { customMealIcon, BUILTIN_OTHER_MEALS } from "@/lib/custom-meal-icons";
 import { tintFor } from "@/lib/tints";
 import { useToday } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MealIcon } from "@/components/plan/meal-icon";
 import { ShopDaysDialog } from "@/components/plan/shop-days-dialog";
 import { WeekIngredientsDialog } from "@/components/plan/week-ingredients-dialog";
+import { RecipeIngredientsDialog } from "@/components/plan/recipe-ingredients-dialog";
 
 export type PlannedDay = {
   index: number;
@@ -66,6 +67,9 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
   } | null>(null);
   const [shopping, setShopping] = useState(false);
   const [shopDialogOpen, setShopDialogOpen] = useState(false);
+  const [ingredientRecipeId, setIngredientRecipeId] = useState<string | null>(
+    null,
+  );
   const [viewWeekStart, setViewWeekStart] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,7 +146,11 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
       const customMeal =
         day.entry?.custom_meal_id
           ? (customMealById.get(day.entry.custom_meal_id) ?? null)
-          : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ?? null;
+          : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ??
+            BUILTIN_OTHER_MEALS.find(
+              (meal) => meal.name === day.entry?.custom_meal_name,
+            ) ??
+            null;
       const title = dayTitle(day.entry, recipe?.name ?? customMeal?.name);
       const made = Boolean(day.entry?.made_at);
       const planned = isPlanned(day.entry);
@@ -225,6 +233,7 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
                 customMeals={customMeals}
                 today={today}
                 coverageById={coverageById}
+                onViewIngredients={setIngredientRecipeId}
                 onOpen={(openWeekStart, dayIndex) =>
                   setOpenDay({ weekStart: openWeekStart, dayIndex })
                 }
@@ -270,6 +279,17 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
         />
       ) : null}
 
+      {ingredientRecipeId && coverageById[ingredientRecipeId] ? (
+        <RecipeIngredientsDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setIngredientRecipeId(null);
+          }}
+          recipeName={recipeById.get(ingredientRecipeId)?.name ?? "Recipe"}
+          coverage={coverageById[ingredientRecipeId]}
+        />
+      ) : null}
+
       {viewWeek ? (
         <WeekIngredientsDialog
           open
@@ -292,6 +312,7 @@ function DayCard({
   today,
   coverageById,
   onOpen,
+  onViewIngredients,
 }: {
   weekStart: string;
   day: PlannedDay;
@@ -300,6 +321,7 @@ function DayCard({
   today: string;
   coverageById: Record<string, RecipeCoverage>;
   onOpen: (weekStart: string, dayIndex: number) => void;
+  onViewIngredients: (recipeId: string) => void;
 }) {
   const label = dayLabel(day.index, weekStart);
   const iso = addDays(weekStart, day.index);
@@ -309,7 +331,11 @@ function DayCard({
   const customMeal =
     day.entry?.custom_meal_id
       ? customMeals.find((meal) => meal.id === day.entry?.custom_meal_id) ?? null
-      : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ?? null;
+      : customMeals.find((meal) => meal.name === day.entry?.custom_meal_name) ??
+        BUILTIN_OTHER_MEALS.find(
+          (meal) => meal.name === day.entry?.custom_meal_name,
+        ) ??
+        null;
   const customIcon = customMeal ? customMealIcon(customMeal.icon) : null;
   const kindInfo = mealKindInfo(day.entry?.kind);
   const title = dayTitle(day.entry, recipe?.name ?? customMeal?.name);
@@ -326,11 +352,9 @@ function DayCard({
   const showTime = Boolean(recipe && recipe.time > 0);
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(weekStart, day.index)}
+    <div
       className={cn(
-        "flex h-full min-h-24 flex-col rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
+        "relative flex h-full min-h-24 flex-col rounded-xl border p-3 text-left transition-shadow hover:shadow-sm",
         planned
           ? cn(tint.header, "hover:border-primary/50")
           : "border-dashed bg-background",
@@ -363,16 +387,24 @@ function DayCard({
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {showTime ? `${recipe?.time} min` : null}
                 {showCoverage ? (
-                  <span
-                    className={
-                      coverage && coverage.inPantry >= coverage.total
-                        ? "font-bold text-emerald-600 dark:text-emerald-300"
-                        : undefined
-                    }
-                  >
+                  <>
                     {showTime ? " · " : null}
-                    {coverage?.inPantry}/{coverage?.total}
-                  </span>
+                    <button
+                      type="button"
+                      className={cn(
+                        "relative z-10 -mx-1 rounded px-1 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-70",
+                        coverage && coverage.inPantry >= coverage.total
+                          ? "font-bold text-emerald-600 dark:text-emerald-300"
+                          : undefined,
+                      )}
+                      onClick={() =>
+                        recipe ? onViewIngredients(recipe.id) : undefined
+                      }
+                      aria-label={`View ingredients: ${coverage?.inPantry} of ${coverage?.total} available`}
+                    >
+                      {coverage?.inPantry}/{coverage?.total}
+                    </button>
+                  </>
                 ) : null}
               </span>
             ) : null}
@@ -389,7 +421,13 @@ function DayCard({
           {note}
         </span>
       ) : null}
-    </button>
+      <button
+        type="button"
+        onClick={() => onOpen(weekStart, day.index)}
+        aria-label={`Open ${title ?? "meal"} for ${label.weekday}`}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      />
+    </div>
   );
 }
 

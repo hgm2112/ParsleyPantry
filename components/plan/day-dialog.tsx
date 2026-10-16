@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChefHat, Ellipsis, Loader2, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +28,7 @@ import {
 import { MadeConfirmContent } from "@/components/plan/made-confirm";
 import { dayLabel } from "@/lib/plan";
 import { MEAL_KINDS, dayTitle, isPlanned, mealKindInfo } from "@/lib/meal-kind";
-import { CUSTOM_MEAL_ICON_OPTIONS, type CustomMealIconId, customMealIcon } from "@/lib/custom-meal-icons";
+import { BUILTIN_OTHER_MEALS, CUSTOM_MEAL_ICON_OPTIONS, type CustomMealIconId, customMealIcon } from "@/lib/custom-meal-icons";
 import type { CustomMealClassification, CustomMealRow, MealKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { PlannedDay } from "@/components/plan/plan-view";
@@ -125,32 +125,6 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
       return;
     }
     toast.success("Recipe removed (note kept)");
-    router.refresh();
-  }
-
-  async function saveNote() {
-    setBusy(true);
-    const result = await saveMealNote({
-      weekStart,
-      dayIndex: day.index,
-      note,
-      kind,
-    });
-    setBusy(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    if (kind) {
-      const kindLabel = mealKindInfo(kind)?.label ?? "Meal";
-      toast.success(
-        currentRecipe
-          ? `Recipe replaced — ${kindLabel}`
-          : `${kindLabel} planned for ${label.weekday}`,
-      );
-    } else {
-      toast.success("Note saved");
-    }
     router.refresh();
   }
 
@@ -319,11 +293,7 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
   }
 
   const topCustomMeals = localCustomMeals.slice(0, 3);
-  const builtinMeals = [
-    { name: "Takeout", icon: "utensils", classification: "no_cook" as const },
-    { name: "Pizza", icon: "pizza", classification: "no_cook" as const },
-    { name: "Leftovers", icon: "refrigerator", classification: "cooking" as const },
-  ];
+  const builtinMeals = BUILTIN_OTHER_MEALS;
 
   function groupHeading(title: string) {
     return (
@@ -657,15 +627,6 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
                   }
                   rows={2}
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void saveNote()}
-                  disabled={busy}
-                >
-                  {busy ? <Loader2 className="animate-spin" /> : <Check />}
-                  Save
-                </Button>
               </div>
             </div>
 
@@ -677,7 +638,12 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
               >
                 <Trash2 /> Clear day
               </Button>
-              <Button onClick={onDone} className="flex-1">
+              <Button
+                onClick={() => void finish()}
+                disabled={busy}
+                className="flex-1"
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <Check />}
                 Done
               </Button>
             </DialogFooter>

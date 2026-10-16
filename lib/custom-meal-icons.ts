@@ -14,6 +14,7 @@ import {
   Wine,
   type LucideIcon,
 } from "lucide-react";
+import type { CustomMealClassification } from "@/lib/types";
 
 export const CUSTOM_MEAL_ICON_OPTIONS = [
   { id: "utensils", label: "Takeout", Icon: UtensilsCrossed },
@@ -32,6 +33,17 @@ export const CUSTOM_MEAL_ICON_OPTIONS = [
 ] as const;
 
 export type CustomMealIconId = (typeof CUSTOM_MEAL_ICON_OPTIONS)[number]["id"];
+
+/** Built-in Other Meals kept as application code (not DB rows). */
+export const BUILTIN_OTHER_MEALS: {
+  name: string;
+  icon: CustomMealIconId;
+  classification: CustomMealClassification;
+}[] = [
+  { name: "Takeout", icon: "utensils", classification: "no_cook" },
+  { name: "Pizza", icon: "pizza", classification: "no_cook" },
+  { name: "Leftovers", icon: "refrigerator", classification: "cooking" },
+];
 
 export const DEFAULT_CUSTOM_MEAL_ICON_LABEL: Record<string, LucideIcon> =
   Object.fromEntries(

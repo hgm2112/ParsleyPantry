@@ -63,20 +63,37 @@ export function mealKindInfo(
   return MEAL_KINDS.find((entry) => entry.kind === kind) ?? null;
 }
 
-/** Primary title for a day: recipe name > kind label > note > null. */
+/** Primary title for a day: recipe name > custom meal > kind label > note > null. */
 export function dayTitle(
-  entry: Pick<MealPlanDayRow, "kind" | "note"> | null | undefined,
+  entry:
+    | Pick<MealPlanDayRow, "kind" | "note" | "custom_meal_name">
+    | null
+    | undefined,
   recipeName?: string | null,
 ): string | null {
   if (recipeName) return recipeName;
+  const customName = entry?.custom_meal_name?.trim();
+  if (customName) return customName;
   const info = mealKindInfo(entry?.kind);
   if (info) return info.label;
   return entry?.note?.trim() || null;
 }
 
-/** A day counts as planned when a recipe, a kind, or a note is set. */
+/** A day counts as planned when a recipe, kind, note, or custom meal is set. */
 export function isPlanned(
-  entry: Pick<MealPlanDayRow, "recipe_id" | "kind" | "note"> | null | undefined,
+  entry:
+    | Pick<
+        MealPlanDayRow,
+        "recipe_id" | "kind" | "note" | "custom_meal_id" | "custom_meal_name"
+      >
+    | null
+    | undefined,
 ): boolean {
-  return Boolean(entry?.recipe_id || entry?.kind || entry?.note?.trim());
+  return Boolean(
+    entry?.recipe_id ||
+      entry?.kind ||
+      entry?.note?.trim() ||
+      entry?.custom_meal_id ||
+      entry?.custom_meal_name?.trim(),
+  );
 }
