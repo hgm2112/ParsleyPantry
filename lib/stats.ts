@@ -102,7 +102,12 @@ export function cookedOccurrences(
   return out;
 }
 
-/** All-time set of local dates with at least one cooked occurrence. */
+/**
+ * All-time set of local dates with at least one cooked occurrence. Other
+ * Meals (built-in or user-created, identified by a custom-meal
+ * classification) never extend the active-cooking streak — even when their
+ * classification is "cooking" (e.g. Leftovers).
+ */
 export function cookedDates(
   meals: MealPlanDayRow[],
   recipeTypes: Map<string, string> = new Map(),
@@ -113,7 +118,7 @@ export function cookedDates(
       !row.made_at ||
       row.kind === "eating_out" ||
       row.kind === "no_cook" ||
-      row.custom_meal_classification === "no_cook" ||
+      row.custom_meal_classification !== null ||
       (row.recipe_id !== null && recipeTypes.get(row.recipe_id) === "no_cook")
     )
       continue;
@@ -124,7 +129,8 @@ export function cookedDates(
 
 /**
  * Consecutive local dates ending today (or yesterday, if today isn't cooked
- * yet) with ≥1 home-cooked meal. No-cooking entries never extend a streak.
+ * yet) with ≥1 home-cooked meal. No-cooking entries and Other Meals never
+ * extend a streak.
  */
 export function cookingStreak(allCookedDates: Set<string>, today: string): number {
   let cursor = allCookedDates.has(today) ? today : addDays(today, -1);
@@ -158,6 +164,55 @@ export function noCookDates(
     if (inRange(iso, range)) dates.add(iso);
   }
   return dates;
+}
+
+export type OtherMealEntry = {
+  name: string;
+  count: number;
+  lastEaten: string;
+};
+
+export type OtherMealStats = {
+  total: number;
+  cooking: number;
+  noCook: number;
+  byName: OtherMealEntry[];
+};
+
+/**
+ * Consumed Other Meals in range: made_at set AND a per-occurrence
+ * custom-meal classification (built-ins + user-created meals; legacy
+ * Eating out / Meal kit / No cooking kinds excluded). Grouped by the
+ * snapshotted meal name, ranked by count then recency.
+ */
+export function otherMealOccurrences(
+  meals: MealPlanDayRow[],
+  range: DateRange,
+): OtherMealStats {
+  let total = 0;
+  let cooking = 0;
+  let noCook = 0;
+  const grouped = new Map<string, { count: number; lastEaten: string }>();
+  for (const row of meals) {
+    if (!row.made_at || row.custom_meal_classification === null) continue;
+    const iso = scheduledDate(row);
+    if (!inRange(iso, range)) continue;
+    total += 1;
+    if (row.custom_meal_classification === "cooking") cooking += 1;
+    else noCook += 1;
+    const name = row.custom_meal_name?.trim() || "Other meal";
+    const entry = grouped.get(name);
+    if (entry) {
+      entry.count += 1;
+      if (iso > entry.lastEaten) entry.lastEaten = iso;
+    } else {
+      grouped.set(name, { count: 1, lastEaten: iso });
+    }
+  }
+  const byName = [...grouped.entries()]
+    .map(([name, entry]) => ({ name, ...entry }))
+    .sort((a, b) => b.count - a.count || (a.lastEaten < b.lastEaten ? 1 : -1));
+  return { total, cooking, noCook, byName };
 }
 
 export type FavoriteMeal = {

@@ -22,6 +22,7 @@ import {
   mostActiveWeekday,
   newRecipesTried,
   noCookDates,
+  otherMealOccurrences,
   pantrySnapshot,
   periodLabel,
   periodRange,
@@ -194,6 +195,7 @@ export function StatsView({
     const newTried = newRecipesTried(firstCooked, range);
     const milestones = milestoneState(allTime.length);
     const planning = planningStats(meals, range, today, recipeByType);
+    const otherMeals = otherMealOccurrences(meals, range);
 
     const periodDays =
       range.start === null
@@ -254,6 +256,7 @@ export function StatsView({
         .slice(0, 6),
       milestones,
       planning,
+      otherMeals,
       avgPerWeek,
       recipeNames,
       snapshot,
@@ -519,6 +522,60 @@ export function StatsView({
           </ol>
         ) : (
           <EmptyHint>Plan a few meals to see your most-planned recipes.</EmptyHint>
+        )}
+      </Section>
+
+      {/* Other Meals */}
+      <Section title="Other Meals">
+        {stats.otherMeals.total === 0 ? (
+          <EmptyHint>
+            Mark an Other Meal as made to see what you actually ate here.
+          </EmptyHint>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatCard
+                label="Meals eaten"
+                value={stats.otherMeals.total}
+                sub={periodLabel(period)}
+              />
+              <StatCard
+                label="Cooking"
+                value={stats.otherMeals.cooking}
+                sub="Cooking-classified meals"
+              />
+              <StatCard
+                label="No Cooking"
+                value={stats.otherMeals.noCook}
+                sub="Cooking-free meals"
+                className="border-dashed bg-muted/30"
+              />
+            </div>
+            <ol className="divide-y rounded-xl border bg-card shadow-sm">
+              {stats.otherMeals.byName.slice(0, 5).map((entry, index) => (
+                <li key={entry.name} className="flex items-center gap-3 px-3 py-2">
+                  <span className="w-5 shrink-0 text-center text-xs font-extrabold tabular-nums text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    {entry.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    eaten {entry.count}×
+                  </span>
+                  <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">
+                    last {fmtDate(entry.lastEaten)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            {stats.otherMeals.byName.length > 5 ? (
+              <p className="text-xs text-muted-foreground">
+                +{stats.otherMeals.byName.length - 5} more meal
+                {stats.otherMeals.byName.length - 5 === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
         )}
       </Section>
 
