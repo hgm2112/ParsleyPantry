@@ -35,7 +35,6 @@ import {
   type ExpirationEntryValue,
   type FreezeValue,
 } from "@/components/inventory/entry-fields";
-import { addDays, suggestExpiration } from "@/lib/expiry";
 import type { OffProduct } from "@/lib/off";
 import {
   addToInventory,
@@ -125,18 +124,6 @@ export function AddForm({
   // live in refs rather than the values captured by the current render.
   const nameDirtyRef = useRef(false);
   const unitDirtyRef = useRef(false);
-  const expiryTouchedRef = useRef(false);
-
-  const suggestion = useMemo(() => {
-    if (selectedItem?.expiration_days != null) {
-      return {
-        days: selectedItem.expiration_days,
-        reason: `${selectedItem.name} default`,
-      };
-    }
-    if (off) return suggestExpiration(off.categories, off.name ?? name);
-    return null;
-  }, [selectedItem, off, name]);
 
   const initialItemId = initialItem?.id ?? null;
 
@@ -163,7 +150,6 @@ export function AddForm({
     setCanonicalName("");
     canonicalTouchedRef.current = false;
     nameDirtyRef.current = false;
-    expiryTouchedRef.current = false;
     setEntries([newExpirationEntry()]);
     void lookupBarcode(initialBarcode ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,19 +243,6 @@ export function AddForm({
     return "Optional — the generic ingredient recipes should match on.";
   })();
 
-  // Keep the first row's date synced to the shelf-life suggestion until the
-  // user edits any date themselves.
-  useEffect(() => {
-    if (expiryTouchedRef.current) return;
-    const suggestedDate = suggestion ? addDays(suggestion.days) : null;
-    setEntries((current) => {
-      if (current.length === 0 || current[0].date === suggestedDate) return current;
-      const next = [...current];
-      next[0] = { ...next[0], date: suggestedDate };
-      return next;
-    });
-  }, [suggestion]);
-
   function applyItem(item: ItemRow) {
     setSelectedItem(item);
     setName(item.name);
@@ -287,13 +260,6 @@ export function AddForm({
     setAutoRestock(item.auto_restock);
     setLocation(item.default_location);
     setOff(null);
-    if (!expiryTouchedRef.current) {
-      setEntries([
-        newExpirationEntry(
-          item.expiration_days != null ? addDays(item.expiration_days) : null,
-        ),
-      ]);
-    }
   }
 
   async function lookupBarcode(code: string) {
@@ -435,7 +401,6 @@ export function AddForm({
     canonicalTouchedRef.current = false;
     foodTypeTouchedRef.current = false;
     nameDirtyRef.current = false;
-    expiryTouchedRef.current = false;
     if (mode === "navigate") {
       if (onSaved) onSaved();
       else router.push(safeReturnTo);
@@ -596,13 +561,7 @@ export function AddForm({
             onChange={setFreeze}
           />
 
-          <ExpirationEntries
-            entries={entries}
-            onChange={(next) => {
-              expiryTouchedRef.current = true;
-              setEntries(next);
-            }}
-          />
+          <ExpirationEntries entries={entries} onChange={setEntries} />
         </section>
 
         <section className="space-y-3 rounded-xl border bg-background p-4">

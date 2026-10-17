@@ -31,7 +31,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Scanner } from "@/components/scanner";
-import { addDays, suggestExpiration } from "@/lib/expiry";
 import { useStoredEnum, useStoredJson } from "@/lib/use-local-storage";
 import type { OffProduct } from "@/lib/off";
 import {
@@ -497,15 +496,8 @@ function ConfirmItemSheet({
 }) {
   use(io());
   const [location, setLocation] = useState<Location>(initialLocation);
-  const suggestion = suggestExpiration(off?.categories ?? [], item.name);
   const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
-    newExpirationEntry(
-      item.expiration_days != null
-        ? addDays(item.expiration_days)
-        : suggestion
-          ? addDays(suggestion.days)
-          : null,
-    ),
+    newExpirationEntry(),
   ]);
   const [freeze, setFreeze] = useState<FreezeValue>(() => ({
     frozen: true,

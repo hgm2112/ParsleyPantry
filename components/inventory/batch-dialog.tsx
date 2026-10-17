@@ -28,7 +28,7 @@ import {
   restoreBatches,
   updateInventory,
 } from "@/app/(app)/inventory/actions";
-import { addDays, formatExpiry, parseDate } from "@/lib/expiry";
+import { formatExpiry, parseDate } from "@/lib/expiry";
 import { formatFreezerQuality } from "@/lib/freezer";
 import { toBatchSnapshot } from "@/lib/batches";
 import { cn } from "@/lib/utils";
@@ -76,7 +76,7 @@ export function BatchDialog({
 
   const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
     newExpirationEntry(
-      editing?.expiration_date ?? addDays(7),
+      editing?.expiration_date ?? null,
       editing ? String(editing.quantity) : "",
     ),
   ]);
