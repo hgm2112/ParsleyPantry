@@ -8,16 +8,26 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-10-16)
+## Current Session Snapshot (2026-10-16, part 2)
 
-Goal: keep `/stats`, `/home`, and plan custom-meals coherent and refreshed.
+Goal: batch/expiry correctness, recovering the schema after a DROP SCHEMA reset,
+and one consistent pantry-coverage rule across recipes.
 
-Shipped and pushed:
-- Stats Other Meals section + streak excludes eaten Leftovers / custom meals (`642a814`).
-- Home page now resolves fresh via `await connection()`, passes custom-meal and recipe-type data, fixed Pizza icon and No-cook alignment (`b83b654`).
+Shipped and pushed (b51610e → 86783fc):
+- Restore public schema grants after DROP SCHEMA reset (`b51610e`) — reset wiped
+  role grants (PostgREST 42501); keep this migration last on any rebuild.
+- Recipe editor: drop duplicate top submit, return to list after create (`86d4b22`).
+- Multi-date expiration entry with Month/Day/Year pickers (`ebe3951`).
+- Restore `store_aisles.category_id` (`c3b9e89`).
+- Drop stale `inventory_household_id_item_id_location_key` (`3b95e28`).
+- Stop pre-filling expiration dates on batch entry (`251ab4c`).
+- Recipes required-only counts + optional column + presence-based checks (`12ef77e`).
+- Inventory detail: read-only quantity, Save returns to list, "+ Add More" (`523c448`).
+- Recipe editor: "Save changes" returns to list (`86783fc`).
 
-Verified: `npx tsc --noEmit` → green; `npm run build` → successful; `npm run lint` → 12 pre-existing unrelated errors only.
+Verified: `npx tsc --noEmit` green; `npm run build` successful; `npm run lint`
+12 pre-existing errors / 16 warnings (no new); pre-push hook green.
 
 Open:
-- Confirm deployed numbers/UI in fresh browser.
-- Optional stray-file and lint-error cleanup.
+- Confirm deployed `/recipes` counts and the new redirect flows in a fresh browser.
+- Optional: align home Quick Bites coverage with required-only + presence; stray-file / lint-error cleanup.
