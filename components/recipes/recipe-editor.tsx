@@ -122,6 +122,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, i
         return;
       }
       toast.success("Recipe saved");
+      router.push("/recipes");
       router.refresh();
       return;
     }
