@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   Pencil,
+  Plus,
   ShoppingCart,
   Trash2,
 } from "lucide-react";
@@ -30,7 +31,6 @@ import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { BatchDialog } from "@/components/inventory/batch-dialog";
 import {
   addInventoryToGrocery,
-  consumeFromItem,
   deleteInventory,
   listCanonicalCandidates,
   renameCanonicalRoot,
@@ -81,7 +81,6 @@ export function InventoryDetail({
   );
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [useLastOpen, setUseLastOpen] = useState(false);
   const [consumeMode, setConsumeMode] = useState<"partial" | "last" | null>(null);
   const [batchDialog, setBatchDialog] = useState<{
     batch: InventoryEntry | null;
@@ -152,7 +151,12 @@ export function InventoryDetail({
       autoRestock: item.auto_restock,
     });
     setSaveBusy(false);
-    toast[ok ? "success" : "error"](ok ? "Saved" : "Could not save");
+    if (!ok) {
+      toast.error("Could not save");
+      return;
+    }
+    toast.success("Saved");
+    router.push("/inventory");
   }
 
   async function commitName() {
@@ -334,47 +338,6 @@ export function InventoryDetail({
         ? `${item.name} added to grocery list`
         : "Already on the grocery list",
     );
-  }
-
-  /** −1 on the total: FEFO within all batches, undo restores each row. */
-  async function quickUse() {
-    const result = await consumeFromItem({
-      itemId: item.id,
-      amount: 1,
-      addToGrocery: false,
-    });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    applyAffected(result.data.affected);
-    toast.success(`Used 1 ${item.name}`, {
-      action: {
-        label: "Undo",
-        onClick: () =>
-          void restoreBatches({ snapshots: result.data.snapshots }),
-      },
-    });
-  }
-
-  /** +1 on the total: tops up the soonest-expiring batch (never invents dates). */
-  async function quickAdd() {
-    const target = batches[0];
-    if (!target) {
-      setBatchDialog({ batch: null });
-      return;
-    }
-    const result = await updateInventory({
-      inventoryId: target.id,
-      quantity: target.quantity + 1,
-    });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    if (result.data.inventory.item) {
-      applySaved(result.data.inventory as InventoryEntry, target.id);
-    }
   }
 
   async function toggleLow() {
@@ -620,31 +583,9 @@ export function InventoryDetail({
               {item.brand ? ` · ${item.brand}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Decrease quantity"
-              disabled={total <= 0}
-              onClick={() => {
-                if (total <= 1) setUseLastOpen(true);
-                else void quickUse();
-              }}
-            >
-              −
-            </Button>
-            <span className="w-12 text-center text-xl font-extrabold tabular-nums">
-              {total % 1 === 0 ? total : total.toFixed(1)}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Increase quantity"
-              onClick={() => void quickAdd()}
-            >
-              +
-            </Button>
-          </div>
+          <span className="text-xl font-extrabold tabular-nums">
+            {total % 1 === 0 ? total : total.toFixed(1)}
+          </span>
         </div>
       </section>
 
@@ -661,7 +602,7 @@ export function InventoryDetail({
             size="sm"
             onClick={() => setBatchDialog({ batch: null })}
           >
-            Add batch
+            <Plus /> Add More
           </Button>
         </div>
         <ul className="space-y-2">
@@ -846,42 +787,6 @@ export function InventoryDetail({
           }}
         />
       ) : null}
-
-      <ConfirmDialog
-        open={useLastOpen}
-        onOpenChange={setUseLastOpen}
-        title={`Use the last ${item.name}?`}
-        description={`All ${batches.length} ${
-          batches.length === 1 ? "batch" : "batches"
-        } (${uniqueLocations.map(locationLabel).join(", ")}) will be removed from your pantry. The catalog item stays for next time.`}
-        confirmLabel="Used the last one"
-        onConfirm={async () => {
-          const result = await consumeFromItem({
-            itemId: item.id,
-            amount: total,
-            addToGrocery: false,
-          });
-          if (!result.ok) {
-            toast.error(result.error);
-            return;
-          }
-          toast.success(
-            `Used the last ${item.name} · removed from pantry`,
-            {
-              action: {
-                label: "Undo",
-                onClick: () =>
-                  void restoreBatches({
-                    snapshots: result.data.snapshots,
-                  }),
-              },
-              duration: 8000,
-            },
-          );
-          router.push("/inventory");
-          router.refresh();
-        }}
-      />
 
       <ConfirmDialog
         open={deleteOpen}
