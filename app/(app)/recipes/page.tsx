@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipesView } from "@/components/recipes/recipes-view";
 import { createRootLookup } from "@/lib/canonical";
-import { parseQuantityText, splitNameAndQuantity, toOunces } from "@/lib/stock";
+import { splitNameAndQuantity } from "@/lib/stock";
 import type { RecipeRow } from "@/lib/types";
 
 export const metadata = { title: "Recipes" };
@@ -43,11 +43,11 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       .order("name", { ascending: true }),
     supabase
       .from("recipe_ingredients")
-      .select("recipe_id, optional, item_id, quantity_text, name")
+      .select("recipe_id, optional, item_id, name")
       .eq("household_id", householdId),
     supabase
       .from("inventory")
-      .select("item_id, quantity, unit")
+      .select("item_id, quantity")
       .eq("household_id", householdId),
     supabase
       .from("items")
@@ -58,8 +58,11 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
   const recipes = (recipesResult.data ?? []) as RecipeRow[];
   const itemIdsByRecipe: Record<string, string[]> = {};
   const recipeIdsWithIngredients = new Set<string>();
-  const pantryStatus: Record<string, { covered: number; total: number }> = {};
-  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
+  const pantryStatus: Record<
+    string,
+    { covered: number; total: number; optional: number }
+  > = {};
+  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number }[];
   const itemsData = (itemsResult.data ?? []) as {
     id: string;
     name: string;
@@ -70,15 +73,9 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
   // Stock and name resolution are keyed by canonical identity (root item),
   // so every product under one generic ingredient shares its pantry pool.
   const stockByItem: Record<string, number> = {};
-  const stockUnitByItem: Record<string, string | null> = {};
   for (const row of inventoryData) {
     const key = rootOf(row.item_id);
     stockByItem[key] = (stockByItem[key] ?? 0) + row.quantity;
-    if (stockUnitByItem[key] == null) {
-      stockUnitByItem[key] = row.unit;
-    } else if (stockUnitByItem[key] !== row.unit) {
-      stockUnitByItem[key] = null;
-    }
   }
 
   const nameToItemId: Record<string, string> = {};
@@ -90,7 +87,6 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
     recipe_id: string;
     optional: boolean;
     item_id: string | null;
-    quantity_text: string;
     name: string;
   }[]) {
     recipeIdsWithIngredients.add(row.recipe_id);
@@ -104,18 +100,21 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       const list = itemIdsByRecipe[row.recipe_id] ?? [];
       list.push(itemId);
       itemIdsByRecipe[row.recipe_id] = list;
-      if (!pantryStatus[row.recipe_id]) {
-        pantryStatus[row.recipe_id] = { covered: 0, total: 0 };
-      }
-      pantryStatus[row.recipe_id].total += 1;
-      const p = parseQuantityText(row.quantity_text || "");
-      const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
-      const haveRaw = stockByItem[itemId] || 0;
-      const haveUnit = stockUnitByItem[itemId];
-      const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
-      if (have >= needed) {
-        pantryStatus[row.recipe_id].covered += 1;
-      }
+    }
+    if (!row.name.trim()) continue;
+    if (!pantryStatus[row.recipe_id]) {
+      pantryStatus[row.recipe_id] = { covered: 0, total: 0, optional: 0 };
+    }
+    // Optional ingredients are counted separately and never folded into the
+    // have/need tally; required coverage is presence-based (any stock counts),
+    // so an ingredient with a mismatched amount/unit still reads as on hand.
+    if (row.optional) {
+      pantryStatus[row.recipe_id].optional += 1;
+      continue;
+    }
+    pantryStatus[row.recipe_id].total += 1;
+    if (itemId && (stockByItem[itemId] ?? 0) > 0) {
+      pantryStatus[row.recipe_id].covered += 1;
     }
   }
 

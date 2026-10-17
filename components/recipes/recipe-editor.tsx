@@ -19,7 +19,7 @@ import {
 } from "@/app/(app)/recipes/actions";
 import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
 import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
-import { parseQuantityText, splitNameAndQuantity, toOunces, trimDecimal } from "@/lib/stock";
+import { splitNameAndQuantity, trimDecimal } from "@/lib/stock";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 type IngredientDraft = {
@@ -34,13 +34,12 @@ type Props = {
   recipe: RecipeRow | null;
   ingredients: RecipeIngredientRow[];
   stockByItem?: Record<string, number>;
-  stockUnitByItem?: Record<string, string | null>;
   nameToItemId?: Record<string, string>;
   /** item id → canonical root id (stock pools are root-keyed). */
   itemRoots?: Record<string, string>;
 };
 
-export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem, nameToItemId, itemRoots }: Props) {
+export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, itemRoots }: Props) {
   const router = useRouter();
   const isEdit = recipe !== null;
 
@@ -166,14 +165,10 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
     if (!recipe || !stockByItem) return;
     const missingIds = ingredients
       .filter((ingredient) => {
+        if (ingredient.optional) return false;
         const key = matchingKey(ingredient.item_id, ingredient.name);
-        if (!key) return false;
-        const p = parseQuantityText(ingredient.quantity_text);
-        const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
-        const haveRaw = stockByItem[key] || 0;
-        const haveUnit = stockUnitByItem?.[key] ?? null;
-        const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
-        return have < needed;
+        if (!key) return true;
+        return (stockByItem[key] ?? 0) <= 0;
       })
       .map((ingredient) => ingredient.id);
     if (missingIds.length === 0) {
@@ -345,18 +340,10 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
               let covered = 0;
               let total = 0;
               for (const row of rows) {
-                if (row.name.trim()) {
-                  const effId = matchingKey(row.item_id, row.name);
-                  if (effId) {
-                    total += 1;
-                    const p = parseQuantityText(row.quantity_text);
-                    const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
-                    const haveRaw = stockByItem[effId] || 0;
-                    const haveUnit = stockUnitByItem?.[effId] ?? null;
-                    const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
-                    if (have >= needed) covered += 1;
-                  }
-                }
+                if (!row.name.trim() || row.optional) continue;
+                total += 1;
+                const effId = matchingKey(row.item_id, row.name);
+                if (effId && (stockByItem[effId] ?? 0) > 0) covered += 1;
               }
               return total > 0 ? ` · ✓ ${covered}/${total}` : "";
             })()}
@@ -391,18 +378,19 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, stockUnitByItem
               {stockByItem ? (() => {
                 const effId = matchingKey(row.item_id, row.name);
                 if (effId) {
-                  const p = parseQuantityText(row.quantity_text);
-                  const neededRaw = p.quantity;
-                  const needed = toOunces(neededRaw, p.unit) ?? neededRaw;
                   const haveRaw = stockByItem[effId] || 0;
-                  const haveUnit = stockUnitByItem?.[effId] ?? null;
-                  const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
-                  const sufficient = have >= needed;
+                  const sufficient = !row.optional && haveRaw > 0;
                   const displayHave = trimDecimal(haveRaw);
                   return (
                     <span
                       className={`text-xs ${sufficient ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground"}`}
-                      title={sufficient ? `Have ${haveRaw}` : `Have ${haveRaw} (need ${row.quantity_text})`}
+                      title={
+                        row.optional
+                          ? `Have ${haveRaw} (optional)`
+                          : sufficient
+                            ? `Have ${haveRaw}`
+                            : "None in pantry"
+                      }
                     >
                       {sufficient ? "✓ " : ""}{displayHave}
                     </span>

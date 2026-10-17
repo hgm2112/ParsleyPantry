@@ -37,7 +37,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
       .order("sort_order", { ascending: true }),
     supabase
       .from("inventory")
-      .select("item_id, quantity, unit")
+      .select("item_id, quantity")
       .eq("household_id", householdId),
     supabase
       .from("items")
@@ -50,7 +50,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
 
   const ingredients = (ingredientsResult.data ?? []) as RecipeIngredientRow[];
 
-  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number; unit: string | null }[];
+  const inventoryData = (inventoryResult.data ?? []) as { item_id: string; quantity: number }[];
   const itemsData = (itemsResult.data ?? []) as {
     id: string;
     name: string;
@@ -61,15 +61,9 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
   // Stock pools are keyed by canonical identity so every product under one
   // generic ingredient contributes to the same pantry check.
   const stockByItem: Record<string, number> = {};
-  const stockUnitByItem: Record<string, string | null> = {};
   for (const row of inventoryData) {
     const key = rootOf(row.item_id);
     stockByItem[key] = (stockByItem[key] ?? 0) + row.quantity;
-    if (stockUnitByItem[key] == null) {
-      stockUnitByItem[key] = row.unit;
-    } else if (stockUnitByItem[key] !== row.unit) {
-      stockUnitByItem[key] = null;
-    }
   }
 
   const nameToItemId: Record<string, string> = {};
@@ -87,7 +81,6 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
         recipe={recipe}
         ingredients={ingredients}
         stockByItem={stockByItem}
-        stockUnitByItem={stockUnitByItem}
         nameToItemId={nameToItemId}
         itemRoots={itemRoots}
       />

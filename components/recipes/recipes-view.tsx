@@ -18,7 +18,10 @@ export function RecipesView({
   recipes: RecipeRow[];
   itemIdsByRecipe?: Record<string, string[]>;
   onlyItemIds?: string[];
-  pantryStatus?: Record<string, { covered: number; total: number }>;
+  pantryStatus?: Record<
+    string,
+    { covered: number; total: number; optional: number }
+  >;
   recipeIdsWithIngredients: string[];
 }) {
   const [query, setQuery] = useState("");
@@ -55,6 +58,7 @@ export function RecipesView({
   function renderRow(recipe: RecipeRow) {
     const ps = pantryStatus?.[recipe.id];
     const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
+    const optional = ps && ps.optional > 0 ? String(ps.optional) : "";
     const grad = tileGradient(recipe.name);
     return (
       <Link
@@ -62,7 +66,7 @@ export function RecipesView({
         href={`/recipes/${recipe.id}`}
         className="block border-b border-border last:border-b-0 hover:ring-2 hover:ring-inset hover:ring-foreground/20 transition-all"
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] items-center px-3 py-1.5 text-sm">
+        <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_56px_70px] items-center px-3 py-1.5 text-sm">
           <div
             className={cn(
               "flex items-center gap-2 min-w-0 -ml-3 pl-3 relative",
@@ -93,6 +97,9 @@ export function RecipesView({
           </div>
           <div className="text-center tabular-nums hidden sm:block">
             {recipe.yields > 1 ? recipe.yields : ""}
+          </div>
+          <div className="text-center tabular-nums text-muted-foreground hidden sm:block">
+            {optional}
           </div>
           <div className="text-center tabular-nums font-medium">{have}</div>
         </div>
@@ -156,10 +163,11 @@ export function RecipesView({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border">
-          <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_70px] bg-muted/50 px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b">
+          <div className="grid grid-cols-[minmax(0,1fr)_60px] sm:grid-cols-[minmax(0,1fr)_60px_50px_56px_70px] bg-muted/50 px-3 py-1 text-[10px] font-semibold text-muted-foreground border-b">
             <div>Recipes</div>
             <div className="text-center hidden sm:block">Time</div>
             <div className="text-center hidden sm:block">Size</div>
+            <div className="text-center hidden sm:block">Optional</div>
             <div className="text-center">Have?</div>
           </div>
           {showHeadings ? groupHeading("Cooking") : null}
