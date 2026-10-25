@@ -16,6 +16,7 @@ for "what changed", this is for "what's true now / what's next".
 - Low threshold operates on pieces (6 = 6 packets/eggs).
 - All existing non-pack items work unchanged.
 - Verified: `npx tsc --noEmit` green, `npm run build` successful, `npm run lint` at pre-existing parity (12 errors / 16 warnings).
+- Verified in production (2026-10-25): migration applied; Beef Stock Concentrate (pack 12, packets) and Eggs (pack 12, eggs) add/consume correctly end-to-end.
 
 **Gotchas**
 - Migration must be applied in Supabase (SQL editor or `supabase db push`) before the UI works.
@@ -24,7 +25,6 @@ for "what changed", this is for "what's true now / what's next".
 - Canonical matching (`lib/canonical.ts` `cleanTokens`) already strips "12 ct" / "pk" from names, so pack text never pollutes recipe matching.
 
 **Open — next session**
-- Apply migration in production, then create Beef Stock Concentrate (pack 12, packets) and Eggs (pack 12, eggs) to verify end-to-end.
 - Confirm deployed `/recipes` counts and redirect flows from previous session (still open from 2026-10-16).
 - Optional: Quick Bites coverage alignment / stray-file / lint cleanup.
 
