@@ -828,28 +828,30 @@ function InventoryItemCard({
             </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onSelect={() => {
+              onClick={() => {
                 onConsume("partial");
               }}
             >
               Use some…
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => {
+              onClick={() => {
                 onConsume("last");
               }}
             >
               Used the last one
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => {
+              onClick={() => {
                 void addInventoryToGrocery(batches[0].id).then((result) => {
+                  if (!result.ok) {
+                    toast.error(result.error);
+                    return;
+                  }
                   toast.success(
-                    result.ok && result.data.created
+                    result.data.created
                       ? `${item.name} added to grocery list`
-                      : result.ok
-                        ? "Already on the grocery list"
-                        : result.error,
+                      : "Already on the grocery list",
                   );
                 });
               }}
@@ -857,7 +859,7 @@ function InventoryItemCard({
               <ShoppingCart /> Add to grocery list
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => {
+              onClick={() => {
                 void toggleLow();
               }}
             >
@@ -866,7 +868,7 @@ function InventoryItemCard({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onSelect={() => setDeleteOpen(true)}
+              onClick={() => setDeleteOpen(true)}
             >
               <Trash2 /> Remove from inventory
             </DropdownMenuItem>
