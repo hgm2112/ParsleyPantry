@@ -48,7 +48,7 @@ import {
   pickFefoBatch,
   toBatchSnapshot,
 } from "@/lib/batches";
-import { displayQtyUnit } from "@/lib/stock";
+import { displayQtyUnit, packHintText, packUnitLabel } from "@/lib/stock";
 import type { InventoryEntry, ItemRow, SubcategoryRow } from "@/lib/types";
 
 export function InventoryDetail({
@@ -76,6 +76,12 @@ export function InventoryDetail({
   const [renameDraft, setRenameDraft] = useState(canonicalItem?.name ?? "");
   const renameBusyRef = useRef(false);
   const [unit, setUnit] = useState(initialItem.unit ?? "");
+  const [packSize, setPackSize] = useState(
+    initialItem.pack_size != null && initialItem.pack_size > 1
+      ? String(initialItem.pack_size)
+      : "",
+  );
+  const [packUnit, setPackUnit] = useState(initialItem.pack_unit ?? "");
   const [lowThreshold, setLowThreshold] = useState(
     initialItem.low_threshold != null ? String(initialItem.low_threshold) : "",
   );
@@ -143,10 +149,18 @@ export function InventoryDetail({
     return true;
   }
 
+  const parsedPackSize = Math.round(Number(packSize));
+  const packActive =
+    Number.isFinite(parsedPackSize) &&
+    parsedPackSize >= 2 &&
+    packSize.trim() !== "";
+
   async function saveDetails() {
     setSaveBusy(true);
     const ok = await patchItem({
       unit: unit.trim() || null,
+      packSize: packActive ? parsedPackSize : null,
+      packUnit: packUnit.trim() || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
       autoRestock: item.auto_restock,
     });
@@ -583,9 +597,17 @@ export function InventoryDetail({
               {item.brand ? ` · ${item.brand}` : ""}
             </p>
           </div>
-          <span className="text-xl font-extrabold tabular-nums">
-            {total % 1 === 0 ? total : total.toFixed(1)}
-          </span>
+          <div className="text-right">
+            <span className="text-xl font-extrabold tabular-nums">
+              {total % 1 === 0 ? total : total.toFixed(1)}
+            </span>
+            {item.pack_size != null && item.pack_size > 1 ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {packUnitLabel(item)}
+                {packHintText(total, item) ? ` · ${packHintText(total, item)}` : ""}
+              </p>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -692,6 +714,34 @@ export function InventoryDetail({
             onChange={(event) => setUnit(event.target.value)}
             placeholder="oz"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="pack">Pieces per pack</Label>
+          <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+            <Input
+              id="pack"
+              type="number"
+              min={2}
+              step={1}
+              inputMode="numeric"
+              placeholder="12"
+              value={packSize}
+              onChange={(event) => setPackSize(event.target.value)}
+            />
+            <Input
+              id="pack-unit"
+              placeholder={"eggs, packets…"}
+              value={packUnit}
+              onChange={(event) => setPackUnit(event.target.value)}
+              aria-label="Piece name"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {packActive
+              ? `1 pack = ${parsedPackSize} ${packUnit.trim() || "pieces"} — buying counts packs, stock and low-threshold count pieces.`
+              : "Optional — buying a box of 12 would be pack size 12 (blank = not a pack item)."}
+          </p>
         </div>
 
         <div className="space-y-2">

@@ -19,6 +19,7 @@ import {
   entriesToBatches,
   newExpirationEntry,
   type ExpirationEntryValue,
+  type QtyScale,
 } from "@/components/inventory/entry-fields";
 import { locationLabel } from "@/components/location-badge";
 import { FreezeDialog } from "@/components/inventory/freeze-dialog";
@@ -31,6 +32,7 @@ import {
 import { formatExpiry, parseDate } from "@/lib/expiry";
 import { formatFreezerQuality } from "@/lib/freezer";
 import { toBatchSnapshot } from "@/lib/batches";
+import { packUnitLabel } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import type { InventoryEntry, InventoryWithItem, ItemRow, Location } from "@/lib/types";
 
@@ -73,6 +75,18 @@ export function BatchDialog({
   const name = item.name;
   const editing = batch ?? null;
   const wasFrozen = editing?.location === "freezer";
+
+  // Adding new batches counts packs for a pack item (the server scales to
+  // pieces); editing stores raw piece counts, since an opened pack is not a
+  // whole number of packs.
+  const qtyScale: QtyScale | undefined =
+    editing || item.pack_size == null || item.pack_size <= 1
+      ? undefined
+      : {
+          noun: "pack",
+          piecesPerUnit: item.pack_size,
+          pieceNoun: packUnitLabel(item),
+        };
 
   const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
     newExpirationEntry(
@@ -197,7 +211,9 @@ export function BatchDialog({
             <DialogDescription>
               {editing
                 ? `Quantities and dates are tracked per batch — this edit only touches the batch in ${locationLabel(editing.location)}.`
-                : "Each batch keeps its own quantity, date, and storage history."}
+                : qtyScale
+                  ? `Entries count packs — 1 pack = ${qtyScale.piecesPerUnit} ${qtyScale.pieceNoun}. Each batch keeps its own quantity, date, and storage history.`
+                  : "Each batch keeps its own quantity, date, and storage history."}
             </DialogDescription>
           </DialogHeader>
 
@@ -206,6 +222,7 @@ export function BatchDialog({
               entries={single ? entries.slice(0, 1) : entries}
               onChange={setEntries}
               single={single}
+              qtyScale={qtyScale}
             />
 
             {freezerBatch ? (

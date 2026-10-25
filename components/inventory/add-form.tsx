@@ -561,7 +561,19 @@ export function AddForm({
             onChange={setFreeze}
           />
 
-          <ExpirationEntries entries={entries} onChange={setEntries} />
+          <ExpirationEntries
+            entries={entries}
+            onChange={setEntries}
+            qtyScale={
+              selectedItem?.pack_size != null && selectedItem.pack_size > 1
+                ? {
+                    noun: "pack",
+                    piecesPerUnit: selectedItem.pack_size,
+                    pieceNoun: selectedItem.pack_unit?.trim() || "pieces",
+                  }
+                : undefined
+            }
+          />
         </section>
 
         <section className="space-y-3 rounded-xl border bg-background p-4">

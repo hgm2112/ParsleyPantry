@@ -55,6 +55,7 @@ import {
   foodTypeByKey,
   guessFreezerFoodType,
 } from "@/lib/freezer";
+import { packUnitLabel } from "@/lib/stock";
 import type { ItemRow, Location } from "@/lib/types";
 
 /**
@@ -66,7 +67,10 @@ type TripEntry = {
   inventoryId: string;
   itemId: string;
   name: string;
+  /** Pieces added for this line (a pack item adds its full pack size). */
   added: number;
+  /** Pieces one more "+1" tap adds (pack size for pack items, else 1). */
+  packStep: number;
   location: Location;
   expirationDate: string | null;
   /** Exact freeze inputs used when this line was last saved (re-sent on +1). */
@@ -111,6 +115,9 @@ function isTrip(value: unknown): value is TripEntry[] {
       typeof row.itemId === "string" &&
       typeof row.name === "string" &&
       typeof row.added === "number" &&
+      // Trips saved before pack sizes existed lack packStep — treated as 1.
+      (row.packStep === undefined ||
+        (typeof row.packStep === "number" && row.packStep >= 1)) &&
       typeof row.location === "string" &&
       (LOCATION_VALUES as readonly string[]).includes(row.location) &&
       (row.expirationDate === null || typeof row.expirationDate === "string") &&
@@ -125,7 +132,10 @@ type SavedAdd = {
   inventoryId: string;
   itemId: string;
   name: string;
+  /** Pieces this add put in stock (a pack item stores its full pack size). */
   amount: number;
+  /** Pieces one +1 tap adds (pack size for pack items, else 1). */
+  packStep: number;
   location: Location;
   expirationDate: string | null;
   freezeInput: FreezeInput;
@@ -175,6 +185,8 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
     expirationDate: string | null;
     freezeInput: FreezeInput;
     amount: number;
+    /** Pieces one +1 tap adds for this line (pack size for pack items). */
+    packStep: number;
   }) {
     setTrip((current) => {
       const existing = current.find(
@@ -186,6 +198,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
             ? {
                 ...entry,
                 added: entry.added + input.amount,
+                packStep: input.packStep,
                 location: input.location,
                 expirationDate: input.expirationDate,
                 freezeInput: input.freezeInput,
@@ -201,6 +214,7 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
           itemId: input.itemId,
           name: input.name,
           added: input.amount,
+          packStep: input.packStep,
           location: input.location,
           expirationDate: input.expirationDate,
           freezeInput: input.freezeInput,
@@ -286,13 +300,13 @@ export function ShopSession({ defaultLocation }: { defaultLocation: Location }) 
       setTrip((current) =>
         current.map((row) =>
           row.key === entry.key
-            ? { ...row, added: row.added + 1, at: Date.now() }
+            ? { ...row, added: row.added + entry.packStep, at: Date.now() }
             : row,
         ),
       );
       showFlash(entry.name);
     } else {
-      await undoEntry(entry.inventoryId, 1);
+      await undoEntry(entry.inventoryId, entry.packStep);
     }
   }
 
@@ -510,6 +524,15 @@ function ConfirmItemSheet({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
 
+  const qtyScale = item.pack_size != null && item.pack_size > 1
+    ? {
+        noun: "pack",
+        piecesPerUnit: item.pack_size,
+        pieceNoun: packUnitLabel(item),
+      }
+    : undefined;
+  const packStep = qtyScale?.piecesPerUnit ?? 1;
+
   async function save() {
     const batches = entriesToBatches(entries);
     if (batches.length === 0) {
@@ -552,6 +575,7 @@ function ConfirmItemSheet({
         itemId: inventory.item_id,
         name: inventory.item?.name ?? item.name,
         amount: batches[index]?.quantity ?? inventory.quantity,
+        packStep,
         location,
         expirationDate: inventory.expiration_date,
         freezeInput,
@@ -576,7 +600,11 @@ function ConfirmItemSheet({
             <LocationPicker value={location} onChange={setLocation} />
           </div>
 
-          <ExpirationEntries entries={entries} onChange={setEntries} />
+          <ExpirationEntries
+            entries={entries}
+            onChange={setEntries}
+            qtyScale={qtyScale}
+          />
 
           <FreezerFields
             location={location}

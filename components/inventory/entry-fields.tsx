@@ -458,6 +458,20 @@ function formatTotal(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
 }
 
+/**
+ * What the per-row quantities count when the item is bought in packs:
+ * rows are entered in packs, while stored stock is pieces (12 packets
+ * per pack).
+ */
+export type QtyScale = {
+  /** What one entered unit is called ("pack"). */
+  noun: string;
+  /** Pieces one entered unit equals (12 → "1 pack = 12 packets"). */
+  piecesPerUnit: number;
+  /** What a stored piece is called ("packets", "eggs"). */
+  pieceNoun: string;
+};
+
 /** Collapses blank/zero rows and merges duplicate dates into dated batches. */
 export function entriesToBatches(
   entries: ExpirationEntryValue[],
@@ -486,11 +500,14 @@ export function ExpirationEntries({
   onChange,
   single = false,
   disabled = false,
+  qtyScale,
 }: {
   entries: ExpirationEntryValue[];
   onChange: (entries: ExpirationEntryValue[]) => void;
   single?: boolean;
   disabled?: boolean;
+  /** Set when rows count packs and stored stock counts pieces. */
+  qtyScale?: QtyScale;
 }) {
   const total = entries.reduce((sum, entry) => {
     const value = Number(entry.quantity);
@@ -517,7 +534,9 @@ export function ExpirationEntries({
       <div className="flex items-center justify-between gap-2">
         <Label>Expiration</Label>
         {!single ? (
-          <span className="text-xs text-muted-foreground">Quantity for each date</span>
+          <span className="text-xs text-muted-foreground">
+            {qtyScale ? `${qtyScale.noun}s for each date` : "Quantity for each date"}
+          </span>
         ) : null}
       </div>
 
@@ -529,7 +548,7 @@ export function ExpirationEntries({
               inputMode="decimal"
               min={0}
               step="any"
-              placeholder="Qty"
+              placeholder={qtyScale ? `Qty (${qtyScale.noun}s)` : "Qty"}
               aria-label="Quantity for this date"
               value={entry.quantity}
               onChange={(event) => update(entry.id, { quantity: event.target.value })}
@@ -610,6 +629,12 @@ export function ExpirationEntries({
       {!single ? (
         <p className="w-fit rounded-md border bg-muted/40 px-3 py-1.5 text-sm font-semibold tabular-nums">
           Total Quantity: {formatTotal(total)}
+          {qtyScale
+            ? ` ${qtyScale.noun}${total === 1 ? "" : "s"}` +
+              (qtyScale.piecesPerUnit !== 1
+                ? ` (= ${formatTotal(total * qtyScale.piecesPerUnit)} ${qtyScale.pieceNoun})`
+                : "")
+            : null}
         </p>
       ) : null}
     </div>

@@ -55,7 +55,7 @@ import {
   toBatchSnapshot,
   type ItemGroup,
 } from "@/lib/batches";
-import { displayQtyUnit, stockPoolKey } from "@/lib/stock";
+import { displayQtyUnit, packCount, packHintText, stockPoolKey } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
 
@@ -801,6 +801,11 @@ function InventoryItemCard({
             </Button>
             <span className="min-w-8 text-center text-sm font-extrabold tabular-nums">
               {quantity % 1 === 0 ? quantity : quantity.toFixed(1)}
+              {packCount(quantity, item) ? (
+                <span className="text-xs text-muted-foreground ml-0.5">
+                  ({packHintText(quantity, item)})
+                </span>
+              ) : null}
             </span>
             <Button
               variant="outline"

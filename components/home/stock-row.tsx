@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { displayQtyUnit } from "@/lib/stock";
+import { displayQtyUnit, packCount, packHintText } from "@/lib/stock";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge } from "@/components/location-badge";
 import { expiryChipProps } from "@/lib/freezer";
@@ -24,6 +24,11 @@ export function StockRow({ group }: { group: ItemGroup }) {
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold uppercase text-blue-800 dark:bg-blue-950 dark:text-blue-200">
             QTY: {qtyText}
+            {packCount(group.totalQuantity, group.item) ? (
+              <span className="text-xs text-muted-foreground ml-0.5">
+                ({packHintText(group.totalQuantity, group.item)})
+              </span>
+            ) : null}
           </span>
           {unitText ? (
             <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase text-violet-800 dark:bg-violet-950 dark:text-violet-200">

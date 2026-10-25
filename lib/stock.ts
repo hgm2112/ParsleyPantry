@@ -24,6 +24,40 @@ export function stockPoolKey(itemId: string, unit: string | null): string {
   return `${itemId}__${(unit ?? "").toLowerCase()}`;
 }
 
+/** Pieces one purchased pack adds (1 = the item is not a pack item). */
+export function packMultiplier(
+  item: Pick<ItemRow, "pack_size"> | null | undefined,
+): number {
+  return item?.pack_size != null && item.pack_size > 1 ? item.pack_size : 1;
+}
+
+/** The name one piece inside a pack is stored under ("eggs", "packets"). */
+export function packUnitLabel(
+  item: Pick<ItemRow, "pack_unit"> | null | undefined,
+): string {
+  return item?.pack_unit?.trim() || "pieces";
+}
+
+/** True when the item is a pack item and the piece count is a whole pack. */
+export function packCount(
+  quantity: number,
+  item: Pick<ItemRow, "pack_size"> | null | undefined,
+): number | null {
+  const size = item?.pack_size;
+  if (size == null || size <= 1 || quantity <= 0) return null;
+  const packs = quantity / size;
+  return Number.isInteger(packs) ? packs : null;
+}
+
+/** "(1 box)" → keep to the generic pack wording in UI. */
+export function packHintText(
+  quantity: number,
+  item: Pick<ItemRow, "pack_size"> | null | undefined,
+): string | null {
+  const packs = packCount(quantity, item);
+  return packs ? `${packs} pack${packs === 1 ? "" : "s"}` : null;
+}
+
 const WEIGHT_TO_IMPERIAL: Record<string, { unit: string; factor: number }> = {
   g: { unit: "oz", factor: 1 / 28.3495 },
   gr: { unit: "oz", factor: 1 / 28.3495 },

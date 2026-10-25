@@ -72,6 +72,14 @@ export interface ItemRow {
   low_threshold: number | null;
   auto_restock: boolean;
   unit: string | null;
+  /**
+   * Pieces per purchased pack ("1 carton = 12 eggs"); null = not a pack item.
+   * Stock for pack items is stored in pieces — quantities are multiplied by
+   * this at purchase time so consumption never deals in fractions of a pack.
+   */
+  pack_size: number | null;
+  /** What one piece inside a pack is called ("eggs", "packets"). */
+  pack_unit: string | null;
   /** Last freezer food type chosen for this item (key from lib/freezer.ts). */
   freezer_food_type: string | null;
   created_by: string | null;

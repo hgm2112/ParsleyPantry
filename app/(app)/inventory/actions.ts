@@ -72,6 +72,15 @@ const addInputSchema = z.object({
     .optional(),
   source: z.string().trim().max(60).nullish(),
   notes: z.string().trim().max(500).nullish(),
+  /** Pieces per pack (set when first creating a pack item). */
+  packSize: z.number().int().min(2).max(9999).nullish().transform((v) => v ?? null),
+  /** Piece name ("eggs", "packets"); defaults to "pieces" when a pack size is set. */
+  packUnit: z
+    .string()
+    .trim()
+    .max(32)
+    .nullish()
+    .transform((value) => (value ?? "").trim() || null),
   lowThreshold: z.number().min(0).nullish(),
   expirationDays: z.number().int().min(0).max(3650).nullish(),
   autoRestock: z.boolean().nullish(),
@@ -271,7 +280,7 @@ export async function addToInventory(
     const freeze = freezeColumnsForAdd(input);
 
     // The converted unit is batch-independent (only the quantity scales).
-    const unit = toImperialStock(1, input.unit ?? null).unit;
+    const inputUnit = toImperialStock(1, input.unit ?? null).unit;
     const thresholdFactor = imperialFactor(input.unit ?? null);
     const lowThreshold =
       input.lowThreshold != null && thresholdFactor != null
@@ -334,7 +343,9 @@ export async function addToInventory(
           low_threshold: lowThreshold,
           auto_restock: input.autoRestock ?? false,
           freezer_food_type: input.freezerFoodType,
-          unit,
+          pack_size: input.packSize ?? null,
+          pack_unit: input.packSize != null ? (input.packUnit ?? "pieces") : null,
+          unit: inputUnit,
           created_by: user.id,
         })
         .select("*")
@@ -365,6 +376,15 @@ export async function addToInventory(
       if (input.name.trim() && input.name.trim() !== item.name) {
         patch.name = input.name.trim();
       }
+      // Pack size fills an item that never had one (never silently edits an
+      // existing `pieces per pack` — the item editor owns that).
+      if (
+        input.packSize != null &&
+        (item.pack_size == null || item.pack_size <= 1)
+      ) {
+        patch.pack_size = input.packSize;
+        patch.pack_unit = (input.packUnit ?? "pieces").trim() || "pieces";
+      }
       if (input.unit !== undefined && input.unit !== item.unit) {
         patch.unit = input.unit;
       }
@@ -384,6 +404,15 @@ export async function addToInventory(
 
     if (!item) return { ok: false, error: "Could not create item" };
     const targetItemId = item.id;
+
+    // Pack items store stock in pieces: each entered pack count scales by the
+    // pack size and batches are labeled with the piece unit ("eggs",
+    // "packets"). Consumption and thresholds then count pieces directly.
+    const packSize =
+      item.pack_size != null && item.pack_size > 1 ? item.pack_size : null;
+    const unit = packSize
+      ? ((item.pack_unit ?? "pieces").trim() || "pieces")
+      : inputUnit;
 
     // Batch key: same item + location + expiration date + freezing history
     // (including the purchased-frozen flag) = the same batch. Anything else
@@ -498,7 +527,8 @@ export async function addToInventory(
       if (batch.quantity <= 0) continue;
       const converted = toImperialStock(batch.quantity, input.unit ?? null).quantity;
       if (converted <= 0) continue;
-      const outcome = await addBatch(converted, batch.expirationDate);
+      const pieces = packSize ? converted * packSize : converted;
+      const outcome = await addBatch(pieces, batch.expirationDate);
       if (!outcome.ok) return { ok: false, error: outcome.error };
       const row = await loadInventory(supabase, householdId, outcome.id);
       if (!row) return { ok: false, error: "Could not load updated item" };
@@ -915,6 +945,23 @@ const patchSchema = z.object({
     .transform((value) => (value === undefined ? undefined : (value ?? null))),
   source: z.string().trim().max(60).nullish(),
   notes: z.string().trim().max(500).nullish(),
+  /** Pieces per pack; null clears the pack (undefined = leave untouched). */
+  packSize: z
+    .number()
+    .int()
+    .min(2)
+    .max(9999)
+    .nullish()
+    .transform((value) => (value === undefined ? undefined : (value ?? null))),
+  /** Piece name inside the pack. */
+  packUnit: z
+    .string()
+    .trim()
+    .max(32)
+    .nullish()
+    .transform((value) =>
+      value === undefined ? undefined : ((value ?? "").trim() || null),
+    ),
   isLow: z.boolean().optional(),
   lowThreshold: z.number().min(0).nullish(),
   autoRestock: z.boolean().optional(),
@@ -1187,13 +1234,28 @@ export async function updateInventory(
       input.autoRestock !== undefined ||
       input.itemName !== undefined ||
       input.subcategoryId !== undefined ||
-      input.freezerFoodType !== undefined
+      input.freezerFoodType !== undefined ||
+      input.packSize !== undefined ||
+      input.packUnit !== undefined
     ) {
       const itemPatch: Record<string, unknown> = {};
       if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
       if (input.itemName !== undefined) itemPatch.name = input.itemName;
       if (input.subcategoryId !== undefined) itemPatch.subcategory_id = input.subcategoryId;
+      if (input.packSize !== undefined) {
+        itemPatch.pack_size = input.packSize;
+        // A pack always carries a piece name; clearing the pack clears it too.
+        const currentItem = current.item;
+        itemPatch.pack_unit =
+          input.packUnit === undefined
+            ? (input.packSize != null && currentItem?.pack_unit?.trim()
+                ? currentItem.pack_unit.trim()
+                : (input.packSize ? "pieces" : null))
+            : input.packUnit;
+      } else if (input.packUnit !== undefined) {
+        itemPatch.pack_unit = input.packUnit;
+      }
       if (input.freezerFoodType !== undefined) {
         if (
           input.freezerFoodType !== null &&
