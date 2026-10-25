@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Keep `next build` enrolled in Next.js security upgrade guidance.
+    agentUpgrade: "security",
+  },
   async redirects() {
     return [{ source: "/calendar", destination: "/home", permanent: false }];
   },
