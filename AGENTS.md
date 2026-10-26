@@ -8,26 +8,39 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-10-16, part 2)
+## Current Session Snapshot (2026-10-26)
 
-Goal: batch/expiry correctness, recovering the schema after a DROP SCHEMA reset,
-and one consistent pantry-coverage rule across recipes.
+Goal: pantry/shopping UX — cook from Quick Bites without leaving `/home`, and
+make shopping lines read like aisle labels instead of scanned product names.
 
-Shipped and pushed (b51610e → 86783fc):
-- Restore public schema grants after DROP SCHEMA reset (`b51610e`) — reset wiped
-  role grants (PostgREST 42501); keep this migration last on any rebuild.
-- Recipe editor: drop duplicate top submit, return to list after create (`86d4b22`).
-- Multi-date expiration entry with Month/Day/Year pickers (`ebe3951`).
-- Restore `store_aisles.category_id` (`c3b9e89`).
-- Drop stale `inventory_household_id_item_id_location_key` (`3b95e28`).
-- Stop pre-filling expiration dates on batch entry (`251ab4c`).
-- Recipes required-only counts + optional column + presence-based checks (`12ef77e`).
-- Inventory detail: read-only quantity, Save returns to list, "+ Add More" (`523c448`).
-- Recipe editor: "Save changes" returns to list (`86783fc`).
+Shipped and pushed (bd0d7e9 → 64dd04d):
+- Quick Bites cards open a **Cook `<recipe>`** dialog: pantry coverage preview,
+  required rows pre-checked, meal-plan `stock_holds` protected, FEFO deduction
+  with Undo (`bd0d7e9`). Actions live in `app/(app)/recipes/actions.ts`
+  (`previewRecipeCook` / `cookRecipe`).
+- Grocery lines collapse onto the canonical root: line name/id/category follow
+  the root; unit keeps the pack/input unit. Centralized in `addGroceryItem` /
+  `ensureGroceryItem` via `resolveCatalogRoot` (`lib/grocery.ts`), so list adds,
+  type-ahead, inventory button, consume, low stock, recipes and planner agree
+  (`64dd04d`).
+- Migration `20261026120000_grocery_canonical_names.sql` backfilled existing
+  linked lines; applied to prod (4 labels changed; all 13 linked lines on root).
+- Fixed conditional-hook order in `quick-bites-widget.tsx` (5 lint errors gone).
 
 Verified: `npx tsc --noEmit` green; `npm run build` successful; `npm run lint`
-12 pre-existing errors / 16 warnings (no new); pre-push hook green.
+8 pre-existing errors / 16 warnings (no new); pre-push hook green.
+
+Durable notes:
+- On any schema rebuild keep `20261017140000_restore_schema_privileges.sql` last:
+  a DROP SCHEMA reset wipes role grants (PostgREST 42501).
+- Date Bark Quick Bites visibility was fixed as **data**, not code: Medjool
+  Dates inventory 3 → 24, ingredient quantity text “10-12, Naturals Delights”
+  → “10”.
 
 Open:
-- Confirm deployed `/recipes` counts and the new redirect flows in a fresh browser.
-- Optional: align home Quick Bites coverage with required-only + presence; stray-file / lint-error cleanup.
+- Signed-in check: Quick Bites cook + Undo; add a scanned product → canonical
+  grocery label and correct aisle; adding a second product with the same root
+  should report “already on the list”.
+- Confirm deployed `/recipes` required-only counts and the new redirect flows.
+- Optional: align Quick Bites coverage with the presence-based rule `/recipes`
+  uses; stray-file / lint-error cleanup.

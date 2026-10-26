@@ -24,6 +24,7 @@ for "what changed", this is for "what's true now / what's next".
   “Sunbeam Giant BREAD” → Bread. All 13 linked lines now sit on their root.
 - Verified: `npx tsc --noEmit` green, `npm run build` successful. Lint parity
   (pre-existing smart-actions apostrophe error + 2 warnings in touched files).
+- Committed `64dd04d`; pushed.
 
 **Notes**
 - Pickers still show scanned product names so a specific package stays easy to
@@ -59,6 +60,12 @@ for "what changed", this is for "what's true now / what's next".
   (early `return null` sat between `useMemo`s) — 5 lint errors gone.
 - Verified: `npx tsc --noEmit` green, `npm run build` successful, `npm run lint`
   at 8 errors / 16 warnings (down from 12/16, none new).
+- Committed `bd0d7e9`; pushed.
+
+**Notes**
+- Date Bark later became visible again via **data**: Medjool Dates stock 3 → 24
+  and ingredient quantity text “10-12, Naturals Delights” → “10”. The widget
+  still uses quantity-based coverage; presence alignment remains optional.
 
 **Gotchas**
 - An empty `quantity_text` deducts **1** (same rule as the meal-plan
