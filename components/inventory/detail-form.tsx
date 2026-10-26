@@ -349,7 +349,7 @@ export function InventoryDetail({
     }
     toast.success(
       result.data.created
-        ? `${item.name} added to grocery list`
+        ? `${result.data.name} added to grocery list`
         : "Already on the grocery list",
     );
   }

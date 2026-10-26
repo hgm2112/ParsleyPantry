@@ -4,6 +4,41 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-26 — Grocery lines use the canonical root name
+
+**Shipped**
+- `resolveCatalogRoot` in `lib/grocery.ts`: walks `items.canonical_item_id` to
+  the generic root (cycle-safe, ≤8 hops) and returns its name/category/unit.
+- `addGroceryItem` and `ensureGroceryItem` now collapse catalog-linked adds
+  onto the root: line `name` = root name, `item_id` = root id, `category_id`
+  = root category (input fallback), `unit` keeps the pack/input unit. Dedupe
+  and remembered aisles therefore key identically from every entry point.
+- Covers all add paths: `/grocery` Add→Inventory, the type-ahead, inventory
+  “Add to grocery list”, consume / low-stock / auto-restock, smart actions,
+  recipes and planner.
+- Both actions return the canonical name; toasts on the supermarket list,
+  inventory list/detail and low-stock card now say the canonical label.
+- Migration `20261026120000_grocery_canonical_names.sql` backfilled existing
+  linked lines (applied to prod): “6 Cheese Italian Natural Cheese” → Cheese,
+  “Original cooking spray” → Pam Spray, “Shortening Sticks” → Shortening,
+  “Sunbeam Giant BREAD” → Bread. All 13 linked lines now sit on their root.
+- Verified: `npx tsc --noEmit` green, `npm run build` successful. Lint parity
+  (pre-existing smart-actions apostrophe error + 2 warnings in touched files).
+
+**Notes**
+- Pickers still show scanned product names so a specific package stays easy to
+  find; only the resulting shopping line is canonical.
+- Unlinked/manual lines keep their typed name. The backfill rewrites the copied
+  name on linked lines, so a deliberately custom label there would be lost
+  (only one line differed at apply time).
+
+**Open — next session**
+- Signed-in check: add a scanned product → canonical label + correct aisle;
+  add a second product with the same root → “already on the list”.
+- Confirm deployed `/recipes` counts and the new redirect flows.
+- Optional: Quick Bites coverage alignment (present in recipes list), stray
+  file / lint cleanup.
+
 ## 2026-10-26 — Quick Bites: deduct ingredients without leaving /home
 
 **Shipped**

@@ -12,6 +12,63 @@ export type EnsureGroceryInput = {
   source: GrocerySource;
 };
 
+export type CatalogRoot = {
+  id: string;
+  name: string;
+  category_id: string | null;
+  unit: string | null;
+};
+
+/**
+ * Walks items.canonical_item_id to the generic root and returns its identity.
+ * Scanned products keep their exact name in the pantry; shopping lines use
+ * this root name (and root category) so they read like aisle labels. Unmapped
+ * items are their own root. Follows chains defensively, but the app stores
+ * roots directly.
+ */
+export async function resolveCatalogRoot(
+  supabase: SupabaseClient,
+  householdId: string,
+  itemId: string,
+): Promise<CatalogRoot | null> {
+  let current = itemId;
+  const seen = new Set<string>();
+  let last: CatalogRoot | null = null;
+
+  for (let hop = 0; hop < 8; hop += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+
+    const { data, error } = await supabase
+      .from("items")
+      .select("id, name, category_id, unit, canonical_item_id")
+      .eq("household_id", householdId)
+      .eq("id", current)
+      .maybeSingle();
+    if (error || !data) return last;
+
+    const row = data as {
+      id: string;
+      name: string;
+      category_id: string | null;
+      unit: string | null;
+      canonical_item_id: string | null;
+    };
+    last = {
+      id: row.id,
+      name: row.name,
+      category_id: row.category_id,
+      unit: row.unit,
+    };
+
+    const next = row.canonical_item_id;
+    if (!next || next === current) break;
+    current = next;
+  }
+
+  return last;
+}
+
 /**
  * Resolves a free-text grocery add to a catalog item, creating one when the
  * name is new. This is what makes the type-ahead remember items added via
@@ -196,11 +253,13 @@ export async function ensureGroceryItem(
   supabase: SupabaseClient,
   householdId: string,
   input: EnsureGroceryInput,
-): Promise<{ created: boolean; id: string | null }> {
-  // Free-text paths (if any) should also resolve to catalog for memory.
+): Promise<{ created: boolean; id: string | null; name: string }> {
   let itemId = input.itemId ?? null;
   let categoryId = input.categoryId ?? null;
   let unit = input.unit ?? null;
+  let name = input.name;
+
+  // Free-text paths (if any) should also resolve to catalog for memory.
   if (!itemId) {
     const catalogItem = await findOrCreateCatalogItem(supabase, householdId, {
       name: input.name,
@@ -211,6 +270,19 @@ export async function ensureGroceryItem(
       itemId = catalogItem.id;
       if (!categoryId) categoryId = catalogItem.category_id;
       if (!unit) unit = catalogItem.unit;
+    }
+  }
+
+  // Same canonical-root rule as addGroceryItem: the line is labeled with the
+  // generic ingredient and links to the root, so re-adds from consume/low
+  // stock dedupe and file exactly like adds from the shopping list.
+  if (itemId) {
+    const root = await resolveCatalogRoot(supabase, householdId, itemId);
+    if (root) {
+      itemId = root.id;
+      name = root.name;
+      categoryId = root.category_id ?? categoryId;
+      if (!unit) unit = root.unit;
     }
   }
 
@@ -225,14 +297,14 @@ export async function ensureGroceryItem(
   ).limit(1);
 
   const existing = (existingRows ?? [])[0] as { id: string } | undefined;
-  if (existing) return { created: false, id: existing.id };
+  if (existing) return { created: false, id: existing.id, name };
 
   const { data: inserted, error } = await supabase
     .from("grocery_items")
     .insert({
       household_id: householdId,
       item_id: itemId,
-      name: input.name,
+      name,
       quantity: input.quantity ?? 1,
       unit,
       category_id: categoryId,
@@ -241,12 +313,12 @@ export async function ensureGroceryItem(
     .select("id")
     .single();
 
-  if (error || !inserted) return { created: false, id: null };
+  if (error || !inserted) return { created: false, id: null, name };
 
   const id = (inserted as { id: string }).id;
   await bumpGroceryAddMemory(supabase, householdId, itemId);
   await fileGroceryItem(supabase, householdId, id, itemId);
-  return { created: true, id };
+  return { created: true, id, name };
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   fileGroceryItem,
   findOrCreateCatalogItem,
   rememberItemStores,
+  resolveCatalogRoot,
   syncStoreAislesToCategories,
 } from "@/lib/grocery";
 import type {
@@ -43,7 +44,7 @@ export type AddGroceryInput = z.input<typeof addSchema>;
 
 export async function addGroceryItem(
   rawInput: AddGroceryInput,
-): Promise<ActionResult<{ id: string; created: boolean }>> {
+): Promise<ActionResult<{ id: string; created: boolean; name: string }>> {
   try {
     const parsed = addSchema.safeParse(rawInput);
     if (!parsed.success) {
@@ -52,12 +53,18 @@ export async function addGroceryItem(
     const input = parsed.data;
     const { supabase, householdId, user } = await requireDal();
 
-    // Free-text adds (Manual tab, recipe ingredients with no catalog link)
-    // must land in the catalog so the type-ahead remembers them after the
-    // shopping line is cleared. Without this they leave no trace at all.
+    // Catalog-linked adds collapse onto the canonical root: name, item id and
+    // category all follow the generic ingredient ("Sunbeam Giant BREAD" →
+    // "Bread"). The list then reads like aisle labels, and dedupe plus
+    // remembered aisles key the same way from every entry point.
     let itemId = input.itemId ?? null;
     let categoryId = input.categoryId ?? null;
     let unit = input.unit ?? null;
+    let name = input.name;
+
+    // Free-text adds (Manual tab, recipe ingredients with no catalog link)
+    // must land in the catalog so the type-ahead remembers them after the
+    // shopping line is cleared. Without this they leave no trace at all.
     if (!itemId) {
       const catalogItem = await findOrCreateCatalogItem(supabase, householdId, {
         name: input.name,
@@ -72,9 +79,19 @@ export async function addGroceryItem(
       }
     }
 
+    if (itemId) {
+      const root = await resolveCatalogRoot(supabase, householdId, itemId);
+      if (root) {
+        itemId = root.id;
+        name = root.name;
+        categoryId = root.category_id ?? categoryId;
+        if (!unit) unit = root.unit;
+      }
+    }
+
     const lookup = supabase
       .from("grocery_items")
-      .select("id")
+      .select("id, name")
       .eq("household_id", householdId)
       .eq("checked", false);
 
@@ -82,10 +99,15 @@ export async function addGroceryItem(
       itemId ? lookup.eq("item_id", itemId) : lookup.eq("name", input.name)
     ).limit(1);
 
-    const existing = (existingRows ?? [])[0] as { id: string } | undefined;
+    const existing = (existingRows ?? [])[0] as
+      | { id: string; name: string }
+      | undefined;
     if (existing) {
       revalidatePath("/grocery");
-      return { ok: true, data: { id: existing.id, created: false } };
+      return {
+        ok: true,
+        data: { id: existing.id, created: false, name: existing.name },
+      };
     }
 
     const { data, error } = await supabase
@@ -93,7 +115,7 @@ export async function addGroceryItem(
       .insert({
         household_id: householdId,
         item_id: itemId,
-        name: input.name,
+        name,
         quantity: input.quantity,
         unit,
         category_id: categoryId,
@@ -112,7 +134,10 @@ export async function addGroceryItem(
     await fileGroceryItem(supabase, householdId, (data as { id: string }).id, itemId);
 
     revalidatePath("/grocery");
-    return { ok: true, data: { id: (data as { id: string }).id, created: true } };
+    return {
+      ok: true,
+      data: { id: (data as { id: string }).id, created: true, name },
+    };
   } catch (error) {
     return {
       ok: false,

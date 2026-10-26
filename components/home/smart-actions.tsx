@@ -384,9 +384,9 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
       }
       setAddedLocal((prev) => [...new Set([...prev, lowGroup.item.id])]);
       if (result.data.created) {
-        toast.success(`${lowGroup.item.name} added to your shopping list`);
+        toast.success(`${result.data.name} added to your shopping list`);
       } else {
-        toast.message(`${lowGroup.item.name} is already on your list`);
+        toast.message(`${result.data.name} is already on your list`);
       }
     }
     const handleIgnore = () => {

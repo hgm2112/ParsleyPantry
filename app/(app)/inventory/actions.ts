@@ -1400,7 +1400,7 @@ export async function locationForNewItem(): Promise<Location> {
 /** Adds an inventory item to the grocery list without consuming it. */
 export async function addInventoryToGrocery(
   inventoryId: string,
-): Promise<ActionResult<{ created: boolean }>> {
+): Promise<ActionResult<{ created: boolean; name: string }>> {
   try {
     const { supabase, householdId } = await requireDal();
     const inventory = await loadInventory(supabase, householdId, inventoryId);
@@ -1416,7 +1416,10 @@ export async function addInventoryToGrocery(
     });
 
     revalidatePath("/grocery");
-    return { ok: true, data: { created: result.created } };
+    return {
+      ok: true,
+      data: { created: result.created, name: result.name },
+    };
   } catch (error) {
     return {
       ok: false,

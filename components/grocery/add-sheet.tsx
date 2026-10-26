@@ -82,8 +82,8 @@ export function AddGrocerySheet({
     }
     toast.success(
       result.data.created
-        ? `${group.item.name} added to list`
-        : `${group.item.name} is already on the list`,
+        ? `${result.data.name} added to list`
+        : `${result.data.name} is already on the list`,
     );
     onAdded();
   }

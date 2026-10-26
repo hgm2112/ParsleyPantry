@@ -366,7 +366,7 @@ export function GroceryView({
       return;
     }
     setQuery("");
-    toast.success(`${entry.name} added to the list`);
+    toast.success(`${result.data.name} added to the list`);
     router.refresh();
   }
 
