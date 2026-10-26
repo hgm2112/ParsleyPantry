@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Clock } from "lucide-react";
+import { ChefHat, Clock } from "lucide-react";
+import { CookRecipeDialog } from "@/components/home/cook-recipe-dialog";
 import { parseQuantityText, toOunces } from "@/lib/stock";
 
 type RecipeOption = {
@@ -39,15 +40,13 @@ export function QuickBitesWidget({
   recipeIngredients: RecipeIngredient[];
   pantry: InventoryEntry[];
 }) {
+  const [cookTarget, setCookTarget] = useState<RecipeOption | null>(null);
+
   const quickBitesRecipes = useMemo(() => {
     return recipes.filter((r) =>
       r.tags.some((t) => t.toLowerCase() === "quick bites"),
     );
   }, [recipes]);
-
-  if (quickBitesRecipes.length === 0) {
-    return null;
-  }
 
   const pantryRoots = useMemo(() => {
     const map = new Map<string, string>();
@@ -130,6 +129,10 @@ export function QuickBitesWidget({
     return available;
   }, [quickBitesRecipes, recipeIngredients, pantry, rootOf, stockByItem, stockUnitByItem]);
 
+  if (quickBitesRecipes.length === 0) {
+    return null;
+  }
+
   if (availableRecipes.length === 0) {
     return (
       <section className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -159,10 +162,12 @@ export function QuickBitesWidget({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
         {availableRecipes.map((recipe) => (
-          <Link
+          <button
             key={recipe.id}
-            href={`/recipes/${recipe.id}`}
-            className="group block rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:shadow-sm"
+            type="button"
+            onClick={() => setCookTarget(recipe)}
+            title="Deduct this recipe's ingredients from your pantry"
+            className="group block w-full rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/50 hover:shadow-sm"
           >
             <div className="flex items-center gap-2">
               <p className="truncate text-sm font-semibold group-hover:text-primary">
@@ -173,10 +178,22 @@ export function QuickBitesWidget({
                   {recipe.time}m
                 </span>
               )}
+              <ChefHat className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
             </div>
-          </Link>
+          </button>
         ))}
       </div>
+
+      {cookTarget ? (
+        <CookRecipeDialog
+          key={cookTarget.id}
+          recipeId={cookTarget.id}
+          recipeName={cookTarget.name}
+          onOpenChange={(open) => {
+            if (!open) setCookTarget(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

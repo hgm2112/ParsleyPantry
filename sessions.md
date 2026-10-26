@@ -4,6 +4,44 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-26 — Quick Bites: deduct ingredients without leaving /home
+
+**Shipped**
+- Quick Bites cards on `/home` now open a **Cook `<recipe>`** dialog instead of
+  navigating to the recipe editor. An “Open recipe →” link in the dialog keeps
+  the old destination one tap away.
+- `previewRecipeCook` / `cookRecipe` in `app/(app)/recipes/actions.ts`:
+  canonical-root coverage (item_id → root), oz-family unit conversion, a
+  per-recipe running budget so two rows on one root can't claim the same stock,
+  FEFO deduction across batches, empty batches deleted, and `BatchSnapshot[]`
+  returned so the toast can Undo via `restoreBatches`.
+- Meal-plan `stock_holds` reduce availability in the preview and are protected
+  during deduction (reserved quantities come off the earliest batches).
+- `components/home/cook-recipe-dialog.tsx`: required rows pre-checked, optional
+  rows off until tapped, unmatched/fully-reserved rows disabled with a reason,
+  plus loading/error/retry and empty states.
+- Fixed the pre-existing conditional-hook order in `quick-bites-widget.tsx`
+  (early `return null` sat between `useMemo`s) — 5 lint errors gone.
+- Verified: `npx tsc --noEmit` green, `npm run build` successful, `npm run lint`
+  at 8 errors / 16 warnings (down from 12/16, none new).
+
+**Gotchas**
+- An empty `quantity_text` deducts **1** (same rule as the meal-plan
+  confirmation). Free-text amounts (“10-12, Naturals Delights”) parse to the
+  leading number, so the dialog can show “short N” while still deducting what
+  is there.
+- Cooking from Quick Bites does **not** release meal-plan holds for a planned
+  day — reserved stock is simply skipped.
+- Undo uses the existing snapshot restore: last action only, max 60 batches.
+- Not yet manually exercised in a signed-in browser.
+
+**Open — next session**
+- Try the dialog against real Quick Bites (Cereal, Grilled Cheese, Date Bark)
+  and confirm Undo restores every touched batch.
+- Confirm deployed `/recipes` counts and redirect flows (still open from
+  2026-10-16).
+- Optional: Quick Bites coverage alignment / stray-file / lint cleanup.
+
 ## 2026-10-23 — Pack sizes: items bought in boxes/cases but used as individual pieces
 
 **Shipped**

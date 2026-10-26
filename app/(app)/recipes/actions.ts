@@ -5,7 +5,15 @@ import { z } from "zod";
 import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
 import { createRootLookup } from "@/lib/canonical";
-import { parseQuantityText, splitNameAndQuantity, toImperialText } from "@/lib/stock";
+import { fefoSort, toBatchSnapshot, type BatchSnapshot } from "@/lib/batches";
+import {
+  fromOunces,
+  parseQuantityText,
+  splitNameAndQuantity,
+  toImperialText,
+  toOunces,
+} from "@/lib/stock";
+import type { InventoryRow } from "@/lib/types";
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -303,6 +311,377 @@ export async function addRecipeToGrocery(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Could not add ingredients",
+    };
+  }
+}
+
+/** One ingredient as the cook dialog shows it: what the pantry can cover. */
+export type RecipeCookItem = {
+  id: string;
+  name: string;
+  quantityText: string;
+  optional: boolean;
+  /** Canonical root id; null = the ingredient isn't linked to a catalog item. */
+  rootId: string | null;
+  /** Catalog name of the matched group (differs for branded products). */
+  pantryName: string | null;
+  /** Recipe unit — display only; deduction compares quantity in pool space. */
+  unit: string | null;
+  needed: number;
+  available: number;
+  take: number;
+  shortfall: number;
+  /** Deduction amount in pool space (oz for weight recipes, raw otherwise). */
+  takePool: number;
+};
+
+type CookResolution =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      recipe: { id: string; name: string };
+      items: RecipeCookItem[];
+      groupByRoot: Map<string, string[]>;
+      heldByRoot: Map<string, number>;
+      /** Unreserved stock per root in pool space — shared roots don't double-dip. */
+      availableByRoot: Map<string, number>;
+    };
+
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
+/**
+ * Recipe-driven pantry resolution for the Quick Bites cook dialog: every saved
+ * ingredient paired with current stock via item_id → canonical root, pooled
+ * across all batches (oz-family weights convert exactly; cups/counts compare
+ * as plain numbers, like the recipe editor). Meal-plan stock holds reduce
+ * availability — reserved stock is never shown as usable. Read-only.
+ */
+async function resolveRecipeCook(
+  supabase: Awaited<ReturnType<typeof requireDal>>["supabase"],
+  householdId: string,
+  recipeId: string,
+): Promise<CookResolution> {
+  const { data: recipeData, error: recipeError } = await supabase
+    .from("recipes")
+    .select("id, name")
+    .eq("household_id", householdId)
+    .eq("id", recipeId)
+    .maybeSingle();
+  if (recipeError) return { ok: false, error: recipeError.message };
+  const recipe = recipeData as { id: string; name: string } | null;
+  if (!recipe) return { ok: false, error: "Recipe not found" };
+
+  const [ingredientsResult, inventoryResult, holdsResult, itemsResult] =
+    await Promise.all([
+      supabase
+        .from("recipe_ingredients")
+        .select("id, name, item_id, quantity_text, optional, sort_order")
+        .eq("household_id", householdId)
+        .eq("recipe_id", recipeId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("inventory")
+        .select("*")
+        .eq("household_id", householdId)
+        .gt("quantity", 0),
+      supabase
+        .from("stock_holds")
+        .select("item_id, quantity, unit")
+        .eq("household_id", householdId),
+      supabase
+        .from("items")
+        .select("id, name, canonical_item_id")
+        .eq("household_id", householdId),
+    ]);
+  if (ingredientsResult.error) {
+    return { ok: false, error: ingredientsResult.error.message };
+  }
+
+  const catalogRows = (itemsResult.data ?? []) as {
+    id: string;
+    name: string;
+    canonical_item_id: string | null;
+  }[];
+  const rootOf = createRootLookup(catalogRows);
+  const nameById = new Map<string, string>();
+  const groupByRoot = new Map<string, string[]>();
+  for (const row of catalogRows) {
+    const root = rootOf(row.id);
+    nameById.set(row.id, row.name);
+    const group = groupByRoot.get(root) ?? [];
+    group.push(row.id);
+    groupByRoot.set(root, group);
+  }
+
+  const stockByRoot = new Map<string, number>();
+  const stockUnitByRoot = new Map<string, string | null>();
+  const unitSeen = new Set<string>();
+  for (const row of (inventoryResult.data ?? []) as InventoryRow[]) {
+    const root = rootOf(row.item_id);
+    stockByRoot.set(root, (stockByRoot.get(root) ?? 0) + row.quantity);
+    if (!unitSeen.has(root)) {
+      unitSeen.add(root);
+      stockUnitByRoot.set(root, row.unit);
+    } else if (stockUnitByRoot.get(root) !== row.unit) {
+      stockUnitByRoot.set(root, null);
+    }
+  }
+
+  const heldByRoot = new Map<string, number>();
+  for (const hold of (holdsResult.data ?? []) as {
+    item_id: string;
+    quantity: number;
+    unit: string | null;
+  }[]) {
+    const root = rootOf(hold.item_id);
+    heldByRoot.set(root, (heldByRoot.get(root) ?? 0) + hold.quantity);
+  }
+
+  const items: RecipeCookItem[] = [];
+  /** Unreserved stock per root BEFORE this recipe's ingredients claim any. */
+  const availableByRoot = new Map<string, number>();
+  /** Running budget: two ingredients on one root must not claim stock twice. */
+  const remainingByRoot = new Map<string, number>();
+  for (const row of (ingredientsResult.data ?? []) as {
+    id: string;
+    name: string;
+    item_id: string | null;
+    quantity_text: string;
+    optional: boolean;
+  }[]) {
+    const parsed = parseQuantityText(row.quantity_text);
+    const rootId = row.item_id ? rootOf(row.item_id) : null;
+    const neededRaw = parsed.quantity;
+    const needed = toOunces(neededRaw, parsed.unit) ?? neededRaw;
+    const haveRaw = rootId ? (stockByRoot.get(rootId) ?? 0) : 0;
+    const commonUnit = rootId ? (stockUnitByRoot.get(rootId) ?? null) : null;
+    const have = toOunces(haveRaw, commonUnit) ?? haveRaw;
+    const held = rootId ? (heldByRoot.get(rootId) ?? 0) : 0;
+    const pool = Math.max(0, have - held);
+    if (rootId && !availableByRoot.has(rootId)) {
+      availableByRoot.set(rootId, pool);
+      remainingByRoot.set(rootId, pool);
+    }
+    const availablePool = rootId
+      ? (remainingByRoot.get(rootId) ?? pool)
+      : pool;
+    const takePool = Math.min(availablePool, needed);
+    if (rootId) {
+      remainingByRoot.set(rootId, Math.max(0, availablePool - takePool));
+    }
+    const shortfall = Math.max(0, needed - takePool);
+    // Report in the recipe's own unit so the dialog reads "1 lb"/"2 eggs".
+    const toRecipe = (value: number) =>
+      parsed.unit ? (fromOunces(value, parsed.unit) ?? value) : value;
+    items.push({
+      id: row.id,
+      name: row.name,
+      quantityText: row.quantity_text,
+      optional: row.optional === true,
+      rootId,
+      pantryName: rootId ? (nameById.get(rootId) ?? null) : null,
+      unit: parsed.unit,
+      needed: round3(toRecipe(needed)),
+      available: round3(toRecipe(availablePool)),
+      take: round3(toRecipe(takePool)),
+      shortfall: round3(toRecipe(shortfall)),
+      takePool: round3(takePool),
+    });
+  }
+
+  return {
+    ok: true,
+    recipe,
+    items,
+    groupByRoot,
+    heldByRoot,
+    availableByRoot,
+  };
+}
+
+/** Read-only pantry impact preview for the Quick Bites cook dialog. */
+export async function previewRecipeCook(
+  recipeId: string,
+): Promise<
+  ActionResult<{
+    recipe: { id: string; name: string };
+    items: RecipeCookItem[];
+  }>
+> {
+  try {
+    if (!z.string().uuid().safeParse(recipeId).success) {
+      return { ok: false, error: "Invalid recipe" };
+    }
+    const { supabase, householdId } = await requireDal();
+    const resolved = await resolveRecipeCook(supabase, householdId, recipeId);
+    if (!resolved.ok) return resolved;
+    return {
+      ok: true,
+      data: { recipe: resolved.recipe, items: resolved.items },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not load ingredients",
+    };
+  }
+}
+
+const cookRecipeSchema = z.object({
+  recipeId: z.string().uuid(),
+  ingredientIds: z.array(z.string().uuid()).min(1).max(100),
+});
+
+export type CookRecipeInput = z.input<typeof cookRecipeSchema>;
+
+export type CookRecipeData = {
+  deducted: { id: string; name: string; amount: number; unit: string | null }[];
+  skipped: { id: string; name: string; reason: string }[];
+  /** Pre-deduction rows so the client can undo via restoreBatches. */
+  snapshots: BatchSnapshot[];
+};
+
+/**
+ * Deducts the selected ingredients from the pantry FEFO across each
+ * canonical group. Quantities are recomputed server-side; stock reserved by
+ * meal-plan holds is left untouched. Empty batches are deleted, and the
+ * touched rows are returned as snapshots for the Undo toast.
+ */
+export async function cookRecipe(
+  rawInput: CookRecipeInput,
+): Promise<ActionResult<CookRecipeData>> {
+  try {
+    const parsed = cookRecipeSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return { ok: false, error: "Select at least one ingredient" };
+    }
+    const { supabase, householdId } = await requireDal();
+    const resolved = await resolveRecipeCook(
+      supabase,
+      householdId,
+      parsed.data.recipeId,
+    );
+    if (!resolved.ok) return resolved;
+
+    const selected = new Set(parsed.data.ingredientIds);
+    const snapshots: BatchSnapshot[] = [];
+    // A batch can serve more than one ingredient row (shared canonical root) —
+    // undo needs the state BEFORE the first deduction, not intermediate ones.
+    const snapshotted = new Set<string>();
+    const deducted: CookRecipeData["deducted"] = [];
+    const skipped: CookRecipeData["skipped"] = [];
+
+    for (const ingredient of resolved.items) {
+      if (!selected.has(ingredient.id)) continue;
+      if (!ingredient.rootId) {
+        skipped.push({
+          id: ingredient.id,
+          name: ingredient.name,
+          reason: "Not matched to the pantry",
+        });
+        continue;
+      }
+      // Shared canonical roots must not double-dip: recompute the remaining
+      // unreserved pool after every deduction.
+      const rootPool = resolved.availableByRoot.get(ingredient.rootId) ?? 0;
+      const takePool = Math.min(ingredient.takePool, rootPool);
+      if (takePool <= 0) {
+        skipped.push({
+          id: ingredient.id,
+          name: ingredient.name,
+          reason: "Nothing available",
+        });
+        continue;
+      }
+
+      const groupIds =
+        resolved.groupByRoot.get(ingredient.rootId) ?? [ingredient.rootId];
+      const { data: rowsData, error: rowsError } = await supabase
+        .from("inventory")
+        .select("*")
+        .eq("household_id", householdId)
+        .in("item_id", groupIds)
+        .gt("quantity", 0);
+      if (rowsError) return { ok: false, error: rowsError.message };
+      const rows = fefoSort((rowsData ?? []) as InventoryRow[]);
+
+      let remaining = takePool;
+      let heldRemaining = resolved.heldByRoot.get(ingredient.rootId) ?? 0;
+      for (const row of rows) {
+        if (remaining <= 0) break;
+        // Reserved meal-plan stock comes off the earliest batches first.
+        const reserved = Math.min(heldRemaining, row.quantity);
+        heldRemaining -= reserved;
+        const usable = row.quantity - reserved;
+        if (usable <= 0) continue;
+        const ozPerUnit = toOunces(1, row.unit);
+        const take = Math.min(
+          usable,
+          ozPerUnit != null ? remaining / ozPerUnit : remaining,
+        );
+        if (take <= 0) continue;
+        const nextQuantity = round3(row.quantity - take);
+        if (!snapshotted.has(row.id)) {
+          snapshotted.add(row.id);
+          snapshots.push(toBatchSnapshot(row));
+        }
+        if (nextQuantity <= 0) {
+          const { error } = await supabase
+            .from("inventory")
+            .delete()
+            .eq("id", row.id);
+          if (error) return { ok: false, error: error.message };
+        } else {
+          const { error } = await supabase
+            .from("inventory")
+            .update({ quantity: nextQuantity })
+            .eq("id", row.id);
+          if (error) return { ok: false, error: error.message };
+        }
+        remaining -= take * (ozPerUnit != null ? ozPerUnit : 1);
+      }
+
+      const takenPool = Math.max(0, takePool - Math.max(0, remaining));
+      resolved.availableByRoot.set(
+        ingredient.rootId,
+        Math.max(0, rootPool - takenPool),
+      );
+      const toRecipe = (value: number) =>
+        ingredient.unit
+          ? (fromOunces(value, ingredient.unit) ?? value)
+          : value;
+      deducted.push({
+        id: ingredient.id,
+        name: ingredient.name,
+        amount: round3(toRecipe(takenPool)),
+        unit: ingredient.unit,
+      });
+      if (remaining > 0.0001) {
+        skipped.push({
+          id: ingredient.id,
+          name: ingredient.name,
+          reason: "Part of it is reserved or out of stock",
+        });
+      }
+    }
+
+    if (snapshots.length === 0) {
+      return {
+        ok: false,
+        error: "Nothing was deducted — those ingredients aren't available.",
+      };
+    }
+
+    revalidatePath("/home");
+    revalidatePath("/inventory");
+    revalidatePath("/recipes");
+    revalidatePath("/plan");
+    return { ok: true, data: { deducted, skipped, snapshots } };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not deduct ingredients",
     };
   }
 }
