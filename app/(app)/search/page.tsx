@@ -10,6 +10,7 @@ import { requireDal } from "@/lib/auth";
 import { SearchForm } from "@/app/(app)/nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CanonicalInfo } from "@/components/canonical-info";
+import { AddToListButton } from "@/components/search/add-to-list-button";
 import { groupByItem } from "@/lib/batches";
 import { buildCanonicalNameMap } from "@/lib/canonical";
 import { cn } from "@/lib/utils";
@@ -179,6 +180,13 @@ async function SearchContent({ query }: { query: string }) {
                         <CanonicalInfo name={canonical} />
                       </span>
                     ) : null}
+                    <AddToListButton
+                      className="ml-auto"
+                      itemId={group.item.canonical_item_id ?? group.item.id}
+                      name={group.item.name}
+                      unit={group.batches[0]?.unit ?? group.item.unit}
+                      categoryId={group.item.category_id}
+                    />
                   </div>
                   <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
                     <span className="font-bold">{group.totalQuantity}</span>
@@ -278,6 +286,13 @@ async function SearchContent({ query }: { query: string }) {
                         <CanonicalInfo name={canonical} />
                       </span>
                     ) : null}
+                    <AddToListButton
+                      className="ml-auto"
+                      itemId={item.canonical_item_id ?? item.id}
+                      name={item.name}
+                      unit={item.unit}
+                      categoryId={item.category_id}
+                    />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {item.barcode
