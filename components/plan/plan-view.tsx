@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ListChecks,
+  ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,22 @@ type Props = {
 };
 
 type ShopResult = Awaited<ReturnType<typeof planDaysToGrocery>>;
+
+/**
+ * Whether a planned day's shopping is already done: the durable record left by
+ * the last "Shop …" run, or — for days that predate that column — the live
+ * shopping list already covering everything the pantry can't.
+ */
+function dayOnList(
+  entry: MealPlanDayRow | null,
+  coverage: RecipeCoverage | null,
+): boolean {
+  if (!entry || entry.made_at) return false;
+  if (entry.shopped_at) return true;
+  return Boolean(
+    coverage && coverage.shoppable > 0 && coverage.onList >= coverage.shoppable,
+  );
+}
 
 /** "Oct 13 – Oct 19" */
 function weekRangeLabel(start: string): string {
@@ -165,6 +182,12 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
           ? `${title ?? "Meal"} · Made ✓`
           : (title ?? "Nothing planned"),
         enabled: planned && !made,
+        shopped: dayOnList(
+          day.entry,
+          day.entry?.recipe_id
+            ? (coverageById[day.entry.recipe_id] ?? null)
+            : null,
+        ),
       };
     }),
   }));
@@ -387,6 +410,9 @@ function DayCard({
   const coverage = recipe ? (coverageById[recipe.id] ?? null) : null;
   const showCoverage = Boolean(coverage && coverage.total > 0);
   const showTime = Boolean(recipe && recipe.time > 0);
+  // Shopped is durable history when stamped; otherwise inferred from the live
+  // list so days shopped before the column existed still read correctly.
+  const shopped = dayOnList(day.entry, coverage);
 
   return (
     <div
@@ -405,6 +431,15 @@ function DayCard({
         <span className="text-[11px] font-bold uppercase opacity-70">
           {label.month} {label.dayOfMonth}
         </span>
+        {shopped ? (
+          <span
+            className="ml-auto flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
+            title="Ingredients added to your shopping list"
+          >
+            <ShoppingCart className="h-2.5 w-2.5" aria-hidden />
+            On list
+          </span>
+        ) : null}
       </span>
 
       {planned ? (

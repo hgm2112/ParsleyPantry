@@ -23,6 +23,8 @@ export type ShopDayOption = {
   mealLabel: string;
   /** Unplanned and made days are shown but can't be shopped. */
   enabled: boolean;
+  /** Already pushed to the shopping list at least once. */
+  shopped: boolean;
 };
 
 export type ShopWeekGroup = {
@@ -141,8 +143,13 @@ export function ShopDaysDialog({
                           onCheckedChange={() => toggle(day)}
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold">
+                          <span className="flex items-baseline gap-1.5 text-sm font-semibold">
                             {day.dateLabel}
+                            {day.shopped ? (
+                              <span className="text-[10px] font-bold uppercase text-primary">
+                                · on your list
+                              </span>
+                            ) : null}
                           </span>
                           <span
                             className={cn(

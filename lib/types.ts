@@ -228,6 +228,8 @@ export interface MealPlanDayRow {
   kind: MealKind | null;
   note: string | null;
   made_at: string | null;
+  /** Last time this day's ingredients were pushed to the grocery list. */
+  shopped_at: string | null;
   custom_meal_id: string | null;
   custom_meal_name: string | null;
   custom_meal_classification: CustomMealClassification | null;

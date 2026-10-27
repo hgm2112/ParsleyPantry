@@ -92,7 +92,7 @@ export async function setMealDay(
             }
           : {}),
         // A new recipe on a made day is not made yet.
-        ...(changed ? { made_at: null } : {}),
+        ...(changed ? { made_at: null, shopped_at: null } : {}),
       },
       { onConflict: "household_id,week_start,day_index" },
     );
@@ -143,7 +143,7 @@ export async function saveMealNote(
         custom_meal_id: null,
         custom_meal_name: null,
         custom_meal_classification: null,
-        ...(replacesRecipe ? { recipe_id: null, made_at: null } : {}),
+        ...(replacesRecipe ? { recipe_id: null, made_at: null, shopped_at: null } : {}),
       },
       { onConflict: "household_id,week_start,day_index" },
     );
@@ -487,6 +487,25 @@ async function shopDays(
       if (!result.ok) return result;
       added = result.data.added;
       skipped = result.data.skipped;
+    }
+
+    // Record the shop per day — the only durable trace that a day was shopped
+    // (grocery lines dedupe, get checked off, and can come from any source).
+    // Only targeted recipe days survive into planDays, so custom meals, eating
+    // out and no-cook days are never marked.
+    const shoppedAt = new Date().toISOString();
+    for (const weekStart of weekStarts) {
+      const dayIndexes = planDays
+        .filter((day) => day.week_start === weekStart)
+        .map((day) => day.day_index);
+      if (dayIndexes.length === 0) continue;
+      const { error: shoppedError } = await supabase
+        .from("meal_plan_days")
+        .update({ shopped_at: shoppedAt })
+        .eq("household_id", householdId)
+        .eq("week_start", weekStart)
+        .in("day_index", dayIndexes);
+      if (shoppedError) return { ok: false, error: shoppedError.message };
     }
 
     revalidatePath("/plan");
@@ -1111,6 +1130,8 @@ export async function setCustomMealDay(
         custom_meal_name: name,
         custom_meal_classification: classification,
         made_at: null,
+        // A replaced meal has nothing left to shop for.
+        shopped_at: null,
       },
       { onConflict: "household_id,week_start,day_index" },
     );

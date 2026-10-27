@@ -183,6 +183,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
         })),
         inventory,
         items,
+        groceryItems,
       ),
     );
   }

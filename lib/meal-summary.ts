@@ -54,11 +54,19 @@ export type RecipeIngredientLine = SummaryLine & {
   haveUnit: string | null;
   /** Whether the ingredient resolved to a canonical pantry pool. */
   matched: boolean;
+  /** Canonical pool key (root item id, or "name:<lower>" when unmatched). */
+  poolKey: string;
+  /** An unchecked grocery line already covers this line. */
+  onList: boolean;
 };
 
 export type RecipeCoverage = {
   total: number;
   inPantry: number;
+  /** Lines the pantry doesn't fully cover — what still has to be bought. */
+  shoppable: number;
+  /** Of those, how many already have an unchecked grocery line. */
+  onList: number;
   /** One line per canonical pantry pool, same dedupe as the counts. */
   lines: RecipeIngredientLine[];
 };
@@ -180,6 +188,27 @@ export function buildWeekSummary(
   };
 }
 
+/**
+ * Pool keys (canonical root id, or "name:<lower>" for unmatched lines) for
+ * every grocery line already on the list — the same keys `resolveLine` emits,
+ * so pantry pools and shopping lines compare like for like.
+ */
+export function groceryPoolKeys(
+  groceryItems: SummaryGroceryRow[],
+  items: SummaryItemRow[],
+): Set<string> {
+  const rootLookup = createRootLookup(items);
+  const keys = new Set<string>();
+  for (const grocery of groceryItems) {
+    keys.add(
+      grocery.item_id
+        ? rootLookup(grocery.item_id)
+        : `name:${grocery.name.trim().toLowerCase()}`,
+    );
+  }
+  return keys;
+}
+
 export function countIngredientsOnShoppingList(
   ingredients: SummaryIngredient[],
   groceryItems: SummaryGroceryRow[],
@@ -202,14 +231,7 @@ export function countIngredientsOnShoppingList(
     plannedKeys.add(key);
   }
 
-  const groceryKeys = new Set<string>();
-  for (const grocery of groceryItems) {
-    if (grocery.item_id) {
-      groceryKeys.add(rootLookup(grocery.item_id));
-    } else {
-      groceryKeys.add(`name:${grocery.name.trim().toLowerCase()}`);
-    }
-  }
+  const groceryKeys = groceryPoolKeys(groceryItems, items);
 
   const safeCovered = coveredKeys ?? new Set<string>();
   let count = 0;
@@ -224,8 +246,10 @@ export function buildRecipeCoverage(
   ingredients: RecipeSummaryIngredient[],
   inventory: SummaryInventoryRow[],
   items: SummaryItemRow[],
+  groceryItems: SummaryGroceryRow[] = [],
 ): Map<string, RecipeCoverage> {
   const pools = buildPantryPools(inventory, items);
+  const groceryKeys = groceryPoolKeys(groceryItems, items);
 
   const needByKey = new Map<string, number>();
   const firstByKey = new Map<string, RecipeSummaryIngredient>();
@@ -251,11 +275,24 @@ export function buildRecipeCoverage(
       : matched && have > 0
         ? "partial"
         : "missing";
+    // Only lines the pantry can't cover need a shopping line; an uncovered
+    // line counts as "on list" when the list already has its pool key.
+    const onList = !covered && groceryKeys.has(poolKey);
 
     const first = firstByKey.get(key)!;
-    const stats = out.get(recipeId) ?? { total: 0, inPantry: 0, lines: [] };
+    const stats = out.get(recipeId) ?? {
+      total: 0,
+      inPantry: 0,
+      shoppable: 0,
+      onList: 0,
+      lines: [],
+    };
     stats.total += 1;
     if (covered) stats.inPantry += 1;
+    else {
+      stats.shoppable += 1;
+      if (onList) stats.onList += 1;
+    }
     stats.lines.push({
       name: first.name,
       quantityText: first.quantityText,
@@ -264,6 +301,8 @@ export function buildRecipeCoverage(
       haveQuantity: rawHave,
       haveUnit: commonUnit,
       matched,
+      poolKey,
+      onList,
     });
     out.set(recipeId, stats);
   }
