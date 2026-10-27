@@ -143,11 +143,11 @@ export function WeekMeals({
               {planned ? (
                 <>
                   <div className="flex flex-col items-center">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-sm font-extrabold uppercase">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[13px] font-extrabold uppercase">
                         {label.weekday}
                       </span>
-                      <span className="text-xs opacity-70">
+                      <span className="whitespace-nowrap text-[11px] opacity-70">
                         {label.month} {label.dayOfMonth}
                       </span>
                     </div>
@@ -185,11 +185,11 @@ export function WeekMeals({
                 </>
               ) : (
                 <>
-                  <div className="flex items-baseline justify-center gap-1.5">
-                    <span className="text-sm font-extrabold uppercase">
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-[13px] font-extrabold uppercase">
                       {label.weekday}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="whitespace-nowrap text-[11px] text-muted-foreground">
                       {label.month} {label.dayOfMonth}
                     </span>
                   </div>
