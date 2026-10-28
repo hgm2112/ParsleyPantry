@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { markMealMade, previewMealMade } from "@/app/(app)/plan/actions";
 import { displayQtyUnit } from "@/lib/stock";
+import { cn } from "@/lib/utils";
+import type { Tint } from "@/lib/tints";
+import { tintFor } from "@/lib/tints";
 
 type PreviewItem = {
   name: string;
@@ -56,6 +59,8 @@ type Props = {
   weekStart: string;
   dayIndex: number;
   mealName?: string | null;
+  /** Optional tint for the recipe/meal. Falls back to computing from mealName. */
+  tint?: Tint;
   onCancel: () => void;
   onConfirmed?: () => void;
 };
@@ -71,10 +76,12 @@ export function MadeConfirmContent({
   weekStart,
   dayIndex,
   mealName,
+  tint,
   onCancel,
   onConfirmed,
 }: Props) {
   const router = useRouter();
+  const effectiveTint = tint ?? (mealName ? tintFor(mealName.split("·")[0].trim()) : null);
   const [items, setItems] = useState<PreviewItem[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loadError, setLoadError] = useState(false);
@@ -252,6 +259,7 @@ export function MadeConfirmContent({
           type="button"
           onClick={() => void confirm()}
           disabled={busy || items === null || loadError}
+          className={effectiveTint ? cn(effectiveTint.header, "hover:opacity-90") : undefined}
         >
           {busy ? (
             <Loader2 className="animate-spin" />
@@ -272,12 +280,14 @@ export function MadeConfirmDialog({
   weekStart,
   dayIndex,
   mealName,
+  tint,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weekStart: string;
   dayIndex: number;
   mealName?: string | null;
+  tint?: Tint;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -286,6 +296,7 @@ export function MadeConfirmDialog({
           weekStart={weekStart}
           dayIndex={dayIndex}
           mealName={mealName}
+          tint={tint}
           onCancel={() => onOpenChange(false)}
           onConfirmed={() => onOpenChange(false)}
         />

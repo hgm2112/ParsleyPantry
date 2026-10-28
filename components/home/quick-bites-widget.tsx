@@ -100,7 +100,8 @@ export function QuickBitesWidget({
       if (recipeIngs.length === 0) continue;
 
       // Same coverage rule as /plan: weights in ounces with container sizes
-      // expanded, everything else in container counts.
+      // expanded, everything else in container counts. Count needs fall back
+      // to covered on any weight stock (symmetric to weight needs).
       const demandByRoot = new Map<string, PantryDemand>();
       let matched = true;
       for (const ig of recipeIngs) {

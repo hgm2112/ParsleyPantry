@@ -184,10 +184,15 @@ export function poolValue(
 }
 
 /**
- * Whether the pool satisfies the demand. A weight demand that finds no weight
- * stock at all falls back to "any stock present" — an all-container pantry
- * can't prove a weight shortage, and telling the user to buy an ingredient
- * they clearly have is worse than being lenient.
+ * Whether the pool satisfies the demand.
+ *
+ * Weight demands fall back to "any stock present" when there is zero weight
+ * stock but package stock exists.
+ *
+ * Count demands (e.g. "2 carrots") now also fall back to covered when there is
+ * any weight stock (ounces > 0), even if the recorded package count is low or
+ * zero. This treats the presence of stock in either basis as sufficient for
+ * count-style recipe needs (aligning with the simple presence check on /recipes).
  */
 export function poolCovers(
   pool: PantryPool | undefined,
@@ -200,7 +205,10 @@ export function poolCovers(
     demand.ounces <= 0 ||
     ounces >= demand.ounces - EPSILON ||
     (ounces <= 0 && packages > 0);
-  const packagesOk = demand.packages <= 0 || packages >= demand.packages - EPSILON;
+  const packagesOk =
+    demand.packages <= 0 ||
+    packages >= demand.packages - EPSILON ||
+    ounces > 0;
   return ouncesOk && packagesOk;
 }
 

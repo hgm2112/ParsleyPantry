@@ -27,7 +27,8 @@ import {
 } from "@/app/(app)/plan/actions";
 import { MadeConfirmContent } from "@/components/plan/made-confirm";
 import { dayLabel } from "@/lib/plan";
-import { MEAL_KINDS, dayTitle, isPlanned, mealKindInfo } from "@/lib/meal-kind";
+import { MEAL_KINDS, dayTitle, isPlanned, mealKindInfo, NOTE_TINT } from "@/lib/meal-kind";
+import { tintFor } from "@/lib/tints";
 import { BUILTIN_OTHER_MEALS, CUSTOM_MEAL_ICON_OPTIONS, type CustomMealIconId, customMealIcon } from "@/lib/custom-meal-icons";
 import type { CustomMealClassification, CustomMealRow, MealKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -336,6 +337,13 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
       : mealTitle
     : "Pick a recipe, or just leave a note";
 
+  const kindInfoForCurrent = mealKindInfo(day.entry?.kind);
+  const currentTint = currentRecipe
+    ? tintFor(currentRecipe.name)
+    : kindInfoForCurrent
+      ? kindInfoForCurrent.tint
+      : NOTE_TINT;
+
   return (
     <Dialog open onOpenChange={(open) => !open && onDone()}>
       <DialogContent className="max-h-[85vh] gap-3 overflow-y-auto">
@@ -344,6 +352,7 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
             weekStart={weekStart}
             dayIndex={day.index}
             mealName={mealTitle}
+            tint={currentTint}
             onCancel={() => setConfirmOpen(false)}
             onConfirmed={onDone}
           />
@@ -376,7 +385,7 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
               {isPlanned(day.entry) && !day.entry?.made_at ? (
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className={cn("w-full", currentTint.header)}
                   onClick={() => setConfirmOpen(true)}
                   disabled={busy}
                 >

@@ -220,6 +220,7 @@ export function WeekMeals({
         weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
         dayIndex={dayIndexOf(today)}
         mealName={dayTitle(byDate.get(today), byDate.get(today)?.recipe?.name)}
+        tint={byDate.get(today)?.recipe ? tintFor(byDate.get(today)!.recipe!.name) : (mealKindInfo(byDate.get(today)?.kind)?.tint ?? NOTE_TINT)}
       />
     </section>
   );
@@ -381,6 +382,7 @@ export function CompactDinners({
         weekStart={mondayOf(new Date(`${today}T00:00:00Z`))}
         dayIndex={dayIndexOf(today)}
         mealName={dayTitle(byDate.get(today), byDate.get(today)?.recipe?.name)}
+        tint={byDate.get(today)?.recipe ? tintFor(byDate.get(today)!.recipe!.name) : (mealKindInfo(byDate.get(today)?.kind)?.tint ?? NOTE_TINT)}
       />
     </section>
   );
