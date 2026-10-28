@@ -80,24 +80,50 @@ const WEIGHT_TO_OZ: Record<string, number> = {
   pounds: 16,
 };
 
-export function toOunces(quantity: number, unit: string | null): number | null {
-  if (!unit) return null;
-  let u = unit.trim().toLowerCase().replace(/\.$/, "").trim();
-  u = u.replace(/^[\d\.\s]+/, "").trim();
-  const tokens = u.split(/[\s\/]+/);
-  u = tokens[tokens.length - 1] || u;
-  const f = WEIGHT_TO_OZ[u];
-  return f != null ? quantity * f : null;
+/**
+ * One row's unit is a *container*, and it often carries that container's size
+ * ("6 oz" can, "1.44 lbs" pack, "4 ea" sleeve) because the scan prefill copies
+ * the product size into Unit. This is the size of one container.
+ */
+export function unitPackSize(unit: string | null): number {
+  if (!unit) return 1;
+  const match = unit.trim().match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
+  if (!match) return 1;
+  const size = Number(match[1]);
+  return Number.isFinite(size) && size > 0 ? size : 1;
 }
 
+/** Weight factor of a unit that names a weight ("8oz", "1.44 lbs", "oz"). */
+function weightFactorOf(unit: string | null): number | null {
+  if (!unit) return null;
+  const tokens = unit
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/(\d)([a-z])/g, "$1 $2")
+    .split(/[\s/]+/);
+  for (const token of tokens) {
+    const factor = WEIGHT_TO_OZ[token];
+    if (factor != null) return factor;
+  }
+  return null;
+}
+
+/**
+ * Ounces of stock in `quantity` containers of `unit`. A sized unit multiplies:
+ * 3 × "6 oz" is 18 oz, not 3 oz.
+ */
+export function toOunces(quantity: number, unit: string | null): number | null {
+  const factor = weightFactorOf(unit);
+  if (factor == null) return null;
+  return quantity * unitPackSize(unit) * factor;
+}
+
+/** Inverse of toOunces: how many containers of `targetUnit` hold `ounces`. */
 export function fromOunces(ounces: number, targetUnit: string | null): number | null {
-  if (!targetUnit) return null;
-  let u = targetUnit.trim().toLowerCase().replace(/\.$/, "").trim();
-  u = u.replace(/^[\d\.\s]+/, "").trim();
-  const tokens = u.split(/[\s\/]+/);
-  u = tokens[tokens.length - 1] || u;
-  const f = WEIGHT_TO_OZ[u];
-  return f != null ? ounces / f : null;
+  const factor = weightFactorOf(targetUnit);
+  if (factor == null) return null;
+  return ounces / (factor * unitPackSize(targetUnit));
 }
 
 /**

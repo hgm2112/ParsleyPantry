@@ -7,6 +7,16 @@ import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
 import { createRootLookup } from "@/lib/canonical";
 import { fefoSort, toBatchSnapshot, type BatchSnapshot } from "@/lib/batches";
 import {
+  addNeed,
+  buildPantryPools,
+  emptyDemand,
+  emptyPool,
+  needFromParts,
+  pantryNeed,
+  type PantryDemand,
+  type PantryPool,
+} from "@/lib/meal-summary";
+import {
   fromOunces,
   parseQuantityText,
   splitNameAndQuantity,
@@ -116,6 +126,8 @@ export async function createRecipe(
     }
 
     revalidatePath("/recipes");
+    revalidatePath("/plan");
+    revalidatePath("/home");
     return { ok: true, data: { id: recipe.id as string } };
   } catch (error) {
     return {
@@ -178,6 +190,8 @@ export async function updateRecipe(
 
     revalidatePath("/recipes");
     revalidatePath(`/recipes/${recipeId}`);
+    revalidatePath("/plan");
+    revalidatePath("/home");
     return { ok: true, data: null };
   } catch (error) {
     return {
@@ -197,6 +211,8 @@ export async function deleteRecipe(recipeId: string): Promise<ActionResult> {
       .eq("household_id", householdId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/recipes");
+    revalidatePath("/plan");
+    revalidatePath("/home");
     return { ok: true, data: null };
   } catch (error) {
     return {
@@ -331,8 +347,10 @@ export type RecipeCookItem = {
   available: number;
   take: number;
   shortfall: number;
-  /** Deduction amount in pool space (oz for weight recipes, raw otherwise). */
+  /** Deduction amount in pool space — ounces for weight needs, containers otherwise. */
   takePool: number;
+  /** Which pool column `takePool` is measured in. */
+  poolBasis: "oz" | "count";
 };
 
 type CookResolution =
@@ -342,9 +360,8 @@ type CookResolution =
       recipe: { id: string; name: string };
       items: RecipeCookItem[];
       groupByRoot: Map<string, string[]>;
-      heldByRoot: Map<string, number>;
-      /** Unreserved stock per root in pool space — shared roots don't double-dip. */
-      availableByRoot: Map<string, number>;
+      /** Unreserved pool per root — shared roots don't double-dip. */
+      availableByRoot: Map<string, PantryPool>;
     };
 
 const round3 = (value: number) => Math.round(value * 1000) / 1000;
@@ -413,35 +430,38 @@ async function resolveRecipeCook(
     groupByRoot.set(root, group);
   }
 
-  const stockByRoot = new Map<string, number>();
-  const stockUnitByRoot = new Map<string, string | null>();
-  const unitSeen = new Set<string>();
-  for (const row of (inventoryResult.data ?? []) as InventoryRow[]) {
-    const root = rootOf(row.item_id);
-    stockByRoot.set(root, (stockByRoot.get(root) ?? 0) + row.quantity);
-    if (!unitSeen.has(root)) {
-      unitSeen.add(root);
-      stockUnitByRoot.set(root, row.unit);
-    } else if (stockUnitByRoot.get(root) !== row.unit) {
-      stockUnitByRoot.set(root, null);
-    }
-  }
-
-  const heldByRoot = new Map<string, number>();
+  const stockPools = buildPantryPools(
+    (inventoryResult.data ?? []) as InventoryRow[],
+    catalogRows,
+  );
+  const heldByRoot = new Map<string, PantryDemand>();
   for (const hold of (holdsResult.data ?? []) as {
     item_id: string;
     quantity: number;
     unit: string | null;
   }[]) {
     const root = rootOf(hold.item_id);
-    heldByRoot.set(root, (heldByRoot.get(root) ?? 0) + hold.quantity);
+    const demand = heldByRoot.get(root) ?? emptyDemand();
+    addNeed(demand, needFromParts(hold.quantity, hold.unit));
+    heldByRoot.set(root, demand);
   }
+
+  /** Unreserved pool per root: stock minus meal-plan holds, per basis. */
+  const unreservedPool = (rootId: string | null): PantryPool => {
+    if (!rootId) return emptyPool();
+    const pool = stockPools.pools.get(rootId) ?? emptyPool();
+    const held = heldByRoot.get(rootId);
+    return {
+      ounces: Math.max(0, pool.ounces - (held?.ounces ?? 0)),
+      packages: Math.max(0, pool.packages - (held?.packages ?? 0)),
+    };
+  };
 
   const items: RecipeCookItem[] = [];
   /** Unreserved stock per root BEFORE this recipe's ingredients claim any. */
-  const availableByRoot = new Map<string, number>();
+  const availableByRoot = new Map<string, PantryPool>();
   /** Running budget: two ingredients on one root must not claim stock twice. */
-  const remainingByRoot = new Map<string, number>();
+  const remainingByRoot = new Map<string, PantryPool>();
   for (const row of (ingredientsResult.data ?? []) as {
     id: string;
     name: string;
@@ -451,23 +471,26 @@ async function resolveRecipeCook(
   }[]) {
     const parsed = parseQuantityText(row.quantity_text);
     const rootId = row.item_id ? rootOf(row.item_id) : null;
-    const neededRaw = parsed.quantity;
-    const needed = toOunces(neededRaw, parsed.unit) ?? neededRaw;
-    const haveRaw = rootId ? (stockByRoot.get(rootId) ?? 0) : 0;
-    const commonUnit = rootId ? (stockUnitByRoot.get(rootId) ?? null) : null;
-    const have = toOunces(haveRaw, commonUnit) ?? haveRaw;
-    const held = rootId ? (heldByRoot.get(rootId) ?? 0) : 0;
-    const pool = Math.max(0, have - held);
+    // Weight needs compare in ounces (container sizes expanded); everything
+    // else ("2 cans", a bare "1") compares against container counts.
+    const need = pantryNeed(row.quantity_text);
+    const basis = need.ounces != null ? "oz" : "count";
+    const pool = unreservedPool(rootId);
     if (rootId && !availableByRoot.has(rootId)) {
-      availableByRoot.set(rootId, pool);
-      remainingByRoot.set(rootId, pool);
+      availableByRoot.set(rootId, { ...pool });
+      remainingByRoot.set(rootId, { ...pool });
     }
     const availablePool = rootId
       ? (remainingByRoot.get(rootId) ?? pool)
       : pool;
-    const takePool = Math.min(availablePool, needed);
+    const needed = basis === "oz" ? (need.ounces ?? 0) : need.packages;
+    const availableInBasis = basis === "oz" ? availablePool.ounces : availablePool.packages;
+    const takePool = Math.min(availableInBasis, needed);
     if (rootId) {
-      remainingByRoot.set(rootId, Math.max(0, availablePool - takePool));
+      const next = { ...availablePool };
+      if (basis === "oz") next.ounces = Math.max(0, next.ounces - takePool);
+      else next.packages = Math.max(0, next.packages - takePool);
+      remainingByRoot.set(rootId, next);
     }
     const shortfall = Math.max(0, needed - takePool);
     // Report in the recipe's own unit so the dialog reads "1 lb"/"2 eggs".
@@ -482,10 +505,11 @@ async function resolveRecipeCook(
       pantryName: rootId ? (nameById.get(rootId) ?? null) : null,
       unit: parsed.unit,
       needed: round3(toRecipe(needed)),
-      available: round3(toRecipe(availablePool)),
+      available: round3(toRecipe(availableInBasis)),
       take: round3(toRecipe(takePool)),
       shortfall: round3(toRecipe(shortfall)),
       takePool: round3(takePool),
+      poolBasis: basis,
     });
   }
 
@@ -494,7 +518,6 @@ async function resolveRecipeCook(
     recipe,
     items,
     groupByRoot,
-    heldByRoot,
     availableByRoot,
   };
 }
@@ -583,8 +606,10 @@ export async function cookRecipe(
       }
       // Shared canonical roots must not double-dip: recompute the remaining
       // unreserved pool after every deduction.
-      const rootPool = resolved.availableByRoot.get(ingredient.rootId) ?? 0;
-      const takePool = Math.min(ingredient.takePool, rootPool);
+      const rootPool = resolved.availableByRoot.get(ingredient.rootId) ?? emptyPool();
+      const rootAvailable =
+        ingredient.poolBasis === "oz" ? rootPool.ounces : rootPool.packages;
+      const takePool = Math.min(ingredient.takePool, rootAvailable);
       if (takePool <= 0) {
         skipped.push({
           id: ingredient.id,
@@ -606,19 +631,17 @@ export async function cookRecipe(
       const rows = fefoSort((rowsData ?? []) as InventoryRow[]);
 
       let remaining = takePool;
-      let heldRemaining = resolved.heldByRoot.get(ingredient.rootId) ?? 0;
       for (const row of rows) {
         if (remaining <= 0) break;
-        // Reserved meal-plan stock comes off the earliest batches first.
-        const reserved = Math.min(heldRemaining, row.quantity);
-        heldRemaining -= reserved;
-        const usable = row.quantity - reserved;
-        if (usable <= 0) continue;
         const ozPerUnit = toOunces(1, row.unit);
-        const take = Math.min(
-          usable,
-          ozPerUnit != null ? remaining / ozPerUnit : remaining,
-        );
+        let take: number;
+        if (ingredient.poolBasis === "oz") {
+          // Weight needs only consume weight batches.
+          if (ozPerUnit == null) continue;
+          take = Math.min(row.quantity, remaining / ozPerUnit);
+        } else {
+          take = Math.min(row.quantity, remaining);
+        }
         if (take <= 0) continue;
         const nextQuantity = round3(row.quantity - take);
         if (!snapshotted.has(row.id)) {
@@ -638,14 +661,18 @@ export async function cookRecipe(
             .eq("id", row.id);
           if (error) return { ok: false, error: error.message };
         }
-        remaining -= take * (ozPerUnit != null ? ozPerUnit : 1);
+        remaining -=
+          ingredient.poolBasis === "oz" ? take * (ozPerUnit ?? 0) : take;
       }
 
       const takenPool = Math.max(0, takePool - Math.max(0, remaining));
-      resolved.availableByRoot.set(
-        ingredient.rootId,
-        Math.max(0, rootPool - takenPool),
-      );
+      const reduced = { ...rootPool };
+      if (ingredient.poolBasis === "oz") {
+        reduced.ounces = Math.max(0, reduced.ounces - takenPool);
+      } else {
+        reduced.packages = Math.max(0, reduced.packages - takenPool);
+      }
+      resolved.availableByRoot.set(ingredient.rootId, reduced);
       const toRecipe = (value: number) =>
         ingredient.unit
           ? (fromOunces(value, ingredient.unit) ?? value)

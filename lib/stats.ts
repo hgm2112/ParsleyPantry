@@ -1,14 +1,18 @@
 import { addDays, mondayOf } from "@/lib/plan";
 import { isPlanned } from "@/lib/meal-kind";
 import {
+  addNeed,
   buildPantryPools,
+  emptyDemand,
+  needFromParts,
+  poolCovers,
   resolveLine,
-  type PantryPools,
+  type PantryDemand,
+  type PantryPool,
   type SummaryIngredient,
   type SummaryInventoryRow,
   type SummaryItemRow,
 } from "@/lib/meal-summary";
-import { stockPoolKey, toOunces } from "@/lib/stock";
 import type { MealPlanDayRow } from "@/lib/types";
 
 export type StatsPeriod = "all" | "year" | "90" | "30";
@@ -501,12 +505,15 @@ export type PantrySnapshot = {
 };
 
 function subtractPool(
-  stock: Map<string, number>,
-  pools: PantryPools,
+  available: Map<string, PantryPool>,
+  pools: ReturnType<typeof buildPantryPools>,
   row: { item_id: string; quantity: number; unit: string | null },
 ) {
-  const key = pools.rootOf(row.item_id);
-  stock.set(key, (stock.get(key) ?? 0) - row.quantity);
+  const pool = available.get(pools.rootOf(row.item_id));
+  if (!pool) return;
+  const need = needFromParts(row.quantity, row.unit);
+  if (need.ounces != null) pool.ounces = Math.max(0, pool.ounces - need.ounces);
+  else pool.packages = Math.max(0, pool.packages - need.packages);
 }
 
 /**
@@ -545,28 +552,33 @@ export function pantrySnapshot(input: {
   let coverage: PantrySnapshot["coverage"] = null;
   if (input.upcomingLines.length > 0) {
     const pools = buildPantryPools(input.inventory, input.items);
-    const stock = new Map(pools.stock);
+    const available = new Map<string, PantryPool>();
+    for (const [root, pool] of pools.pools) {
+      available.set(root, { ...pool });
+    }
     for (const hold of input.holds) {
       if (input.upcomingDayKeys.has(`${hold.week_start}:${hold.day_index}`)) {
         continue; // reserved for the demand set itself
       }
-      subtractPool(stock, pools, hold);
+      subtractPool(available, pools, hold);
     }
 
-    const needByPool = new Map<string, number>();
+    const demandByPool = new Map<string, PantryDemand>();
     const resolvedByPool = new Map<string, boolean>();
     let covered = 0;
     for (const line of input.upcomingLines) {
-      const { poolKey, quantity, resolved } = resolveLine(line, pools);
-      needByPool.set(poolKey, (needByPool.get(poolKey) ?? 0) + quantity);
+      const { poolKey, need, resolved } = resolveLine(line, pools);
+      const demand = demandByPool.get(poolKey) ?? emptyDemand();
+      addNeed(demand, need);
+      demandByPool.set(poolKey, demand);
       resolvedByPool.set(poolKey, resolved);
     }
     for (const line of input.upcomingLines) {
       const { poolKey } = resolveLine(line, pools);
       const resolved = resolvedByPool.get(poolKey) ?? false;
-      const have = resolved ? (stock.get(poolKey) ?? 0) : 0;
-      const need = needByPool.get(poolKey) ?? 0;
-      if (resolved && have >= need - 1e-6) covered += 1;
+      if (resolved && poolCovers(available.get(poolKey), demandByPool.get(poolKey))) {
+        covered += 1;
+      }
     }
     coverage = { covered, total: input.upcomingLines.length };
   }

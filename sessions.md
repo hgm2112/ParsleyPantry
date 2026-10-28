@@ -4,6 +4,49 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-27 — Plan coverage, "On list" badges, "Take me to recipe", pantry math fix
+
+**Shipped**
+- Pantry quantities are now compared correctly when units store the container
+  size ("6 oz" rows contribute 6 oz each). `unitPackSize` + updated
+  `toOunces`/`fromOunces` in `lib/stock.ts`; `buildPantryPools` now tracks
+  separate `ounces` and `packages` bases per canonical root and expands pack
+  sizes on every row. Shared by `/plan` shop holds + mark-made preview,
+  recipe cook preview + FEFO deduction, Quick Bites, week/recipe ingredient
+  dialogs, and stats snapshot.
+- "On list" on `/plan` day cards and the shop picker now means *pending*
+  (shoppable lines that already have an unchecked grocery entry). The durable
+  `shopped_at` stamp shows only as a muted "· shopped" in the picker for days
+  whose list items have been cleared. `dayOnList` and `ShopDayOption` updated.
+- Per-recipe ingredient lists (both the single-recipe dialog from a day card
+  and the week "View list") now surface an "On list" badge (priority over
+  In pantry / Partial / Needed) and include the count in the header
+  ("Have 7/9 in pantry · 2 on list").
+- From the recipe ingredient dialog: **Take me to recipe** button links to
+  `/recipes/<id>?returnTo=...`. The recipe editor respects `returnTo` for the
+  back chevron and for post-save / post-delete navigation (uses `router.back()`
+  when a returnTo was supplied). `create`/`update`/`deleteRecipe` now also
+  `revalidatePath("/plan")` and `/home`.
+- Verified: `npx tsc --noEmit` clean, `npm run build` successful, touched files
+  introduce no new lint errors (pre-existing customMealSchema warning only).
+
+**Notes**
+- "6 oz" in inventory unit is treated as a 6-oz container; 3 such = 18 oz.
+  A recipe "6 oz" now sees full coverage.
+- Mixed pack sizes under one root (e.g. Chicken with 10.75 oz cans + 1.44 lb)
+  accumulate correctly instead of collapsing.
+- `shopped_at` column is still written/cleared; it is now advisory history only.
+
+**Gotchas**
+- Recipe editor and `/recipes` list coverage are still simple presence checks
+  (raw container counts). They were not changed in this pass.
+- `haveUnit` for partial rows in the plan dialogs is now either "oz" or null
+  (count basis); the "Have N unit" note only appears for weight needs.
+
+**Open — next session**
+- (carry-over) Signed-in checks for Quick Bites cook/Undo, canonical adds, etc.
+- Optional: make the recipe editor and list use the same pack-aware pools.
+
 ## 2026-10-27 — Add sheet resets; search cart button, shopped days, home date
 
 **Shipped**

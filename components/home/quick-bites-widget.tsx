@@ -1,10 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChefHat, Clock } from "lucide-react";
 import { CookRecipeDialog } from "@/components/home/cook-recipe-dialog";
-import { parseQuantityText, toOunces } from "@/lib/stock";
+import {
+  addNeed,
+  addStockToPool,
+  emptyDemand,
+  emptyPool,
+  pantryNeed,
+  poolCovers,
+  type PantryDemand,
+  type PantryPool,
+} from "@/lib/meal-summary";
 
 type RecipeOption = {
   id: string;
@@ -56,37 +65,29 @@ export function QuickBitesWidget({
     return map;
   }, [pantry]);
 
-  const rootOf = (id: string) => {
-    let current = id;
-    for (let hop = 0; hop < 8; hop += 1) {
-      const next = pantryRoots.get(current);
-      if (!next || next === current) break;
-      current = next;
-    }
-    return current;
-  };
-
-  const stockByItem: Record<string, number> = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const row of pantry) {
-      const key = rootOf(row.item_id);
-      map[key] = (map[key] ?? 0) + row.quantity;
-    }
-    return map;
-  }, [pantry]);
-
-  const stockUnitByItem: Record<string, string | null> = useMemo(() => {
-    const map: Record<string, string | null> = {};
-    for (const row of pantry) {
-      const key = rootOf(row.item_id);
-      if (map[key] == null) {
-        map[key] = row.unit;
-      } else if (map[key] !== row.unit) {
-        map[key] = null;
+  const rootOf = useCallback(
+    (id: string) => {
+      let current = id;
+      for (let hop = 0; hop < 8; hop += 1) {
+        const next = pantryRoots.get(current);
+        if (!next || next === current) break;
+        current = next;
       }
+      return current;
+    },
+    [pantryRoots],
+  );
+
+  const stockPools = useMemo(() => {
+    const map = new Map<string, PantryPool>();
+    for (const row of pantry) {
+      const key = rootOf(row.item_id);
+      const pool = map.get(key) ?? emptyPool();
+      addStockToPool(pool, row.quantity, row.unit);
+      map.set(key, pool);
     }
     return map;
-  }, [pantry]);
+  }, [pantry, rootOf]);
 
   const availableRecipes = useMemo(() => {
     const available: RecipeOption[] = [];
@@ -98,28 +99,27 @@ export function QuickBitesWidget({
 
       if (recipeIngs.length === 0) continue;
 
-      let allSufficient = true;
+      // Same coverage rule as /plan: weights in ounces with container sizes
+      // expanded, everything else in container counts.
+      const demandByRoot = new Map<string, PantryDemand>();
+      let matched = true;
       for (const ig of recipeIngs) {
         if (ig.optional) continue;
-
-        const effId = rootOf(ig.item_id);
-        if (effId == null) {
-          allSufficient = false;
+        const rootId = rootOf(ig.item_id);
+        if (rootId == null) {
+          matched = false;
           break;
         }
-
-        const p = parseQuantityText(ig.quantity_text);
-        const needed = toOunces(p.quantity, p.unit) ?? p.quantity;
-
-        const haveRaw = stockByItem[effId] || 0;
-        const haveUnit = stockUnitByItem[effId];
-        const have = toOunces(haveRaw, haveUnit) ?? haveRaw;
-
-        if (have < needed) {
-          allSufficient = false;
-          break;
-        }
+        const demand = demandByRoot.get(rootId) ?? emptyDemand();
+        addNeed(demand, pantryNeed(ig.quantity_text));
+        demandByRoot.set(rootId, demand);
       }
+
+      const allSufficient =
+        matched &&
+        Array.from(demandByRoot.entries()).every(([rootId, demand]) =>
+          poolCovers(stockPools.get(rootId), demand),
+        );
 
       if (allSufficient) {
         available.push(recipe);
@@ -127,7 +127,7 @@ export function QuickBitesWidget({
     }
 
     return available;
-  }, [quickBitesRecipes, recipeIngredients, pantry, rootOf, stockByItem, stockUnitByItem]);
+  }, [quickBitesRecipes, recipeIngredients, rootOf, stockPools]);
 
   if (quickBitesRecipes.length === 0) {
     return null;

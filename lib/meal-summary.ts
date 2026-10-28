@@ -48,9 +48,9 @@ export type WeekSummary = {
 
 export type RecipeIngredientLine = SummaryLine & {
   status: "available" | "partial" | "missing";
-  /** Raw pantry quantity in the pool's common unit (0 when none). */
+  /** Pantry amount in the need's own basis (ounces for weights, containers otherwise). */
   haveQuantity: number;
-  /** Common unit of the pantry pool, null when mixed/unknown. */
+  /** "oz" for weight needs, null when the need is counted in containers. */
   haveUnit: string | null;
   /** Whether the ingredient resolved to a canonical pantry pool. */
   matched: boolean;
@@ -75,18 +75,51 @@ export function emptyWeekSummary(): WeekSummary {
   return { total: 0, inPantry: 0, needed: 0, lines: [], onShoppingList: 0 };
 }
 
+/**
+ * Pantry stock per canonical root in two bases:
+ * - `ounces`: total weight, with each row's container size expanded
+ *   (3 × "6 oz" = 18 oz).
+ * - `packages`: how many containers/units are on hand. This is what recipe
+ *   amounts without a weight ("2 cans", or a bare "1") are compared against,
+ *   and what cooking deducts one-for-one.
+ */
+export type PantryPool = { ounces: number; packages: number };
+
+/** An ingredient's demand. Weight needs carry `ounces`; everything else counts packages. */
+export type PantryNeed = { ounces: number | null; packages: number };
+
+/** Needs summed per pool — a recipe can list the same root twice, in either basis. */
+export type PantryDemand = { ounces: number; packages: number };
+
 export type PantryPools = {
   rootOf: (id: string) => string;
   nameToRoot: Map<string, string>;
-  stock: Map<string, number>;
-  stockUnitByRoot?: Map<string, string | null>;
+  pools: Map<string, PantryPool>;
 };
+
+const EPSILON = 1e-6;
+
+export function emptyPool(): PantryPool {
+  return { ounces: 0, packages: 0 };
+}
+
+/** Adds one stock row's quantity to a pool, expanding its container size. */
+export function addStockToPool(
+  pool: PantryPool,
+  quantity: number,
+  unit: string | null,
+): PantryPool {
+  if (quantity <= 0) return pool;
+  const ounces = toOunces(quantity, unit);
+  if (ounces != null) pool.ounces += ounces;
+  pool.packages += quantity;
+  return pool;
+}
 
 /**
  * Stock pooled by canonical identity: every product under one generic root
- * shares a pool. Mixed units collapse the common unit to null, exactly like
- * the recipe editor and the mark-as-made dialog, so aggregate pantry
- * quantities are compared with one consistent unit at a time.
+ * shares a pool. Container sizes stay part of the number — a "6 oz" row holds
+ * 6 oz per unit, so quantities are never compared as raw container counts.
  */
 export function buildPantryPools(
   inventory: SummaryInventoryRow[],
@@ -98,43 +131,97 @@ export function buildPantryPools(
     nameToRoot.set(row.name.trim().toLowerCase(), rootOf(row.id));
   }
 
-  const stock = new Map<string, number>();
-  const stockUnitByRoot = new Map<string, string | null>();
-  const unitSeen = new Set<string>();
+  const pools = new Map<string, PantryPool>();
   for (const row of inventory) {
     if (row.quantity <= 0) continue;
     const root = rootOf(row.item_id);
-    stock.set(root, (stock.get(root) ?? 0) + row.quantity);
-    if (!unitSeen.has(root)) {
-      unitSeen.add(root);
-      stockUnitByRoot.set(root, row.unit);
-    } else if (stockUnitByRoot.get(root) !== row.unit) {
-      stockUnitByRoot.set(root, null);
-    }
+    const pool = pools.get(root) ?? emptyPool();
+    addStockToPool(pool, row.quantity, row.unit);
+    pools.set(root, pool);
   }
 
-  return { rootOf, nameToRoot, stock, stockUnitByRoot };
+  return { rootOf, nameToRoot, pools };
+}
+
+/** Need for a quantity + unit pair ("6 oz" → 6 oz, "" → one package). */
+export function needFromParts(
+  quantity: number,
+  unit: string | null,
+): PantryNeed {
+  const ounces = toOunces(quantity, unit);
+  if (ounces != null) return { ounces, packages: 0 };
+  return { ounces: null, packages: quantity };
+}
+
+export function pantryNeed(quantityText: string): PantryNeed {
+  const parsed = parseQuantityText(quantityText);
+  return needFromParts(parsed.quantity, parsed.unit);
+}
+
+export function emptyDemand(): PantryDemand {
+  return { ounces: 0, packages: 0 };
+}
+
+/** Accumulates a need; weight and container demands stay in their own column. */
+export function addNeed(demand: PantryDemand, need: PantryNeed): PantryDemand {
+  if (need.ounces != null) demand.ounces += need.ounces;
+  else demand.packages += need.packages;
+  return demand;
+}
+
+/** Which pool column this demand is measured in. */
+export function demandBasis(demand: PantryDemand): "oz" | "count" {
+  return demand.ounces > 0 ? "oz" : "count";
+}
+
+/** The pool's value in the demand's basis (ounces, or container count). */
+export function poolValue(
+  pool: PantryPool | undefined,
+  demand: PantryDemand,
+): number {
+  if (!pool) return 0;
+  return demandBasis(demand) === "oz" ? pool.ounces : pool.packages;
+}
+
+/**
+ * Whether the pool satisfies the demand. A weight demand that finds no weight
+ * stock at all falls back to "any stock present" — an all-container pantry
+ * can't prove a weight shortage, and telling the user to buy an ingredient
+ * they clearly have is worse than being lenient.
+ */
+export function poolCovers(
+  pool: PantryPool | undefined,
+  demand: PantryDemand | undefined,
+): boolean {
+  if (!demand) return false;
+  const ounces = pool?.ounces ?? 0;
+  const packages = pool?.packages ?? 0;
+  const ouncesOk =
+    demand.ounces <= 0 ||
+    ounces >= demand.ounces - EPSILON ||
+    (ounces <= 0 && packages > 0);
+  const packagesOk = demand.packages <= 0 || packages >= demand.packages - EPSILON;
+  return ouncesOk && packagesOk;
 }
 
 export function resolveLine(
   ingredient: SummaryIngredient,
   pools: PantryPools,
-): { poolKey: string; quantity: number; resolved: boolean } {
+): { poolKey: string; need: PantryNeed; resolved: boolean } {
   const resolvedRoot = ingredient.itemId
     ? pools.rootOf(ingredient.itemId)
     : (pools.nameToRoot.get(
         splitNameAndQuantity(ingredient.name).name.trim().toLowerCase(),
       ) ?? null);
-  const parsed = parseQuantityText(ingredient.quantityText);
-  const quantity = toOunces(parsed.quantity, parsed.unit) ?? parsed.quantity;
+  const need = pantryNeed(ingredient.quantityText);
   if (!resolvedRoot) {
     return {
       poolKey: `name:${ingredient.name.trim().toLowerCase()}`,
-      quantity,
+      need,
       resolved: false,
     };
   }
-  return { poolKey: resolvedRoot, quantity, resolved: true };
+  return { poolKey: resolvedRoot, need, resolved: true };
 }
 
 export function buildWeekSummary(
@@ -145,12 +232,14 @@ export function buildWeekSummary(
 ): WeekSummary {
   const pools = buildPantryPools(inventory, items);
 
-  const needByRoot = new Map<string, number>();
+  const demandByPool = new Map<string, PantryDemand>();
   const firstIngredientByKey = new Map<string, SummaryIngredient>();
 
   for (const ingredient of ingredients) {
-    const { poolKey, quantity } = resolveLine(ingredient, pools);
-    needByRoot.set(poolKey, (needByRoot.get(poolKey) ?? 0) + quantity);
+    const { poolKey, need } = resolveLine(ingredient, pools);
+    const demand = demandByPool.get(poolKey) ?? emptyDemand();
+    addNeed(demand, need);
+    demandByPool.set(poolKey, demand);
     if (!firstIngredientByKey.has(poolKey)) {
       firstIngredientByKey.set(poolKey, ingredient);
     }
@@ -161,11 +250,8 @@ export function buildWeekSummary(
   for (const poolKey of firstIngredientByKey.keys()) {
     const ingredient = firstIngredientByKey.get(poolKey)!;
     const resolved = !poolKey.startsWith("name:");
-    const rawHave = pools.stock.get(poolKey) ?? 0;
-    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
-    const have = toOunces(rawHave, commonUnit) ?? rawHave;
-    const need = needByRoot.get(poolKey) ?? 0;
-    const covered = resolved && have >= need - 1e-6;
+    const covered =
+      resolved && poolCovers(pools.pools.get(poolKey), demandByPool.get(poolKey));
     if (covered) coveredKeys.add(poolKey);
     lines.push({
       name: ingredient.name,
@@ -251,28 +337,29 @@ export function buildRecipeCoverage(
   const pools = buildPantryPools(inventory, items);
   const groceryKeys = groceryPoolKeys(groceryItems, items);
 
-  const needByKey = new Map<string, number>();
+  const demandByKey = new Map<string, PantryDemand>();
   const firstByKey = new Map<string, RecipeSummaryIngredient>();
   for (const ingredient of ingredients) {
-    const { poolKey, quantity } = resolveLine(ingredient, pools);
+    const { poolKey, need } = resolveLine(ingredient, pools);
     const key = `${ingredient.recipeId}|${poolKey}`;
-    needByKey.set(key, (needByKey.get(key) ?? 0) + quantity);
+    const demand = demandByKey.get(key) ?? emptyDemand();
+    addNeed(demand, need);
+    demandByKey.set(key, demand);
     if (!firstByKey.has(key)) firstByKey.set(key, ingredient);
   }
 
   const out = new Map<string, RecipeCoverage>();
-  for (const [key, need] of needByKey) {
+  for (const [key, demand] of demandByKey) {
     const sep = key.indexOf("|");
     const recipeId = key.slice(0, sep);
     const poolKey = key.slice(sep + 1);
     const matched = !poolKey.startsWith("name:");
-    const rawHave = pools.stock.get(poolKey) ?? 0;
-    const commonUnit = pools.stockUnitByRoot?.get(poolKey) ?? null;
-    const have = toOunces(rawHave, commonUnit) ?? rawHave;
-    const covered = matched && have >= need - 1e-6;
+    const pool = pools.pools.get(poolKey);
+    const covered = matched && poolCovers(pool, demand);
+    const available = poolValue(pool, demand);
     const status: RecipeIngredientLine["status"] = covered
       ? "available"
-      : matched && have > 0
+      : matched && available > 0
         ? "partial"
         : "missing";
     // Only lines the pantry can't cover need a shopping line; an uncovered
@@ -298,8 +385,8 @@ export function buildRecipeCoverage(
       quantityText: first.quantityText,
       covered,
       status,
-      haveQuantity: rawHave,
-      haveUnit: commonUnit,
+      haveQuantity: available,
+      haveUnit: demandBasis(demand) === "oz" ? "oz" : null,
       matched,
       poolKey,
       onList,

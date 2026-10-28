@@ -56,16 +56,16 @@ type Props = {
 type ShopResult = Awaited<ReturnType<typeof planDaysToGrocery>>;
 
 /**
- * Whether a planned day's shopping is already done: the durable record left by
- * the last "Shop …" run, or — for days that predate that column — the live
- * shopping list already covering everything the pantry can't.
+ * Whether everything the pantry can't cover for a planned day is already on
+ * the unchecked grocery list. This controls the prominent "On list" chip on
+ * day cards. The durable shopped_at stamp is shown only as a muted hint in
+ * the shop picker for days that have no remaining shoppable items.
  */
 function dayOnList(
   entry: MealPlanDayRow | null,
   coverage: RecipeCoverage | null,
 ): boolean {
   if (!entry || entry.made_at) return false;
-  if (entry.shopped_at) return true;
   return Boolean(
     coverage && coverage.shoppable > 0 && coverage.onList >= coverage.shoppable,
   );
@@ -188,6 +188,7 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
             ? (coverageById[day.entry.recipe_id] ?? null)
             : null,
         ),
+        previouslyShopped: Boolean(day.entry?.shopped_at),
       };
     }),
   }));
@@ -347,6 +348,7 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
           }}
           recipeName={recipeById.get(ingredientRecipeId)?.name ?? "Recipe"}
           coverage={coverageById[ingredientRecipeId]}
+          recipeId={ingredientRecipeId}
         />
       ) : null}
 

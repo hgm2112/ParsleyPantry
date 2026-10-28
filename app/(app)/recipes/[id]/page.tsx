@@ -19,7 +19,13 @@ function RecipeSkeleton() {
   );
 }
 
-async function RecipeContent({ recipeId }: { recipeId: string }) {
+async function RecipeContent({
+  recipeId,
+  returnTo,
+}: {
+  recipeId: string;
+  returnTo?: string;
+}) {
   const { supabase, householdId } = await requireDal();
 
   const [recipeResult, ingredientsResult, inventoryResult, itemsResult] = await Promise.all([
@@ -83,6 +89,7 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
         stockByItem={stockByItem}
         nameToItemId={nameToItemId}
         itemRoots={itemRoots}
+        returnTo={returnTo}
       />
     </div>
   );
@@ -90,19 +97,26 @@ async function RecipeContent({ recipeId }: { recipeId: string }) {
 
 export default function RecipePage({
   params,
+  searchParams,
 }: PageProps<"/recipes/[id]">) {
   return (
     <Suspense fallback={<RecipeSkeleton />}>
-      <RecipeWrapper params={params} />
+      <RecipeWrapper params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
 async function RecipeWrapper({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { id } = await params;
-  return <RecipeContent recipeId={id} />;
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const returnTo =
+    typeof sp.returnTo === "string" && sp.returnTo.startsWith("/")
+      ? sp.returnTo
+      : undefined;
+  return <RecipeContent recipeId={id} returnTo={returnTo} />;
 }

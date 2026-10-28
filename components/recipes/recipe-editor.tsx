@@ -37,11 +37,31 @@ type Props = {
   nameToItemId?: Record<string, string>;
   /** item id → canonical root id (stock pools are root-keyed). */
   itemRoots?: Record<string, string>;
+  /** If set (and starts with /), save/delete navigates back to it using router.back() when possible. */
+  returnTo?: string;
 };
 
-export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, itemRoots }: Props) {
+export function RecipeEditor({
+  recipe,
+  ingredients,
+  stockByItem,
+  nameToItemId,
+  itemRoots,
+  returnTo,
+}: Props) {
   const router = useRouter();
   const isEdit = recipe !== null;
+
+  function navigateAfterSaveOrDelete() {
+    if (returnTo && returnTo.startsWith("/")) {
+      // Prefer history back so the user lands exactly where they were
+      // (including scroll/selection state on the plan).
+      router.back();
+    } else {
+      router.push(returnTo && returnTo.startsWith("/") ? returnTo : "/recipes");
+    }
+    router.refresh();
+  }
 
   /** Raw linked/name-resolved id → canonical matching key. */
   function matchingKey(raw: string | null | undefined, name: string): string | null {
@@ -122,8 +142,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, i
         return;
       }
       toast.success("Recipe saved");
-      router.push("/recipes");
-      router.refresh();
+      navigateAfterSaveOrDelete();
       return;
     }
 
@@ -146,8 +165,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, i
     setTagsText("");
     setRecipeType("cooking");
     setRows([]);
-    router.push("/recipes");
-    router.refresh();
+    navigateAfterSaveOrDelete();
   }
 
   async function remove() {
@@ -158,8 +176,7 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, i
       return;
     }
     toast.success("Recipe deleted");
-    router.push("/recipes");
-    router.refresh();
+    navigateAfterSaveOrDelete();
   }
 
   async function handleAddMissing() {
@@ -199,8 +216,14 @@ export function RecipeEditor({ recipe, ingredients, stockByItem, nameToItemId, i
           type="button"
           variant="ghost"
           size="icon-sm"
-          render={<Link href="/recipes" />}
-          aria-label="Back to recipes"
+          render={
+            <Link
+              href={
+                returnTo && returnTo.startsWith("/") ? returnTo : "/recipes"
+              }
+            />
+          }
+          aria-label="Back"
         >
           <ArrowLeft />
         </Button>

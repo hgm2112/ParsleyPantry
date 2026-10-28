@@ -13,35 +13,20 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 Goal: pantry/shopping UX — cook from Quick Bites and add to the list from
 anywhere, with shopping lines that read like aisle labels.
 
-Shipped and pushed (bd0d7e9 → 2924e6a):
-- Quick Bites cards open a **Cook `<recipe>`** dialog: pantry coverage preview,
-  required rows pre-checked, meal-plan `stock_holds` protected, FEFO deduction
-  with Undo (`bd0d7e9`). Actions live in `app/(app)/recipes/actions.ts`
-  (`previewRecipeCook` / `cookRecipe`).
-- Grocery lines collapse onto the canonical root: line name/id/category follow
-  the root; unit keeps the pack/input unit. Centralized in `addGroceryItem` /
-  `ensureGroceryItem` via `resolveCatalogRoot` (`lib/grocery.ts`), so list adds,
-  type-ahead, inventory button, consume, low stock, recipes and planner agree
-  (`64dd04d`).
-- `/search` results grew a cart button
-  (`components/search/add-to-list-button.tsx`): one tap adds the canonical root,
-  toasts “added” / “already on your list”, swaps to a check while listed, and
-  refreshes the page so the shopping-list section picks the line up (`1af4118`).
-- Meal-plan days remember shopping: `meal_plan_days.shopped_at` is stamped by
-  `shopDays()` and cleared whenever the day's meal changes;
-  `buildRecipeCoverage()` now also takes the unchecked grocery lines and reports
-  `shoppable` / `onList`, so days predating the column still read correctly.
-  Day cards show an “On list” chip; the shop picker labels those days
-  (`2924e6a`). Migration `20261026130000_meal_plan_shopped_at.sql` applied to
-  prod, backfilled from the remaining stock holds (2 days).
-- Home dinners widget fits weekday + date on one line in the 7-column grid
-  (13px weekday, 11px nowrap date, tighter gap) (`3d40515`).
-- Add-to-list sheet (`components/grocery/add-sheet.tsx`) resets on close and
-  clears the pantry filter after each add, so reopening starts blank; manual
-  adds reuse the same `reset()`, so the category clears too.
-- Migration `20261026120000_grocery_canonical_names.sql` backfilled existing
-  linked lines; applied to prod (4 labels changed; all 13 linked lines on root).
-- Fixed conditional-hook order in `quick-bites-widget.tsx` (5 lint errors gone).
+Shipped and pushed (bd0d7e9 → current):
+- Quick Bites cards open a **Cook `<recipe>`** dialog...
+- Grocery lines collapse onto the canonical root...
+- `/search` cart button, meal-plan `shopped_at` + "On list", home date fit, add-sheet reset (as of 7dd187b).
+- **Pantry math**: container sizes in unit ("6 oz") are expanded; pools track
+  ounces + packages separately. Fixes "3 6oz cans = partial for 6 oz need"
+  (Tomato Paste) and mixed-size roots. Used by plan shop/mark-made, recipe
+  cook, Quick Bites, coverage dialogs.
+- **/plan** "On list" chip and picker now mean *pending* only (live unchecked
+  grocery coverage). Durable stamp shows muted "· shopped".
+- Recipe ingredient dialogs (single + week) gained "On list" badge priority +
+  count in headers ("Have 7/9 · 2 on list").
+- From plan coverage dialog: **Take me to recipe** with `?returnTo=...`;
+  editor back-chevron + save/delete navigate back; actions revalidate /plan + /home.
 
 Verified: `npx tsc --noEmit` green; `npm run build` successful; `eslint` clean on
 the files touched this session; `npm run lint` 8 pre-existing errors / 16
@@ -59,12 +44,13 @@ Durable notes:
   still resolves and toasts.
 
 Open:
-- Signed-in check: Quick Bites cook + Undo; add a scanned product → canonical
-  grocery label and correct aisle; adding a second product with the same root
-  should report “already on the list”.
-- Signed-in check: add from the sheet, close, reopen → blank search and manual
-  fields; plan a meal, shop the day, confirm the “On list” chip; tap the search
-  cart button twice to see “added” → “already on your list”.
-- Confirm deployed `/recipes` required-only counts and the new redirect flows.
-- Optional: align Quick Bites coverage with the presence-based rule `/recipes`
-  uses; stray-file / lint-error cleanup.
+- Signed-in check: the new "On list" chip clears after finishing a trip; "Take
+  me to recipe" from a day card's ingredient list returns to the exact plan
+  view after save or browser back.
+- Signed-in check: Tomato Paste (or any "N oz" pack) now shows full coverage
+  when you have enough total ounces; Chicken / Sauce / Bread mixed packs sum
+  correctly.
+- Still pending (from earlier): Quick Bites cook + Undo, canonical label/aisle
+  on scanned add, deployed `/recipes` counts/redirects.
+- Optional: port the pack-aware pools into the recipe editor list and /recipes
+  page (currently still use raw container presence).

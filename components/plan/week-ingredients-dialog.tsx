@@ -48,6 +48,9 @@ export function WeekIngredientsDialog({
             {hasIngredients
               ? ` · Have ${totals.inPantry}/${totals.total} in pantry`
               : ""}
+            {groups.some((g) => g.coverage.onList > 0)
+              ? ` · ${groups.reduce((s, g) => s + g.coverage.onList, 0)} on list`
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -68,8 +71,15 @@ export function WeekIngredientsDialog({
                 </h3>
                 <ul className="divide-y rounded-lg border bg-background">
                   {group.coverage.lines.map((line, index) => {
+                    const badgeKey = line.onList ? "onList" : line.status;
                     const badge =
-                      STATUS_BADGE[line.status] ?? STATUS_BADGE.missing;
+                      STATUS_BADGE[badgeKey] ?? STATUS_BADGE.missing;
+                    const haveNote =
+                      line.status === "partial" &&
+                      line.haveQuantity > 0 &&
+                      line.haveUnit
+                        ? `Have ${line.haveQuantity} ${line.haveUnit}`
+                        : null;
                     return (
                       <li
                         key={`${line.name}-${index}`}
@@ -82,11 +92,8 @@ export function WeekIngredientsDialog({
                           <span className="block text-xs text-muted-foreground">
                             {[
                               line.quantityText,
-                              line.status === "partial" &&
-                                line.haveQuantity > 0 &&
-                                line.haveUnit
-                                ? `Have ${line.haveQuantity} ${line.haveUnit}`
-                                : null,
+                              haveNote,
+                              line.onList ? "On list" : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")}

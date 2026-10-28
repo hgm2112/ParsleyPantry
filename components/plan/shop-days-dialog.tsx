@@ -23,8 +23,13 @@ export type ShopDayOption = {
   mealLabel: string;
   /** Unplanned and made days are shown but can't be shopped. */
   enabled: boolean;
-  /** Already pushed to the shopping list at least once. */
+  /**
+   * Pending items on the list right now (controls the primary "· on your list").
+   * The durable shop stamp is conveyed via `previouslyShopped`.
+   */
   shopped: boolean;
+  /** The day has a shopped_at stamp (even if the list has since been cleared). */
+  previouslyShopped?: boolean;
 };
 
 export type ShopWeekGroup = {
@@ -53,6 +58,7 @@ export function ShopDaysDialog({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(new Set());
       setBusy(false);
     }
@@ -148,6 +154,10 @@ export function ShopDaysDialog({
                             {day.shopped ? (
                               <span className="text-[10px] font-bold uppercase text-primary">
                                 · on your list
+                              </span>
+                            ) : day.previouslyShopped ? (
+                              <span className="text-[10px] font-bold uppercase text-muted-foreground/70">
+                                · shopped
                               </span>
                             ) : null}
                           </span>

@@ -6,11 +6,20 @@ import { requireDal } from "@/lib/auth";
 import { addManyGroceryItems } from "@/app/(app)/grocery/actions";
 import { createRootLookup } from "@/lib/canonical";
 import {
-  fromOunces,
-  parseQuantityText,
-  splitNameAndQuantity,
-  toOunces,
-} from "@/lib/stock";
+  addNeed,
+  buildPantryPools,
+  demandBasis,
+  emptyDemand,
+  emptyPool,
+  needFromParts,
+  pantryNeed,
+  type PantryDemand,
+  type PantryNeed,
+  type PantryPool,
+  type PantryPools,
+  type SummaryItemRow,
+} from "@/lib/meal-summary";
+import { fromOunces, parseQuantityText, splitNameAndQuantity, toOunces } from "@/lib/stock";
 import { isIsoDate } from "@/lib/plan";
 
 export type ActionResult<T = null> =
@@ -203,42 +212,79 @@ type HoldRow = {
 };
 
 /**
- * Blind per-root stock pools shared by planner shopping and the
- * mark-as-made preview: quantities summed across EVERY batch of a canonical
- * group (mixed units collapse the common unit to null, exactly like the
- * recipe editor). Holds are summed raw and the caller's skip rule excludes
- * the days being recomputed, so stock is never double-allocated.
+ * Stock pools and holds shared by planner shopping and the mark-as-made
+ * preview. Stock is pooled per canonical root with container sizes expanded
+ * (see `buildPantryPools`); holds are pooled in the same two bases so a
+ * reservation made from an "N lb" need subtracts pounds, not containers.
+ * The caller's skip rule excludes the days being recomputed, so stock is
+ * never double-allocated.
  */
 function poolStockAndHolds(
   inventoryRows: InventoryRow[],
   holdsRows: HoldRow[],
-  rootOf: (itemId: string) => string,
+  items: SummaryItemRow[],
   skipHold: (row: HoldRow) => boolean,
 ): {
-  stockByRoot: Map<string, number>;
-  stockUnitByRoot: Map<string, string | null>;
-  heldByRoot: Map<string, number>;
+  pools: PantryPools;
+  heldByRoot: Map<string, PantryDemand>;
 } {
-  const stockByRoot = new Map<string, number>();
-  const stockUnitByRoot = new Map<string, string | null>();
-  const stockUnitSeen = new Set<string>();
-  for (const row of inventoryRows) {
-    const root = rootOf(row.item_id);
-    stockByRoot.set(root, (stockByRoot.get(root) ?? 0) + row.quantity);
-    if (!stockUnitSeen.has(root)) {
-      stockUnitSeen.add(root);
-      stockUnitByRoot.set(root, row.unit);
-    } else if (stockUnitByRoot.get(root) !== row.unit) {
-      stockUnitByRoot.set(root, null);
-    }
-  }
-  const heldByRoot = new Map<string, number>();
+  const pools = buildPantryPools(inventoryRows, items);
+  const heldByRoot = new Map<string, PantryDemand>();
   for (const row of holdsRows) {
     if (skipHold(row)) continue;
-    const root = rootOf(row.item_id);
-    heldByRoot.set(root, (heldByRoot.get(root) ?? 0) + row.quantity);
+    const root = pools.rootOf(row.item_id);
+    const demand = heldByRoot.get(root) ?? emptyDemand();
+    addNeed(demand, needFromParts(row.quantity, row.unit));
+    heldByRoot.set(root, demand);
   }
-  return { stockByRoot, stockUnitByRoot, heldByRoot };
+  return { pools, heldByRoot };
+}
+
+/** Pool minus reservations, per basis, never negative. */
+function availablePool(
+  pools: PantryPools,
+  heldByRoot: Map<string, PantryDemand>,
+  rootId: string | null,
+): PantryPool {
+  if (!rootId) return emptyPool();
+  const pool = pools.pools.get(rootId) ?? emptyPool();
+  const held = heldByRoot.get(rootId);
+  return {
+    ounces: Math.max(0, pool.ounces - (held?.ounces ?? 0)),
+    packages: Math.max(0, pool.packages - (held?.packages ?? 0)),
+  };
+}
+
+/**
+ * Reserves as much of `need` as the available pool can cover and reports the
+ * reservation plus what is still missing — both in the need's own basis
+ * (ounces for weights, container counts otherwise). The reservation is
+ * recorded so later days and later ingredients see the reduced pool.
+ */
+function reserveFromPool(
+  pools: PantryPools,
+  heldByRoot: Map<string, PantryDemand>,
+  rootId: string,
+  need: PantryNeed,
+): { reserved: number; shortfall: number; basis: "oz" | "count" } {
+  const pool = availablePool(pools, heldByRoot, rootId);
+  const demand = emptyDemand();
+  addNeed(demand, need);
+  const basis = demandBasis(demand);
+  const wanted = basis === "oz" ? pool.ounces : pool.packages;
+  const needed = basis === "oz" ? (need.ounces ?? 0) : need.packages;
+  const reserved = Math.min(wanted, needed);
+  // A weight need that finds no weight stock at all is "covered" by whatever
+  // containers are on hand — nothing to reserve, nothing to buy.
+  const shortfall =
+    basis === "oz" && wanted <= 0 && pool.packages > 0
+      ? 0
+      : Math.max(0, needed - reserved);
+  const hold = heldByRoot.get(rootId) ?? emptyDemand();
+  if (basis === "oz") hold.ounces += reserved;
+  else hold.packages += reserved;
+  heldByRoot.set(rootId, hold);
+  return { reserved, shortfall, basis };
 }
 
 /**
@@ -371,10 +417,10 @@ async function shopDays(
       nameToRoot.set(row.name.trim().toLowerCase(), rootOf(row.id));
     }
 
-    const { stockByRoot, stockUnitByRoot, heldByRoot } = poolStockAndHolds(
+    const { pools, heldByRoot } = poolStockAndHolds(
       (inventoryResult.data ?? []) as InventoryRow[],
       (holdsResult.data ?? []) as HoldRow[],
-      rootOf,
+      catalogRows,
       // Targeted days are being recomputed below.
       (row) => targetKeys.has(`${row.week_start}:${row.day_index}`),
     );
@@ -423,22 +469,16 @@ async function shopDays(
         const groupKey = ingredientRoot ?? `name:${bareName}`;
         if (!lineNames.has(groupKey)) lineNames.set(groupKey, ingredient.name);
 
-        // Coverage uses proper units: the oz-family converts exactly;
-        // cans/cups/counts compare as plain quantities over the blind
-        // per-root pool.
-        const needed = toOunces(parsed.quantity, parsed.unit) ?? parsed.quantity;
-        let reservePool = 0;
-        if (ingredientRoot) {
-          const haveRaw = stockByRoot.get(ingredientRoot) ?? 0;
-          const commonUnit = stockUnitByRoot.get(ingredientRoot) ?? null;
-          const have = toOunces(haveRaw, commonUnit) ?? haveRaw;
-          const held = heldByRoot.get(ingredientRoot) ?? 0;
-          const available = Math.max(0, have - held);
-          reservePool = Math.min(available, needed);
-        }
+        // Coverage compares each need in its own basis: weights in ounces
+        // (container sizes expanded), everything else in container counts.
+        const need = pantryNeed(ingredient.quantity_text);
+        const reservation = ingredientRoot
+          ? reserveFromPool(pools, heldByRoot, ingredientRoot, need)
+          : { reserved: 0, shortfall: need.ounces ?? need.packages, basis: "count" as const };
+        const { reserved: reservePool, shortfall } = reservation;
         if (reservePool > 0 && ingredientRoot) {
           const holdQty =
-            parsed.unit != null
+            reservation.basis === "oz" && parsed.unit != null
               ? (fromOunces(reservePool, parsed.unit) ?? reservePool)
               : reservePool;
           newHolds.push({
@@ -449,14 +489,10 @@ async function shopDays(
             week_start: day.week_start,
             day_index: day.day_index,
           });
-          heldByRoot.set(
-            ingredientRoot,
-            (heldByRoot.get(ingredientRoot) ?? 0) + reservePool,
-          );
           reserved += 1;
         }
         // One count per meal per ingredient, even if a recipe lists it twice.
-        if (needed - reservePool > 0 && !countedThisMeal.has(groupKey)) {
+        if (shortfall > 0 && !countedThisMeal.has(groupKey)) {
           countedThisMeal.add(groupKey);
           uncoveredMeals.set(groupKey, (uncoveredMeals.get(groupKey) ?? 0) + 1);
         }
@@ -567,14 +603,19 @@ type ResolvedIngredient = {
   rootId: string | null;
   /** Catalog name of the matched group (differs from the recipe name for branded items). */
   pantryName: string | null;
-  /** Recipe unit — display only; availability is quantity-based like the recipe editor. */
+  /** Recipe unit — display only; availability is measured in the need's basis. */
   unit: string | null;
   needed: number;
   available: number;
   take: number;
   shortfall: number;
-  /** Take in pool space (oz for weight recipes, raw otherwise) — what FEFO deducts. */
+  /**
+   * Take in pool space — ounces for weight needs, container counts for
+   * everything else. This is the basis FEFO deducts in.
+   */
   takePool: number;
+  /** Which pool column `takePool` is measured in. */
+  poolBasis: "oz" | "count";
 };
 
 /**
@@ -669,12 +710,12 @@ async function resolveDayIngredients(
     groupByRoot.set(root, group);
   }
 
-  // Blind per-root pools shared with planner shopping (poolStockAndHolds):
-  // one number per ingredient across every batch and unit.
-  const { stockByRoot, stockUnitByRoot, heldByRoot } = poolStockAndHolds(
+  // Stock pools shared with planner shopping (poolStockAndHolds): weights in
+  // ounces with container sizes expanded, everything else in container counts.
+  const { pools, heldByRoot } = poolStockAndHolds(
     (inventoryResult.data ?? []) as InventoryRow[],
     (holdsResult.data ?? []) as HoldRow[],
-    rootOf,
+    catalogRows,
     // This day's own holds exist for this meal — they don't reduce it.
     (row) => row.week_start === weekStart && row.day_index === dayIndex,
   );
@@ -695,17 +736,13 @@ async function resolveDayIngredients(
       : (nameToRoot.get(
           splitNameAndQuantity(row.name).name.trim().toLowerCase(),
         ) ?? null);
-    // Oz-family weights convert exactly; everything else (cups, cans,
-    // counts) is a plain quantity — the same comparison the recipe editor
-    // makes. "2 cans" counts against any stock this ingredient's canonical
-    // root has, whatever unit it was stored in.
-    const neededRaw = parsed.quantity;
-    const needed = toOunces(neededRaw, parsed.unit) ?? neededRaw;
-    const haveRaw = rootId ? (stockByRoot.get(rootId) ?? 0) : 0;
-    const commonUnit = rootId ? (stockUnitByRoot.get(rootId) ?? null) : null;
-    const have = toOunces(haveRaw, commonUnit) ?? haveRaw;
-    const held = rootId ? (heldByRoot.get(rootId) ?? 0) : 0;
-    const available = Math.max(0, have - held);
+    // The need's own basis decides the comparison: "1 lb" against ounces in
+    // stock, "2 cans" (or a bare "1") against container counts.
+    const need = pantryNeed(row.quantity_text);
+    const pool = availablePool(pools, heldByRoot, rootId);
+    const basis = need.ounces != null ? "oz" : "count";
+    const needed = basis === "oz" ? (need.ounces ?? 0) : need.packages;
+    const available = basis === "oz" ? pool.ounces : pool.packages;
     const takePool = Math.min(available, needed);
     const shortfall = Math.max(0, needed - takePool);
     // Report in the recipe's own unit so the dialog reads "1 lb"/"2 cans".
@@ -723,6 +760,7 @@ async function resolveDayIngredients(
       take: round3(toRecipe(takePool)),
       shortfall: round3(toRecipe(shortfall)),
       takePool: round3(takePool),
+      poolBasis: basis,
     });
   }
   return { error: null, recipeId, items, groupByRoot };
@@ -779,12 +817,11 @@ export async function markMealMade(
     );
 
     // Deduct only what the user selected AND the pantry can legitimately
-    // cover, FEFO across the whole canonical group with no unit filter —
-    // quantities are compared as plain numbers (recipe editor semantics; the
-    // recipe's unit text is informational). Weight-unit batches convert
-    // per-batch so an oz batch covers the right share of an "N lb" need;
-    // anything else decrements raw. Optional ingredients are displayed but
-    // never consumed.
+    // cover, FEFO across the whole canonical group. The need's basis decides
+    // how a batch is consumed: a weight need converts per batch (so a "6 oz"
+    // can gives up exactly 6 oz), while a container need eats one container
+    // per unit ("2 cans" takes two batches). Optional ingredients are
+    // displayed but never consumed.
     for (const [index, ingredient] of resolved.items.entries()) {
       if (wanted && !wanted.has(index)) continue;
       if (!ingredient.rootId || ingredient.takePool <= 0) continue;
@@ -806,10 +843,14 @@ export async function markMealMade(
       }[]) {
         if (remaining <= 0) break;
         const ozPerUnit = toOunces(1, row.unit);
-        const take = Math.min(
-          row.quantity,
-          ozPerUnit != null ? remaining / ozPerUnit : remaining,
-        );
+        let take: number;
+        if (ingredient.poolBasis === "oz") {
+          // Weight needs only consume weight batches.
+          if (ozPerUnit == null) continue;
+          take = Math.min(row.quantity, remaining / ozPerUnit);
+        } else {
+          take = Math.min(row.quantity, remaining);
+        }
         if (take <= 0) continue;
         const nextQuantity = Math.round((row.quantity - take) * 1000) / 1000;
         if (nextQuantity <= 0) {
@@ -826,7 +867,8 @@ export async function markMealMade(
             .eq("id", row.id);
           if (updateError) return { ok: false, error: updateError.message };
         }
-        remaining -= take * (ozPerUnit != null ? ozPerUnit : 1);
+        remaining -=
+          ingredient.poolBasis === "oz" ? take * (ozPerUnit ?? 0) : take;
       }
     }
 
