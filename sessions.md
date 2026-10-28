@@ -4,6 +4,35 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-27 — Pack size at add/scan time + durable "Shopped" on plan cards
+
+**Shipped**
+- Inventory **add flow** (`components/inventory/add-form.tsx`): "Pieces per pack" + piece name inputs are now present on initial creation (manual entry or barcode scan). Matches `detail-form.tsx` exactly in behavior:
+  - State + `packActive` / `parsedPackSize` (only active for values >= 2).
+  - Two-column grid (number + piece name input).
+  - Help text (slightly tweaked wording for the create context).
+  - Pre-fills when selecting an existing catalog item that already has pack data.
+  - Wired into the `addToInventory` payload and the post-save reset.
+- Quantity inputs (`ExpirationEntries`) now use live `qtyScale` from the *in-progress* pack values while you're defining a new pack item (falls back to `selectedItem` for re-adds).
+- Backend (`actions.ts`) already handled pack on new item creation; the change just exposes the UI at the right time.
+- `/plan` week view: the durable `shopped_at` stamp is now shown on day cards as a muted "Shopped" pill (small `ShoppingCart` icon) once the live unchecked grocery items are gone. "On list" (primary) still appears while items remain pending. Matches the existing muted "· shopped" hint inside the shop picker.
+- Updated `dayOnList` JSDoc and `DayCard` logic. Title-cased label per request.
+- Verified: `npx tsc --noEmit` clean, `npm run build` successful, eslint clean. Committed + pushed (`c59fb36` for pack add, `4a72ae3` for Shopped indicator).
+
+**Notes**
+- Pack fields are *always shown* in the add form (even when a non-pack catalog item is selected), so you can turn a new item into a pack item on first add.
+- "Shopped" is low-prominence history. The grocery list itself remains the source of truth for what still needs to be bought.
+- Both the transient "On list" chip and the new durable "Shopped" badge are now visible directly on the main week grid (previously the durable state was only inside the picker).
+
+**Gotchas**
+- When re-adding stock to an existing pack item, the form lets you edit the pack fields for the current add session, but the backend only applies a pack update if the item didn't already have one (or on initial creation).
+- `shopped_at` is per planned day and advisory only (cleared when the meal on that day changes).
+
+**Open — next session**
+- Carry-overs from previous: Quick Bites cook + Undo flows, canonical label/aisle on scanned adds, deployed `/recipes` counts/redirects.
+- End-to-end test of new pack-on-add flow (scan a new pack item, manual add with pack size set, confirm scaling in the add form and after save).
+- Optional: make the durable "Shopped" badge also appear in other surfaces (home week view, etc.) if desired.
+
 ## 2026-10-27 — Plan coverage, "On list" badges, "Take me to recipe", pantry math fix
 
 **Shipped**
