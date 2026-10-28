@@ -4,6 +4,61 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-10-27 — Add sheet resets; search cart button, shopped days, home date
+
+**Shipped**
+- `/grocery` **Add to grocery list** sheet (`components/grocery/add-sheet.tsx`)
+  no longer reopens with stale input:
+  - `reset()` clears search, manual name/quantity/unit/category and runs from
+    `handleOpenChange(false)`, so X, overlay, Esc and swipe-close all start
+    blank next time.
+  - Adding a pantry item clears the filter immediately, bringing the full
+    pantry back for the next pick.
+  - `addManual` reuses `reset()` instead of three ad-hoc setters, which also
+    fixes the manually picked **category** sticking around between adds.
+- `/search` one-click cart button (`1af4118`,
+  `components/search/add-to-list-button.tsx`): calls `addGroceryItem` with the
+  canonical root, toasts “added” / “already on your list”, shows a check while
+  the item is on the list, and refreshes `/search` so the shopping-list section
+  picks the new line up.
+- Meal-plan shopped days (`2924e6a`): `meal_plan_days.shopped_at` is stamped by
+  `shopDays()` and cleared whenever the day's meal changes;
+  `buildRecipeCoverage()` now also consumes the unchecked grocery lines and
+  reports `shoppable` / `onList`, so days predating the column still read
+  correctly from the live list. Day cards show an “On list” chip and the shop
+  picker labels those days. Migration `20261026130000_meal_plan_shopped_at.sql`
+  applied to prod; 2 days backfilled from the remaining stock holds.
+- `/home` dinners widget (`3d40515`): weekday 13px + 11px nowrap date with a
+  tighter gap, so “Mon Oct 26” stays on one line in the 7-column desktop grid.
+- Verified: `eslint` clean on the touched file, `npx tsc --noEmit` green,
+  `npm run build` successful.
+
+**Notes**
+- `reset()` deliberately does not clear `busy` / `recipeBusy`: closing the sheet
+  mid-add still lets the request finish and toast instead of vanishing.
+- The sheet is only closed through its own `onOpenChange`
+  (`grocery-view.tsx` → `setAddOpen`), which is what makes the close-time reset
+  reliable; a future caller that flips parent state directly would skip it.
+- The active tab is intentionally *not* reset — reopening resumes Inventory,
+  Recipe or Manual where you left off.
+- `shopped_at` is advisory: it answers “did I already shop this day”, while the
+  grocery list itself stays the source of truth for what is left to buy.
+
+**Gotchas**
+- `shopped_at` only covers days shopped *after* the column existed, or backfilled
+  from `stock_holds`; an older day that was shopped before `stock_holds` were
+  introduced relies on the `onList` fallback rather than the stamp.
+- Changing a day's meal clears its stamp, but editing the *recipe's* ingredients
+  does not — the grocery lines already on the list decide `onList`.
+
+**Open — next session**
+- Signed-in check: add from the sheet → close → reopen is blank; manual category
+  resets after an add.
+- Signed-in check: search cart button twice (“added” → “already on your list”);
+  plan a meal, shop the day, confirm the “On list” chip.
+- Still pending from 2026-10-26: Quick Bites cook + Undo, canonical label/aisle
+  on a scanned add, deployed `/recipes` counts and redirects.
+
 ## 2026-10-26 — Grocery lines use the canonical root name
 
 **Shipped**

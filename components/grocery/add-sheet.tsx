@@ -56,6 +56,20 @@ export function AddGrocerySheet({
   const [busy, setBusy] = useState(false);
   const [recipeBusy, setRecipeBusy] = useState<string | null>(null);
 
+  /** Back to a blank sheet — run on close so a later open starts fresh. */
+  function reset() {
+    setSearch("");
+    setManualName("");
+    setManualQuantity("1");
+    setManualUnit("");
+    setManualCategory("__none");
+  }
+
+  function handleOpenChange(next: boolean) {
+    if (!next) reset();
+    onOpenChange(next);
+  }
+
   const filteredInventory = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const groups = groupByItem(inventory).filter((group) => {
@@ -85,6 +99,9 @@ export function AddGrocerySheet({
         ? `${result.data.name} added to list`
         : `${result.data.name} is already on the list`,
     );
+    // Clearing the filter brings the whole pantry back so the next pick is
+    // a fresh search instead of a leftover one.
+    setSearch("");
     onAdded();
   }
 
@@ -138,14 +155,12 @@ export function AddGrocerySheet({
     toast.success(
       result.data.created ? `${name} added` : `${name} is already on the list`,
     );
-    setManualName("");
-    setManualQuantity("1");
-    setManualUnit("");
+    reset();
     onAdded();
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto gap-3">
         <SheetHeader>
           <SheetTitle>Add to grocery list</SheetTitle>
