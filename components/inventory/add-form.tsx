@@ -100,6 +100,8 @@ export function AddForm({
     newExpirationEntry(),
   ]);
   const [unit, setUnit] = useState("");
+  const [packSize, setPackSize] = useState("");
+  const [packUnit, setPackUnit] = useState("");
   const [location, setLocation] = useState<Location>(defaultLocation);
   const [freeze, setFreeze] = useState<FreezeValue>(defaultFreezeValue);
   const [categoryId, setCategoryId] = useState("");
@@ -124,12 +126,19 @@ export function AddForm({
   // live in refs rather than the values captured by the current render.
   const nameDirtyRef = useRef(false);
   const unitDirtyRef = useRef(false);
+  const packDirtyRef = useRef(false);
+
+  const parsedPackSize = Math.round(Number(packSize));
+  const packActive =
+    Number.isFinite(parsedPackSize) &&
+    parsedPackSize >= 2 &&
+    packSize.trim() !== "";
 
   const initialItemId = initialItem?.id ?? null;
 
   // Prefill from an existing household catalog item (e.g. opened from search),
   // so it can be re-added without a barcode scan. applyItem() preserves the
-  // saved name/unit/category/brand and merge into the selected batch on save.
+  // saved name/unit/pack/category/brand and merge into the selected batch on save.
   useEffect(() => {
     if (initialItem) applyItem(initialItem);
     // Only prefill once per selected item; cleanup is harmless.
@@ -254,6 +263,13 @@ export function AddForm({
     setBarcode(item.barcode ?? barcode);
     setUnit(item.unit ?? "");
     unitDirtyRef.current = false;
+    setPackSize(
+      item.pack_size != null && item.pack_size > 1
+        ? String(item.pack_size)
+        : ""
+    );
+    setPackUnit(item.pack_unit ?? "");
+    packDirtyRef.current = false;
     setCategoryId(item.category_id ?? "");
     setSubcategoryId(item.subcategory_id ?? "");
     setLowThreshold(item.low_threshold != null ? String(item.low_threshold) : "");
@@ -361,6 +377,8 @@ export function AddForm({
         location,
         batches,
         unit: unit.trim() || null,
+        packSize: packActive ? parsedPackSize : null,
+        packUnit: packActive ? (packUnit.trim() || null) : null,
         lowThreshold: lowThreshold ? Number(lowThreshold) : null,
         autoRestock,
         canonicalName: canonicalName.trim() || null,
@@ -391,6 +409,8 @@ export function AddForm({
     setMatches([]);
     setEntries([newExpirationEntry()]);
     setUnit("");
+    setPackSize("");
+    setPackUnit("");
     setSubcategoryId("");
     setCategoryId("");
     setLowThreshold("");
@@ -401,6 +421,7 @@ export function AddForm({
     canonicalTouchedRef.current = false;
     foodTypeTouchedRef.current = false;
     nameDirtyRef.current = false;
+    packDirtyRef.current = false;
     if (mode === "navigate") {
       if (onSaved) onSaved();
       else router.push(safeReturnTo);
@@ -565,7 +586,13 @@ export function AddForm({
             entries={entries}
             onChange={setEntries}
             qtyScale={
-              selectedItem?.pack_size != null && selectedItem.pack_size > 1
+              packActive
+                ? {
+                    noun: "pack",
+                    piecesPerUnit: parsedPackSize,
+                    pieceNoun: packUnit.trim() || "pieces",
+                  }
+                : selectedItem?.pack_size != null && selectedItem.pack_size > 1
                 ? {
                     noun: "pack",
                     piecesPerUnit: selectedItem.pack_size,
@@ -617,6 +644,37 @@ export function AddForm({
                   unitDirtyRef.current = true;
                 }}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pack">Pieces per pack</Label>
+            <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+              <Input
+                id="pack"
+                type="number"
+                min={2}
+                step={1}
+                inputMode="numeric"
+                placeholder="12"
+                value={packSize}
+                onChange={(event) => {
+                  setPackSize(event.target.value);
+                  packDirtyRef.current = true;
+                }}
+              />
+              <Input
+                id="pack-unit"
+                placeholder="eggs, packets…"
+                value={packUnit}
+                onChange={(event) => setPackUnit(event.target.value)}
+                aria-label="Piece name"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {packActive
+                ? `1 pack = ${parsedPackSize} ${packUnit.trim() || "pieces"} — stock and low threshold count in pieces.`
+                : "Optional — set if you buy this in multipacks (e.g. 12 for a dozen). Leave blank for single items."}
+            </p>
           </div>
 
           <div className="space-y-2">
