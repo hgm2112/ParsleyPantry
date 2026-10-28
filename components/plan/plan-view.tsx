@@ -58,8 +58,11 @@ type ShopResult = Awaited<ReturnType<typeof planDaysToGrocery>>;
 /**
  * Whether everything the pantry can't cover for a planned day is already on
  * the unchecked grocery list. This controls the prominent "On list" chip on
- * day cards. The durable shopped_at stamp is shown only as a muted hint in
- * the shop picker for days that have no remaining shoppable items.
+ * day cards.
+ *
+ * The durable shopped_at stamp (set when you shop days) is shown on day cards
+ * as a muted "shopped" indicator once there are no longer live unchecked items
+ * on the grocery list. It also appears as a muted hint in the shop picker.
  */
 function dayOnList(
   entry: MealPlanDayRow | null,
@@ -412,9 +415,12 @@ function DayCard({
   const coverage = recipe ? (coverageById[recipe.id] ?? null) : null;
   const showCoverage = Boolean(coverage && coverage.total > 0);
   const showTime = Boolean(recipe && recipe.time > 0);
-  // Shopped is durable history when stamped; otherwise inferred from the live
-  // list so days shopped before the column existed still read correctly.
-  const shopped = dayOnList(day.entry, coverage);
+
+  // Live "On list" = items still pending on the unchecked grocery list.
+  const liveOnList = dayOnList(day.entry, coverage);
+  // Durable stamp recorded when the day was shopped (survives grocery list being cleared).
+  // Only surface for non-made days to keep the card focused.
+  const previouslyShopped = Boolean(day.entry?.shopped_at) && !day.entry?.made_at;
 
   return (
     <div
@@ -433,13 +439,21 @@ function DayCard({
         <span className="text-[11px] font-bold uppercase opacity-70">
           {label.month} {label.dayOfMonth}
         </span>
-        {shopped ? (
+        {liveOnList ? (
           <span
             className="ml-auto flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
             title="Ingredients added to your shopping list"
           >
             <ShoppingCart className="h-2.5 w-2.5" aria-hidden />
             On list
+          </span>
+        ) : previouslyShopped ? (
+          <span
+            className="ml-auto flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground"
+            title="Shopping recorded for this day"
+          >
+            <ShoppingCart className="h-2.5 w-2.5" aria-hidden />
+            Shopped
           </span>
         ) : null}
       </span>
