@@ -210,3 +210,13 @@ supabase/      migrations (schema, RLS, triggers, RPCs, realtime)
 
 Barcode product data from [Open Food Facts](https://world.openfoodfacts.org),
 licensed ODbL — attribution is rendered in the UI where the data is used.
+
+## Fonts
+
+- UI face: **Dyno** by GrandChaos9000 (`fonts/dyno-*.ttf`), licensed
+  [CC BY-NC-SA 3.0](http://creativecommons.org/licenses/by-nc-sa/3.0/) —
+  © 2009–2012 GrandChaos9000. Non-commercial use only; replace the font before
+  using this project commercially.
+- Wordmark/tagline: **FONTE\_\_\_.ttf**, user-provided (`components/brand.tsx`).
+- Manrope (fallback for the few glyphs Dyno lacks, e.g. `→` and `✓`) and Geist
+  Mono (invite codes, scanner debug) load via `next/font/google`.
