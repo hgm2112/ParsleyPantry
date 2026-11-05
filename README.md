@@ -213,10 +213,10 @@ licensed ODbL — attribution is rendered in the UI where the data is used.
 
 ## Fonts
 
-- UI: **Manrope** via `next/font/google`, with Geist Mono for invite codes and
-  the scanner debug line.
+- UI: **ElValle** by Jorge Algarin (`fonts/elvalle-*.ttf`), © 2019 JORGE ALGARIN,
+  El Valle, Caracas, Vzla. Listed variously as free for personal use or
+  CC BY-SA 4.0 depending on the source.
 - Wordmark/tagline: **FONTE\_\_\_.ttf** (`components/brand.tsx`).
-- Bundled but not currently loaded: **Dyno** by GrandChaos9000
-  (`fonts/dyno-*.ttf`), licensed
-  [CC BY-NC-SA 3.0](http://creativecommons.org/licenses/by-nc-sa/3.0/) —
-  © 2009–2012 GrandChaos9000. Non-commercial use only.
+- Glyph fallback for dashes/checks: **Manrope** (via `next/font/google`).
+- Geist Mono for invite codes and scanner debug.
+- Bundled but not loaded: **Dyno** (CC BY-NC-SA 3.0, GrandChaos9000).
