@@ -35,6 +35,12 @@ warnings (no new); pre-push hook green.
 Durable notes:
 - On any schema rebuild keep `20261017140000_restore_schema_privileges.sql` last:
   a DROP SCHEMA reset wipes role grants (PostgREST 42501).
+- A DROP SCHEMA reset also wipes `notification_settings`,
+  `push_subscriptions`, and `leftover_reminder_deliveries`: every member must
+  re-enable the switch **and** re-subscribe each device. An empty leftovers list
+  never turns the reminder off — the cron just skips (and writes no claim).
+- Reminder saves are partial upserts now (only the patched columns), so saving
+  time / "Hide item names" can never clear `enabled` or `timezone`.
 - Date Bark Quick Bites visibility was fixed as **data**, not code: Medjool
   Dates inventory 3 → 24, ingredient quantity text “10-12, Naturals Delights”
   → “10”.

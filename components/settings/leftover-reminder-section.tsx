@@ -132,11 +132,14 @@ export function LeftoverReminderSection({
     }
   }
 
-  async function persist(patch: {
-    enabled?: boolean;
-    localTime?: string;
-    genericMessage?: boolean;
-  }) {
+  async function persist(
+    patch: {
+      enabled?: boolean;
+      localTime?: string;
+      genericMessage?: boolean;
+    },
+    { quiet = false }: { quiet?: boolean } = {},
+  ): Promise<boolean> {
     setSaving(true);
     const result = await updateLeftoverReminder({
       ...patch,
@@ -144,10 +147,20 @@ export function LeftoverReminderSection({
     });
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error);
-      return;
+      if (!quiet) toast.error(result.error);
+      return false;
     }
-    if (patch.localTime) setLastSavedTime(patch.localTime);
+    // Reflect what the database actually stored for the field that changed, so
+    // a failed or partial save can never leave a lying switch — and an
+    // unrelated in-progress edit (e.g. a time typed but not blurred) is kept.
+    const saved = result.data;
+    if (patch.enabled !== undefined) setEnabled(saved.enabled);
+    if (patch.localTime !== undefined) {
+      setTime(timeValue(saved.local_time));
+      setLastSavedTime(timeValue(saved.local_time));
+    }
+    if (patch.genericMessage !== undefined) setGeneric(saved.generic_message);
+    return true;
   }
 
   async function enableOnThisDevice() {
@@ -199,9 +212,19 @@ export function LeftoverReminderSection({
         return;
       }
       setHasBrowserSubscription(true);
-      toast.success(
-        "This device subscription was saved for your account. You can now send a test notification.",
-      );
+      // Subscribing a device should actually start the reminder: without this,
+      // "Enable on this device" saved a subscription while the daily switch
+      // stayed off, so nothing was ever sent.
+      const reminderOn = await persist({ enabled: true }, { quiet: true });
+      if (reminderOn) {
+        toast.success(
+          "This device is subscribed and the daily reminder is on.",
+        );
+      } else {
+        toast.error(
+          "This device is subscribed, but the daily reminder could not be turned on. Toggle \"Daily reminder\" and try again.",
+        );
+      }
       await refreshDiagnostics();
     } catch (error) {
       const reason = safeErrorText(error);
@@ -267,6 +290,9 @@ export function LeftoverReminderSection({
   } else if (!configReady) {
     statusText =
       "Subscription saved, but server-side configuration is incomplete.";
+  } else if (!enabled) {
+    statusText =
+      "This device is subscribed, but the daily reminder is switched off, so nothing will be sent.";
   } else if (hasBrowserSubscription) {
     statusText = "Notifications are configured and ready on this device.";
   } else {
@@ -297,7 +323,11 @@ export function LeftoverReminderSection({
         <div className="space-y-0.5">
           <Label htmlFor="reminder-enabled">Daily reminder</Label>
           <p className="text-xs text-muted-foreground">
-            One notification a day, within about an hour of your chosen time.
+            One notification a day, within about 2 hours of your chosen time.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Stays on when your leftovers list is empty — nothing is sent that
+            day.
           </p>
         </div>
         <Switch
@@ -306,8 +336,11 @@ export function LeftoverReminderSection({
           disabled={saving}
           onCheckedChange={(checked) => {
             const next = checked === true;
+            const previous = enabled;
             setEnabled(next);
-            void persist({ enabled: next });
+            void persist({ enabled: next }).then((ok) => {
+              if (!ok) setEnabled(previous);
+            });
           }}
         />
       </div>
@@ -328,7 +361,10 @@ export function LeftoverReminderSection({
           onChange={(event) => setTime(event.target.value)}
           onBlur={() => {
             if (time && time !== lastSavedTime) {
-              void persist({ localTime: time });
+              const previous = lastSavedTime;
+              void persist({ localTime: time }).then((ok) => {
+                if (!ok) setTime(previous);
+              });
             }
           }}
         />
@@ -348,8 +384,11 @@ export function LeftoverReminderSection({
           disabled={saving}
           onCheckedChange={(checked) => {
             const next = checked === true;
+            const previous = generic;
             setGeneric(next);
-            void persist({ genericMessage: next });
+            void persist({ genericMessage: next }).then((ok) => {
+              if (!ok) setGeneric(previous);
+            });
           }}
         />
       </div>
@@ -388,8 +427,10 @@ export function LeftoverReminderSection({
           Send test notification
         </Button>
         <p className="text-xs text-muted-foreground">
-          Reminders are sent to each device you enable separately. Deleting the
-          app or clearing site data stops that device&apos;s reminders.
+          Enabling a device also turns the daily reminder on. Reminders go to
+          each device separately, so enable them on your phone too. Deleting the
+          app, clearing site data, or reinstalling stops that device&apos;s
+          reminders until you enable it again.
         </p>
         <p className="text-xs text-muted-foreground">
           Status: {statusText}

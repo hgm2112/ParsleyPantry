@@ -95,9 +95,17 @@ Then set these env vars in Vercel (never commit them):
 How it fires: Vercel Hobby only allows one cron expression per deployment, so
 `vercel.json` registers 24 hourly jobs on the same path. Each run only sends to
 users whose local due window (scheduled time + 2h, wrapping midnight) contains
-that hour, and a per-device/day delivery row guarantees exactly one send. On
+that hour, and a per-device/day delivery row guarantees exactly one send. An
+empty leftovers list is a silent skip — the reminder stays on, no claim is
+written, and a later run in the same window still sends if items appear. On
 iPhone/iPad, web push works only in the installed Home Screen app (iOS 16.4+);
 deactivating/deleting the app eventually deactivates that subscription.
+
+Resetting the database (`DROP SCHEMA public CASCADE`) also drops
+`notification_settings`, `push_subscriptions`, and
+`leftover_reminder_deliveries`. Reminders then come back **off** with no
+devices subscribed: after any rebuild, re-enable the switch and press "Enable
+on this device" on each phone.
 
 Then point Supabase **Authentication → URL Configuration** at the deployed
 URL (Site URL + the Vercel origin in Redirect URLs, `http://localhost:3000/**`

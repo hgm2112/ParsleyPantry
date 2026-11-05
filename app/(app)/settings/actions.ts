@@ -200,10 +200,24 @@ function isValidTimeZone(timeZone: string): boolean {
   }
 }
 
-/** Partial update of the signed-in user's reminder preferences (upsert by user_id). */
+export type ReminderPreference = {
+  enabled: boolean;
+  local_time: string;
+  timezone: string | null;
+  generic_message: boolean;
+};
+
+/**
+ * Partial update of the signed-in user's reminder preferences (upsert by
+ * user_id). Only the fields present in the patch are written: PostgREST updates
+ * just those columns on conflict, and a brand-new row still gets the table
+ * defaults. This replaced a read-then-rewrite of the whole row, which wrote
+ * `enabled: false` whenever its read came back empty — so saving the time or
+ * the privacy switch could silently turn the daily reminder off.
+ */
 export async function updateLeftoverReminder(
   rawPatch: z.input<typeof reminderPatchSchema>,
-): Promise<ActionResult> {
+): Promise<ActionResult<ReminderPreference>> {
   try {
     const parsed = reminderPatchSchema.safeParse(rawPatch);
     if (!parsed.success) {
@@ -215,37 +229,33 @@ export async function updateLeftoverReminder(
     }
     const { supabase, user } = await requireDal();
 
-    const { data: current } = await supabase
-      .from("notification_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const existing = current as
-      | {
-          enabled: boolean;
-          local_time: string;
-          timezone: string | null;
-          generic_message: boolean;
-        }
-      | null;
+    const row: {
+      user_id: string;
+      updated_at: string;
+      enabled?: boolean;
+      local_time?: string;
+      timezone?: string;
+      generic_message?: boolean;
+    } = { user_id: user.id, updated_at: new Date().toISOString() };
+    if (patch.enabled !== undefined) row.enabled = patch.enabled;
+    if (patch.localTime !== undefined) row.local_time = patch.localTime;
+    if (patch.timezone !== undefined) row.timezone = patch.timezone;
+    if (patch.genericMessage !== undefined) {
+      row.generic_message = patch.genericMessage;
+    }
 
-    const { error } = await supabase.from("notification_settings").upsert(
-      {
-        user_id: user.id,
-        enabled: patch.enabled ?? existing?.enabled ?? false,
-        local_time:
-          patch.localTime ?? existing?.local_time ?? "18:00:00",
-        timezone: patch.timezone ?? existing?.timezone ?? null,
-        generic_message:
-          patch.genericMessage ?? existing?.generic_message ?? false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+    const { data, error } = await supabase
+      .from("notification_settings")
+      .upsert(row, { onConflict: "user_id" })
+      .select("enabled, local_time, timezone, generic_message")
+      .maybeSingle();
     if (error) return { ok: false, error: error.message };
+    if (!data) {
+      return { ok: false, error: "Could not verify the saved reminder settings" };
+    }
 
     revalidatePath("/settings");
-    return { ok: true, data: null };
+    return { ok: true, data: data as ReminderPreference };
   } catch (error) {
     return {
       ok: false,
