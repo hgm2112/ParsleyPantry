@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import { Manrope, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { ThemeColorSync } from "@/components/theme-color-sync";
@@ -7,34 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-/**
- * UI face: Dyno (GrandChaos9000, CC BY-NC-SA 3.0 — see README "Fonts").
- * Four cuts: regular/bold plus real italics.
- *
- * - `adjustFontFallback: false` keeps Manrope as the first fallback, so the
- *   two glyphs Dyno lacks that the UI uses (`→` arrows, `✓` checks) render in
- *   a consistent webfont instead of the OS font.
- * - `preload: false` because one localFont call shares its preload setting
- *   across every file it loads; preloading would pull ~150 KB on every page.
- */
-const dynoSans = localFont({
-  src: [
-    { path: "../fonts/dyno-regular.ttf", weight: "400", style: "normal" },
-    { path: "../fonts/dyno-italic.ttf", weight: "400", style: "italic" },
-    { path: "../fonts/dyno-bold.ttf", weight: "700", style: "normal" },
-    { path: "../fonts/dyno-bold-italic.ttf", weight: "700", style: "italic" },
-  ],
-  variable: "--font-dyno",
-  display: "swap",
-  preload: false,
-  adjustFontFallback: false,
-});
-
-/** Glyph fallback only (Dyno has no arrow/check glyphs). */
-const manropeFallback = Manrope({
+const manropeSans = Manrope({
   variable: "--font-manrope",
   subsets: ["latin"],
-  preload: false,
 });
 
 const geistMono = Geist_Mono({
@@ -77,7 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${dynoSans.variable} ${manropeFallback.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${manropeSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-dvh flex flex-col bg-background text-foreground">
         <ThemeProvider>
