@@ -4,6 +4,63 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-05 — Recipe source links + editable grocery lines in search results
+
+**Shipped**
+- **Global search clear button** (`app/(app)/nav.tsx`): the shared `SearchForm`
+  input now shows an `X` while it has text. Clicking it clears the field,
+  cancels the pending debounce, and `router.replace("/search")`. Works in the
+  desktop header and on `/search` because both render the same form.
+- **Editable shopping lines in search results**
+  (`components/search/search-grocery-controls.tsx`,
+  `app/(app)/search/page.tsx`): each "On your shopping list" row gained the
+  same `[- X +]` stepper and delete button as the grocery page. Quantity updates
+  optimistically and reverts (with a toast) if the server rejects the write;
+  delete asks for confirmation. The unit sits next to the stepper so the number
+  and unit never disagree, and the old static quantity line was dropped.
+- `/grocery` stays in sync: `updateGroceryItem` / `deleteGroceryItem` already
+  `revalidatePath("/grocery")`, the search row also calls `router.refresh()`, and
+  `RealtimeSync` refreshes a `/grocery` tab that is already open.
+- **Recipe source links** (`lib/external-url.ts`,
+  `components/recipes/recipes-view.tsx`,
+  `components/recipes/recipe-editor.tsx`): `externalHttpUrl()` linkifies only
+  sources that parse as absolute `http(s)` URLs, so free text ("Will", a
+  cookbook) remains valid.
+  - `/recipes` rows show an `ExternalLink` icon right after the recipe name,
+    always visible when the source is a URL. It stops the row navigation and
+    opens the site in a new tab.
+  - The recipe detail Source field shows the same icon to its right, enabled
+    only for URLs.
+  - Prep / Cook / Yields are fixed at `5.5rem` on `sm+` (comfortable for 3
+    digits) and Source expands into the freed space; Source spans the full row
+    on mobile.
+
+**Verified**
+- `npx tsc --noEmit` clean; `npm run build` compiled; eslint clean on every
+  touched file; pre-push TypeScript hook green.
+- Commits: `1a4423f` (search clear + grocery controls), `db40fe3` (recipe source
+  links + field layout).
+
+**Notes / gotchas**
+- `/recipes` rows are one large `<Link>`: nested controls must call both
+  `preventDefault()` and `stopPropagation()`. A nested `<a>` would be reparented
+  by the HTML parser during SSR, so the icon is a `<button>`.
+- `externalHttpUrl` uses `new URL()` and restricts to `http:` / `https:`; relative
+  paths and `javascript:` / `mailto:` are intentionally not linkable.
+- `SearchGroceryControls` keeps `deleting` separate from `busy` so the trash
+  spinner only appears during a delete (not during a quantity save).
+- Pre-existing `react-hooks/set-state-in-effect` error in `nav.tsx` remains (the
+  path-change reset effect); not introduced by this session.
+
+**Open — next session**
+- Signed-in check: adjust quantity / delete from search results, then confirm
+  `/grocery` shows the same numbers (including in a second tab).
+- Signed-in check: source-link icon navigates correctly from both `/recipes` and
+  `/recipes/[id]`, and the narrowed Prep / Cook / Yields fields still fit 3
+  digits.
+- Still pending from earlier: Quick Bites cook + Undo, canonical label/aisle on
+  scanned add, deployed `/recipes` counts/redirects.
+
 ## 2026-10-27 — Pack size at add/scan time + durable "Shopped" on plan cards
 
 **Shipped**
