@@ -11,6 +11,7 @@ import { SearchForm } from "@/app/(app)/nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CanonicalInfo } from "@/components/canonical-info";
 import { AddToListButton } from "@/components/search/add-to-list-button";
+import { SearchGroceryControls } from "@/components/search/search-grocery-controls";
 import { groupByItem } from "@/lib/batches";
 import { buildCanonicalNameMap } from "@/lib/canonical";
 import { cn } from "@/lib/utils";
@@ -211,25 +212,31 @@ async function SearchContent({ query }: { query: string }) {
           />
           <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {grocery.map((row) => (
-                <li key={row.id}>
+              <li
+                key={row.id}
+                className="flex items-center gap-2 rounded-xl border bg-card p-3 shadow-sm"
+              >
+                <div className="min-w-0 flex-1">
                   <Link
                     href="/grocery"
-                    className="block rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-primary/50"
+                    className={cn(
+                      "block truncate text-sm font-semibold hover:underline",
+                      row.checked && "text-muted-foreground line-through",
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "block truncate text-sm font-semibold",
-                        row.checked && "text-muted-foreground line-through",
-                      )}
-                    >
-                      {row.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {row.quantity}
-                      {row.unit ? ` ${row.unit}` : ""}
-                    </span>
+                    {row.name}
                   </Link>
-                </li>
+                  <span className="block text-xs text-muted-foreground">
+                    On your shopping list
+                  </span>
+                </div>
+                <SearchGroceryControls
+                  id={row.id}
+                  name={row.name}
+                  quantity={row.quantity}
+                  unit={row.unit}
+                />
+              </li>
             ))}
           </ul>
         </section>

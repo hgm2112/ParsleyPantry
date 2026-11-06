@@ -12,6 +12,7 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFullscreen, setFullscreen } from "@/lib/fullscreen";
@@ -137,8 +138,25 @@ export function SearchForm({
           scheduleSearch(event.target.value);
         }}
         placeholder="Search for recipes, ingredients, or meals…"
-        className="h-9 w-full rounded-full border border-input bg-muted/60 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="h-9 w-full rounded-full border border-input bg-muted/60 pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/40"
       />
+      {query ? (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => {
+            setQuery("");
+            if (timerRef.current) {
+              clearTimeout(timerRef.current);
+              timerRef.current = null;
+            }
+            router.replace("/search");
+          }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
     </form>
   );
 }
