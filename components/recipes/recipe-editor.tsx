@@ -3,7 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  Plus,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +26,7 @@ import {
 } from "@/app/(app)/recipes/actions";
 import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
 import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
+import { externalHttpUrl } from "@/lib/external-url";
 import { splitNameAndQuantity, trimDecimal } from "@/lib/stock";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
@@ -209,6 +217,8 @@ export function RecipeEditor({
     router.refresh();
   }
 
+  const sourceUrl = externalHttpUrl(source);
+
   return (
     <form onSubmit={save} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -277,7 +287,7 @@ export function RecipeEditor({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[5.5rem_5.5rem_5.5rem_minmax(0,1fr)]">
           <div className="space-y-2">
             <Label htmlFor="recipe-prep">Prep (min)</Label>
             <Input
@@ -308,14 +318,31 @@ export function RecipeEditor({
               onChange={(event) => setYields(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
+          <div className="col-span-2 space-y-2 sm:col-span-1">
             <Label htmlFor="recipe-source">Source</Label>
-            <Input
-              id="recipe-source"
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
-              placeholder="Will"
-            />
+            <div className="flex items-center gap-1.5">
+              <Input
+                id="recipe-source"
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                placeholder="Will"
+              />
+              {sourceUrl ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label="Open source link in a new tab"
+                  title={sourceUrl}
+                  onClick={() =>
+                    window.open(sourceUrl, "_blank", "noopener,noreferrer")
+                  }
+                >
+                  <ExternalLink />
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
 

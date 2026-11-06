@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Search } from "lucide-react";
+import { BookOpen, ExternalLink, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { externalHttpUrl } from "@/lib/external-url";
 import { tileGradient } from "@/lib/tiles";
 import { cn } from "@/lib/utils";
 import type { RecipeRow } from "@/lib/types";
@@ -60,6 +61,7 @@ export function RecipesView({
     const have = ps && ps.total > 0 ? `${ps.covered}/${ps.total}` : "";
     const optional = ps && ps.optional > 0 ? String(ps.optional) : "";
     const grad = tileGradient(recipe.name);
+    const sourceUrl = externalHttpUrl(recipe.source);
     return (
       <Link
         key={recipe.id}
@@ -82,6 +84,21 @@ export function RecipesView({
             <span className="relative font-semibold truncate dark:text-zinc-50">
               {recipe.name}
             </span>
+            {sourceUrl ? (
+              <button
+                type="button"
+                title={sourceUrl}
+                aria-label={`Open ${recipe.name} source in a new tab`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  window.open(sourceUrl, "_blank", "noopener,noreferrer");
+                }}
+                className="relative shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <ExternalLink className="size-3.5" />
+              </button>
+            ) : null}
             {recipe.tags.length > 0 && (
               <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
                 {recipe.tags.slice(0, 3).map((tag) => (
