@@ -84,18 +84,29 @@ export async function findOrCreateCatalogItem(
     unit?: string | null;
     createdBy?: string | null;
   },
-): Promise<{ id: string; category_id: string | null; unit: string | null } | null> {
+): Promise<{
+  id: string;
+  category_id: string | null;
+  unit: string | null;
+  barcode: string | null;
+} | null> {
   const name = input.name.trim();
   if (!name) return null;
 
   const { data: found } = await supabase
     .from("items")
-    .select("id, category_id, unit")
+    .select("id, category_id, unit, barcode")
     .eq("household_id", householdId)
     .ilike("name", name)
     .limit(1)
     .maybeSingle();
-  if (found) return found as { id: string; category_id: string | null; unit: string | null };
+  if (found)
+    return found as {
+      id: string;
+      category_id: string | null;
+      unit: string | null;
+      barcode: string | null;
+    };
 
   const { data: inserted, error } = await supabase
     .from("items")
@@ -107,21 +118,31 @@ export async function findOrCreateCatalogItem(
       default_location: "pantry",
       created_by: input.createdBy ?? null,
     })
-    .select("id, category_id, unit")
+    .select("id, category_id, unit, barcode")
     .single();
 
   if (error || !inserted) {
     // A concurrent insert may have won the unique-name race; reuse it.
     const { data: again } = await supabase
       .from("items")
-      .select("id, category_id, unit")
+      .select("id, category_id, unit, barcode")
       .eq("household_id", householdId)
       .ilike("name", name)
       .limit(1)
       .maybeSingle();
-    return (again as { id: string; category_id: string | null; unit: string | null }) ?? null;
+    return (again as {
+      id: string;
+      category_id: string | null;
+      unit: string | null;
+      barcode: string | null;
+    }) ?? null;
   }
-  return inserted as { id: string; category_id: string | null; unit: string | null };
+  return inserted as {
+    id: string;
+    category_id: string | null;
+    unit: string | null;
+    barcode: string | null;
+  };
 }
 
 /** Records that an item was added to the list — feeds type-ahead ranking. */

@@ -197,6 +197,7 @@ export function GroceryView({
       ),
     [items, itemStoreMap, sectionStores],
   );
+  const allItemsCount = visibleItems.length;
 
   // Would-seed categories without an aisle yet, per store. Drives each
   // store's "Use my categories as aisles" rescue button. Non-aisle stores
@@ -363,7 +364,7 @@ export function GroceryView({
     setAddingId(entry.id);
     const result = await addGroceryItem({
       name: entry.name,
-      itemId: rootOf(entry.id),
+      itemId: entry.id,
       categoryId: entry.category_id,
       quantity: 1,
       unit: entry.unit,
@@ -492,16 +493,112 @@ export function GroceryView({
     router.refresh();
   }
 
+  function getCopyName(item: GroceryListItem) {
+    return item.specific_name && item.specific_name !== item.name
+      ? `${item.specific_name} (${item.name})`
+      : item.name;
+  }
+
+  const barcodeByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of catalog) {
+      if (entry.barcode) {
+        map.set(entry.name.toLowerCase(), entry.barcode);
+      }
+    }
+    return map;
+  }, [catalog]);
+
+  function formatItemLine(item: GroceryListItem) {
+    const namePart = getCopyName(item);
+    const parts: string[] = [namePart];
+
+    if (item.unit) {
+      const unitTrimmed = item.unit.trim();
+      // Units in this app can already be quantities ("15 oz", "1 lb", "130 sq ft").
+      // If the grocery line is qty 1 and the unit starts with digits, show the
+      // unit as-is instead of producing "1 15 oz".
+      const unitIsSized = /^\d/.test(unitTrimmed);
+      if (item.quantity === 1 && unitIsSized) {
+        parts.push(unitTrimmed);
+      } else {
+        parts.push(`${item.quantity} ${unitTrimmed}`);
+      }
+    }
+
+    // Use whatever barcode is already stored for the specific (pantry) item.
+    // Priority: name lookup in the household catalog (covers pantry items
+    // whose barcodes live on the leaf entry, not the canonical root).
+    const lookupName = (item.specific_name ?? item.name).toLowerCase();
+    const byName = barcodeByName.get(lookupName);
+    const barcode = byName ?? item.item?.barcode;
+    if (barcode) {
+      parts.push(`UPC: ${barcode}`);
+    }
+
+    return parts.join(" | ");
+  }
+
+  function getCopyLine(item: GroceryListItem) {
+    const line = formatItemLine(item);
+    return item.sale_only ? `${line} [sale only]` : line;
+  }
+
+  async function copyAllItems() {
+    if (allItemsCount === 0) return;
+
+    const storeSections = buildStoreSections<GroceryListItem>({
+      items: visibleItems,
+      mode,
+      stores: sectionStores,
+      aisles,
+      itemStores: itemStoreMap,
+      assignments,
+      rememberedAisles,
+      categories,
+    });
+
+    const blocks: string[] = [];
+    for (const sec of storeSections) {
+      const storeItems = sec.groups.flatMap((g) => g.items);
+      if (storeItems.length === 0) continue;
+
+      let header = sec.title;
+      if (sec.key !== ANY_STORE_KEY) {
+        const s = sectionStores.find((st) => st.id === sec.key);
+        const zip = s?.zipcode?.trim();
+        if (zip) header = `${sec.title} (ZIP ${zip})`;
+      }
+
+      const regular = storeItems.filter((item) => !item.sale_only);
+      const saleOnly = storeItems.filter((item) => item.sale_only);
+      const lines = [...regular.map(getCopyLine), ...saleOnly.map(getCopyLine)];
+
+      const itemText = lines.map((n) => `- ${n}`).join("\n");
+      const block = `${header}\n\nItems:\n${itemText}`;
+      blocks.push(block);
+    }
+
+    if (blocks.length === 0) return;
+
+    const prompt = `Check current weekly sales, advertised promotions, and available digital coupons for these items at their respective stores. Items marked [sale only] are the ones I am waiting to buy on sale. I plan to buy the unmarked items. For the [sale only] items, only buy if on sale or a significantly better deal. Report regular prices and sale prices when available, and identify which items are worth waiting for.`;
+
+    const text = `${blocks.join("\n\n")}\n\n${prompt}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }
+
   async function copySaleOnly() {
     if (saleOnlyCount === 0) return;
-    const names = saleOnlyItems.map((item) =>
-      item.specific_name && item.specific_name !== item.name
-        ? `${item.specific_name} (${item.name})`
-        : item.name
-    );
+    const lines = saleOnlyItems.map(formatItemLine);
     const zip = primaryStore?.zipcode?.trim();
     const storeLabel = zip ? `${storeName} (ZIP ${zip})` : storeName;
-    const text = `${storeLabel} Sale-Only Grocery List\n\nStore: ${storeLabel}\n\nItems:\n${names.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeLabel} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
+    const text = `${storeLabel} Sale-Only Grocery List\n\nStore: ${storeLabel}\n\nItems:\n${lines.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeLabel} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Copied");
@@ -563,6 +660,13 @@ export function GroceryView({
               <>
                 <Button size="sm" onClick={() => setAddOpen(true)}>
                   <Plus /> Add
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void copyAllItems()}
+                  disabled={allItemsCount === 0}
+                >
+                  <Copy /> {allItemsCount > 0 ? `Copy All Items (${allItemsCount})` : "Copy All Items"}
                 </Button>
                 <Button
                   size="sm"
