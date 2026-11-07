@@ -115,11 +115,11 @@ export function HomeView({
         <PromoCard />
       </div>
 
-      <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+      <div className="min-w-0 lg:col-start-1 lg:row-start-2 self-start">
         <PantryPreview rows={pantry} />
       </div>
 
-      <div className="min-w-0 lg:col-start-2 lg:row-start-2">
+      <div className="min-w-0 lg:col-start-2 lg:row-start-2 self-start">
         <ShoppingWidget
           items={grocery}
           categories={categories}

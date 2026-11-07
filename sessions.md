@@ -4,6 +4,20 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Home widgets: Pantry & Shopping height-to-content
+
+**Shipped**
+- PantryPreview and ShoppingWidget on /home now size to their own content (instead of stretching to match the tall meal planner area / right column stack).
+- Added `self-start` to their grid cells (`home-view.tsx`) so they remain top-aligned in the row.
+- Removed `h-full` from the root `<section>` in both widgets (`pantry-preview.tsx`, `shopping-widget.tsx`).
+- Padding (`p-4`), top alignment, and independent heights preserved exactly.
+- Widgets now wrap their bottom content naturally; whitespace below them in the grid row is acceptable.
+
+**Verified**
+- `npx tsc --noEmit` clean
+- `npm run build` succeeds
+- No changes to mobile layout, other widgets, or behavior
+
 ## 2026-11-07 — Home pantry quick batch actions
 
 **Shipped**
