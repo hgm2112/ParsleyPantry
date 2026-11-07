@@ -4,6 +4,51 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Grocery copy: Copy All Items, per-store blocks, weight + UPC
+
+**Shipped and pushed (b81ff16, on top of 6a68e6f)**
+- **Copy All Items (N)** button (first, before Copy Sale-Only) on `/grocery` — copies all `visibleItems` for selected stores. **Copy Sale-Only (X)** unchanged except for the enriched line format.
+- **Per-store blocks** for Copy All: one header per selected store (`Store Name (ZIP xxx)` when set, else `Store Name`) + flat `Items:` list, then **Any store** for unfiled. Uses `buildStoreSections` (same partitioning the UI uses) so stores are separated; multi-store items appear under each relevant store.
+- **Item order** inside each store: regular items first, then `[sale only]` items.
+- **Item line format** (both buttons): `Name (Name) | Weight | UPC: #########`
+  - `Name (Name)` = `specific_name (canonical)` when different, else canonical `name`. Display on the list is still canonical-only; specific is behind-the-scenes for copy.
+  - Weight = `quantity unit` (e.g. `3 lb`), omitted when `unit` is null. If qty=1 and unit already sized (`15 oz`, `1 lb`, `130 sq ft`) show unit alone (fixes `1 15 oz` → `15 oz`).
+  - UPC = existing catalog barcode. Resolved **client-side** from the already-loaded `catalog` name map + fallback to `item.item.barcode`. Pantry (inventory) items already have UPC on the leaf entry so they resolve; manual `/grocery` adds without a UPC just omit it. Amazon/Gatorade keeps working via the fallback.
+  - Copy All appends ` [sale only]`; Copy Sale-Only omits the tag on lines (header says Sale-Only).
+- **specific_name capture** (from 6a68e6f, kept): `addGroceryItem` + `ensureGroceryItem` store original `input.name` as `specific_name` before canonical collapse; edit/restore preserve it. Column comment: "only for Copy Sale-Only text".
+- **Per-store ZIP** (from 6a68e6f, kept): editable only on `/grocery/stores/[id]` (`aisle-editor`) with label "Used in Copy Sale-Only prompts". Copied as `Store (ZIP xxx)`. Hidden elsewhere.
+- Direct copy + toast, no dialogs. No UI/display changes to the shopping list.
+- **Specific-barcode column was added then dropped**: reverted — no migration needed. Catalog lookup avoids it and honors "no new SQL" preference.
+
+**Files**
+- `components/grocery/grocery-view.tsx` — Copy All / Sale-Only buttons, per-store blocks, `getCopyName`/`formatItemLine`/`getCopyLine`, `barcodeByName` map, weight fix, leaf-id quickAdd
+- `app/(app)/grocery/actions.ts` — `specific_name` capture (add + restore)
+- `lib/grocery.ts` — `ensureGroceryItem` capture, `findOrCreateCatalogItem` returns barcode
+- `lib/types.ts` — `specific_name` on `GroceryItemRow`
+- `components/grocery/add-sheet.tsx` — passes leaf `itemId` (was root)
+- `supabase/migrations/20261107120000_add_grocery_item_specific_name.sql` + `20261107120000_add_store_zipcode.sql` (apply + `NOTIFY pgrst, 'reload schema';` if not done)
+
+**Verified**
+- `npx tsc --noEmit` clean; pre-push hook green; pre-push push included both commits
+- Copy output example:
+  ```
+  Meijer: N. Hamilton (ZIP 43230)
+
+  Items:
+  - Sunbeam Giant BREAD (Bread) | 2 lb | UPC: 012… [sale only]
+  - Rice Krispies | 18 oz
+
+  Amazon
+
+  Items:
+  - Gatorade Powder: Orange | 4 lb | UPC: 052000044966
+  ```
+
+**Durable / Next**
+- Existing grocery rows added before `specific_name` capture stay `null` → copy shows just canonical (backfill intentionally skipped; re-adding re-captures).
+- Upstream canonical collapse is why old rows only showed UPC for non-mapped items (Amazon). Catalog lookup now bridges it without schema change.
+- Optional follow-up: capture `specific_barcode` at add time (would need migration) if you want durable UPC for items whose catalog name later changes.
+
 ## 2026-11-07 — Leftover reminder time: custom icon, native picker only
 
 **Shipped**
