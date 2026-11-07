@@ -4,6 +4,25 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Leftover reminder time: custom icon, native picker only
+
+**Shipped**
+- LeftoverReminderSection time input now uses a fully controlled visible display (our lucide Clock only) + a hidden native `<input type="time">`.
+- Clicking the pill (or keyboard Enter/Space) calls `.focus()` + `.showPicker()` on the hidden input.
+- No more native clock icon / dropdown affordance on the visible field (big win on Firefox).
+- Display uses `toLocaleTimeString` so it respects the user's 12h/24h locale (matches previous "02:00 PM" look).
+- Save logic, revert-on-failure, disabled state during persist, and label association all preserved.
+- CSS cleanups for appearance resets and indicator hiding (as a belt-and-suspenders).
+
+**Files**
+- `components/settings/leftover-reminder-section.tsx`
+- `app/globals.css` (appearance + indicator rules)
+
+**Verified**
+- `npx tsc --noEmit` clean
+- `npm run build` succeeds
+- Only our Clock appears; native picker still works via showPicker
+
 ## 2026-11-07 — Home widgets: Pantry & Shopping height-to-content
 
 **Shipped**

@@ -148,4 +148,27 @@
   html {
     @apply font-sans;
   }
+
+  /* Suppress native time picker clock/spinner (Firefox + WebKit/Chrome).
+     We render our own controlled icon in LeftoverReminderSection. */
+  .time-input,
+  input[type="time"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+    background-image: none;
+  }
+
+  .time-input::-webkit-calendar-picker-indicator,
+  .time-input::-webkit-inner-spin-button,
+  .time-input::-moz-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-moz-calendar-picker-indicator {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    pointer-events: none;
+    visibility: hidden;
+  }
 }

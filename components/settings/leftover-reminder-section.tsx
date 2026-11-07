@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { BellRing, Loader2, Send } from "lucide-react";
+import { BellRing, Clock, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -96,6 +95,8 @@ export function LeftoverReminderSection({
     cronSecretConfigured: boolean;
   } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const timeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSupport(detectDeviceSupport());
@@ -352,22 +353,58 @@ export function LeftoverReminderSection({
             Your device&apos;s time zone is used.
           </p>
         </div>
-        <Input
-          id="reminder-time"
-          type="time"
-          className="w-28"
-          value={time}
-          disabled={saving}
-          onChange={(event) => setTime(event.target.value)}
-          onBlur={() => {
-            if (time && time !== lastSavedTime) {
-              const previous = lastSavedTime;
-              void persist({ localTime: time }).then((ok) => {
-                if (!ok) setTime(previous);
-              });
-            }
-          }}
-        />
+        <div className="relative w-36">
+          {/* Visible control - we fully own the appearance and icon */}
+          <div
+            role="button"
+            tabIndex={saving ? -1 : 0}
+            className={`flex h-8 w-full cursor-pointer items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm dark:bg-input/30 ${saving ? "cursor-not-allowed opacity-50" : ""}`}
+            onClick={() => {
+              if (!saving && timeInputRef.current) {
+                timeInputRef.current.focus();
+                timeInputRef.current.showPicker?.();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (!saving && (e.key === "Enter" || e.key === " ") && timeInputRef.current) {
+                e.preventDefault();
+                timeInputRef.current.focus();
+                timeInputRef.current.showPicker?.();
+              }
+            }}
+          >
+            <span className="min-w-0 truncate">
+              {time
+                ? new Date(2000, 0, 1, Number(time.split(":")[0]), Number(time.split(":")[1])).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                : ""}
+            </span>
+            <Clock className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+          </div>
+
+          {/* Hidden native time input - provides the picker + value semantics.
+              We never show its native clock icon. */}
+          <input
+            ref={timeInputRef}
+            id="reminder-time"
+            type="time"
+            value={time}
+            disabled={saving}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (next && next !== lastSavedTime) {
+                const previous = lastSavedTime;
+                setTime(next);
+                void persist({ localTime: next }).then((ok) => {
+                  if (!ok) setTime(previous);
+                });
+              }
+            }}
+            className="sr-only"
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">

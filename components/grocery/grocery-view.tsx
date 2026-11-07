@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Copy,
   ListChecks,
   Loader2,
   Maximize2,
@@ -171,6 +172,13 @@ export function GroceryView({
     const active = stores.filter((entry) => selectedIds.includes(entry.id));
     return active.length > 0 ? active : stores;
   }, [stores, selectedIds]);
+
+  const saleOnlyItems = useMemo(
+    () => items.filter((item) => item.sale_only),
+    [items]
+  );
+  const saleOnlyCount = saleOnlyItems.length;
+  const storeName = sectionStores.length > 0 ? sectionStores[0].name : "Meijer";
 
   const hasAisleCapableStore = useMemo(
     () => sectionStores.some((s) => s.use_aisles),
@@ -482,6 +490,18 @@ export function GroceryView({
     router.refresh();
   }
 
+  async function copySaleOnly() {
+    if (saleOnlyCount === 0) return;
+    const names = saleOnlyItems.map((item) => item.name);
+    const text = `${storeName} Sale-Only Grocery List\n\nStore: ${storeName}\n\nItems:\n${names.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeName} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }
+
   // Shared Aisles|Categories segmented control; visibility differs per breakpoint
   // (beside the title on md+, in the button cluster on mobile).
   function modeToggle(extra: string) {
@@ -535,6 +555,13 @@ export function GroceryView({
               <>
                 <Button size="sm" onClick={() => setAddOpen(true)}>
                   <Plus /> Add
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void copySaleOnly()}
+                  disabled={saleOnlyCount === 0}
+                >
+                  <Copy /> {saleOnlyCount > 0 ? `Copy Sale-Only (${saleOnlyCount})` : "Copy Sale-Only"}
                 </Button>
                 <Button size="sm" render={<Link href="/grocery/stores" />}>
                   <Store /> Stores
