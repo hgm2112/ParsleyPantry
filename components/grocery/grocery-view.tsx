@@ -716,11 +716,11 @@ export function GroceryView({
             <Fragment key={section.key}>
               {showStoreHeaders ? (
                 <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-3">
-                  <h2 className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
+                  <h2 className="min-w-0 truncate text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
                     {section.title}
                   </h2>
-                  <span className="h-px flex-1 bg-border" />
-                  <span className="text-xs font-semibold text-muted-foreground">
+                  <span className="h-px min-w-4 flex-1 bg-border" />
+                  <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-muted-foreground">
                     {section.groups.reduce(
                       (total, group) =>
                         total + group.items.filter((item) => !item.checked).length,
@@ -741,8 +741,8 @@ export function GroceryView({
                       tint.header,
                     )}
                   >
-                    <div className="flex items-baseline justify-between px-3 py-2">
-                      <h2 className="text-sm font-extrabold">
+                    <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+                      <h2 className="min-w-0 break-words text-sm font-extrabold">
                         {emoji ? (
                           <span className="mr-1.5" aria-hidden>
                             {emoji}
@@ -750,7 +750,7 @@ export function GroceryView({
                         ) : null}
                         {group.title}
                       </h2>
-                      <span className="text-xs opacity-70">
+                      <span className="shrink-0 whitespace-nowrap text-xs opacity-70">
                         {group.items.filter((item) => !item.checked).length} left
                       </span>
                     </div>

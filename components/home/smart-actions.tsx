@@ -468,8 +468,8 @@ export function SmartActions({ pantry, grocery, meals, recipes }: Props) {
               {card.emoji}
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold leading-snug">{card.line}</p>
-              <p className="mt-0.5 text-xs font-semibold">
+              <p className="break-words text-sm font-semibold leading-snug">{card.line}</p>
+              <p className="mt-0.5 break-words text-xs font-semibold">
                 <span className="[&_a]:text-primary [&_a:hover]:underline [&_button]:text-primary [&_button:hover]:underline [&_button]:cursor-pointer">
                   {card.action}
                 </span>

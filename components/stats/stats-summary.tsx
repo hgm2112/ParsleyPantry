@@ -48,26 +48,26 @@ export function StatsSummary({
         </Link>
       </div>
       <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-        <div>
+        <div className="min-w-0">
           <p className="text-lg font-extrabold tabular-nums leading-none">
             {stats.total}
           </p>
           <p className="mt-1 text-[10px] text-muted-foreground">Cooked</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-lg font-extrabold tabular-nums leading-none">
             {stats.monthCount}
           </p>
           <p className="mt-1 text-[10px] text-muted-foreground">This month</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="inline-flex items-center gap-0.5 text-lg font-extrabold tabular-nums leading-none">
             {stats.streak}
             <Flame className="h-3.5 w-3.5 text-primary" />
           </p>
           <p className="mt-1 text-[10px] text-muted-foreground">Day streak</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-lg font-extrabold tabular-nums leading-none">
             {stats.noCookDays}
           </p>

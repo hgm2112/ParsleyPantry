@@ -228,8 +228,8 @@ export function InventoryView({
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
-        <div className="flex items-center justify-between gap-2">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
             <h1 className="text-lg font-extrabold">Pantry</h1>
             <p className="text-xs text-muted-foreground">
               {groups.length} {groups.length === 1 ? "item" : "items"} ·{" "}
@@ -239,7 +239,7 @@ export function InventoryView({
               ) : null}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Popover>
               <div className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-sm font-semibold text-foreground hover:bg-muted hover:text-foreground">
                 <Link href="/inventory/normalize" className="inline-flex items-center gap-1.5">

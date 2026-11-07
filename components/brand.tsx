@@ -74,10 +74,18 @@ export function Wordmark({
   return (
     <Link
       href={href}
-      className={cn("flex items-center gap-2 font-extrabold", className)}
+      className={cn("flex min-w-0 items-center gap-2 font-extrabold", className)}
     >
-      <ParsleyMark className={cn("h-8.75 w-10", markClassName)} />
-      <span className={cn(brand.className, "text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap")}>
+      <ParsleyMark className={cn("h-8.75 w-10 shrink-0", markClassName)} />
+      {/* min-w-0 + truncate: on a 360px screen the mobile header only has a few
+          px to spare, and any text-scaling/screen-zoom setting is enough to
+          overflow it. The mark stays fixed; the wordmark ellipsizes instead. */}
+      <span
+        className={cn(
+          brand.className,
+          "min-w-0 truncate text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap",
+        )}
+      >
         ParsleyPantry
       </span>
     </Link>

@@ -180,13 +180,17 @@ export function NavFallback() {
         </div>
       </header>
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 border-t bg-background/95 backdrop-blur"
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t bg-background"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="grid h-full grid-cols-5">
+        <div className="grid grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="flex items-center justify-center">
+            <div
+              key={index}
+              className="flex flex-col items-center gap-0.5 px-1 py-2.5"
+            >
               <span className="h-5 w-5 rounded bg-muted" />
+              <span className="h-4 w-8 rounded bg-muted" />
             </div>
           ))}
         </div>
@@ -230,9 +234,9 @@ function SidebarNav({ pathname }: { pathname: string }) {
 
 function MobileHeader() {
   return (
-    <header className="md:hidden sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
+    <header className="md:hidden sticky top-0 z-40 flex min-w-0 h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
       <Wordmark href="/home" className="text-base" markClassName="h-7.5 w-8.75" />
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <ThemeToggle />
         <Link
           href="/stats"
@@ -286,23 +290,25 @@ function DesktopHeader({ name }: { name: string | null }) {
 function MobileNav({ pathname }: { pathname: string }) {
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur"
+      className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t bg-background"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
+      {/* Height is content-driven on purpose: with a text-scaling setting the
+          label line grows, and a fixed height would clip it. */}
       <div className="grid grid-cols-5">
         {mobileItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             className={cn(
-              "flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition-colors",
+              "flex min-w-0 flex-col items-center gap-0.5 px-1 py-2.5 text-[11px] font-semibold transition-colors",
               isActive(pathname, href)
                 ? "text-primary"
                 : "text-muted-foreground",
             )}
           >
-            <Icon className="h-5 w-5" />
-            {label}
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="max-w-full truncate">{label}</span>
           </Link>
         ))}
       </div>

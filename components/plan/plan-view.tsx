@@ -431,7 +431,7 @@ function DayCard({
           : "border-dashed bg-background",
       )}
     >
-      <span className="flex items-baseline gap-1.5">
+      <span className="flex flex-wrap items-baseline gap-1.5">
         <span className="text-xs font-extrabold uppercase">{label.weekday}</span>
         <span className="text-[11px] opacity-40" aria-hidden>
           |
@@ -468,7 +468,7 @@ function DayCard({
             customIcon={customIcon}
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-extrabold leading-snug">
+            <span className="block break-words text-sm font-extrabold leading-snug">
               {title}
             </span>
             {showTime || showCoverage ? (

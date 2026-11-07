@@ -100,9 +100,9 @@ export function RecipesView({
               </button>
             ) : null}
             {recipe.tags.length > 0 && (
-              <span className="flex gap-1 text-[9px] text-muted-foreground shrink-0">
+              <span className="flex min-w-0 gap-1 text-[9px] text-muted-foreground">
                 {recipe.tags.slice(0, 3).map((tag) => (
-                  <span key={tag} className="rounded-full border-2 bg-card px-1.5 py-0.5 border-border">
+                  <span key={tag} className="max-w-28 truncate rounded-full border-2 bg-card px-1.5 py-0.5 border-border">
                     {tag}
                   </span>
                 ))}

@@ -86,7 +86,7 @@ export function WeekMeals({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Utensils className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-extrabold">This Week&apos;s Dinners</h2>
-        <div className="mx-auto flex items-center gap-1">
+        <div className="mx-auto flex min-w-0 items-center gap-1">
           <button
             type="button"
             aria-label="Previous 7 days"
@@ -95,7 +95,7 @@ export function WeekMeals({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-44 whitespace-nowrap text-center text-sm font-semibold text-muted-foreground">
+          <span className="min-w-0 truncate whitespace-nowrap text-center text-sm font-semibold text-muted-foreground">
             {`${rangeStart.weekday} ${rangeStart.month} ${rangeStart.dayOfMonth} - ${rangeEnd.weekday} ${rangeEnd.month} ${rangeEnd.dayOfMonth}`}
           </span>
           <button

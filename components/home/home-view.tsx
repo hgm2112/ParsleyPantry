@@ -89,19 +89,19 @@ export function HomeView({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <div className="lg:hidden">
+      <div className="min-w-0 lg:hidden">
         <CompactDinners meals={meals} recipes={recipes} customMeals={customMeals} />
       </div>
 
-      <div className="hidden lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block">
+      <div className="hidden min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block">
         <WeekMeals meals={meals} recipes={recipes} customMeals={customMeals} />
       </div>
 
-      <div className="lg:col-start-3 lg:row-start-1">
+      <div className="min-w-0 lg:col-start-3 lg:row-start-1">
         <SmartActions pantry={pantry} grocery={grocery} meals={meals} recipes={recipes} />
       </div>
 
-      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
+      <div className="min-w-0 space-y-4 lg:col-start-3 lg:row-start-2">
         <LeftoversWidget rows={leftovers} />
         <SnackWidget rows={pantry} subcategories={subcategories} />
         <QuickBitesWidget
@@ -115,11 +115,11 @@ export function HomeView({
         <PromoCard />
       </div>
 
-      <div className="lg:col-start-1 lg:row-start-2">
+      <div className="min-w-0 lg:col-start-1 lg:row-start-2">
         <PantryPreview rows={pantry} />
       </div>
 
-      <div className="lg:col-start-2 lg:row-start-2">
+      <div className="min-w-0 lg:col-start-2 lg:row-start-2">
         <ShoppingWidget
           items={grocery}
           categories={categories}

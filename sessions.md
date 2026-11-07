@@ -4,6 +4,63 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Mobile overflow + bottom-nav hardening
+
+**Shipped**
+- **Horizontal overflow (`app/globals.css`)**: `html, body { max-width:100%;
+  overflow-x:hidden; overflow-x:clip }` plus `body { overflow-wrap:break-word }`
+  as a safety net. `clip` wins where supported because it doesn't create a
+  scroll container (keeps the sticky mobile header sticky on iOS).
+- **Real overflow causes removed** — no `w-screen`/`100vw`/`h-screen`/`100vh`
+  existed; the offenders were min-content, i.e. things that refuse to shrink:
+  - `components/brand.tsx`: the wordmark label is `min-w-0 truncate` and the
+    mark is `shrink-0`. The mobile header measured ~325px of the 328px available
+    at 360px wide, so any Chrome text-scaling or Samsung screen zoom overflowed
+    it on *every* page.
+  - `components/home/home-view.tsx`: `min-w-0` on every grid cell. Without it,
+    one child whose min-content exceeded the screen stretched the single mobile
+    grid column, so *all* home cards ran past the right edge together.
+  - `week-meals` (`min-w-44` date range), `shopping-widget` + `grocery-view`
+    group/store headers (`min-w-0 truncate` + `shrink-0` counts),
+    `stats-summary` cells, `smart-actions` + `plan-view` titles
+    (`break-words`), `quick-bites` name, `recipes-view` tag pills
+    (`min-w-0`, `max-w-28 truncate`), `inventory-view` header (`flex-wrap`).
+- **Bottom nav (`nav.tsx`, `app-main.tsx`)**: solid `bg-background` instead of
+  `/95` + backdrop blur; height is content-driven (`py-2.5`, no fixed `h-16`) so
+  a larger text setting grows the bar instead of clipping labels; links get
+  `min-w-0`, icons `shrink-0`, labels `max-w-full truncate`. `NavFallback`
+  mirrors that structure so there's no height jump while the profile streams.
+  `AppMain` reserves `pb-[calc(7rem_+_env(safe-area-inset-bottom))]` (identical
+  to the old `pb-28` when the inset is 0).
+- **Not changed on purpose**: `viewportFit` stays `"auto"` (see `b654fc3` — it
+  keeps the green theme-color system bar). `env()` insets are therefore 0, which
+  is why the nav keeps its (currently no-op) `env(safe-area-inset-bottom)`
+  padding rather than gaining a cover-based layout.
+
+**Why the nav "slid"**: Chrome anchors `position: fixed` to the layout viewport,
+so a document wider than the screen lets you pan content while the bar stays
+put. Removing the overflow is the fix — no need to move the nav out of the shell
+(it was already a sibling of the content wrapper, with no transformed ancestor).
+
+**Verified**
+- `npx tsc --noEmit` clean; `npm run build` compiled; built CSS contains
+  `overflow-x:clip` and `padding-bottom:calc(7rem + env(safe-area-inset-bottom))`.
+- eslint on every touched file: only the pre-existing findings (`nav.tsx`
+  set-state-in-effect, `smart-actions` unescaped apostrophe, unused imports).
+- Not yet verified in a signed-in browser at 360/412 (no local session).
+
+**Open**
+- Signed-in check at 360×640 and 412×915 on every route: run
+  `[...document.querySelectorAll('*')].filter(e => e.getBoundingClientRect().right > innerWidth)`
+  and expect `[]`. Confirm the sticky mobile header still sticks with
+  `overflow-x: clip`.
+- On-device check (Samsung, 3-button nav): bar pinned, labels fully visible,
+  every page scrolls to the bottom clear of the bar. If it *still* clips and
+  `matchMedia("(display-mode: standalone)").matches` is true with
+  `getComputedStyle(nav).paddingBottom` = `0px`, the surface is edge-to-edge and
+  only `viewportFit: "cover"` + the safe-area padding (already in place) will
+  fix it — revisit the `auto` decision then.
+
 ## 2026-11-05 — Recipe source links + editable grocery lines in search results
 
 **Shipped**

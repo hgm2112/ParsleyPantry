@@ -233,9 +233,9 @@ export function ShoppingWidget({
                         tint.header,
                       )}
                     >
-                      <div className="flex items-center justify-between px-3 py-1.5 text-xs font-extrabold">
-                        <span>{group.title}</span>
-                        <span className="opacity-70">
+                      <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs font-extrabold">
+                        <span className="min-w-0 truncate">{group.title}</span>
+                        <span className="shrink-0 whitespace-nowrap opacity-70">
                           {group.items.filter((item) => !item.checked).length}{" "}
                           left
                         </span>
