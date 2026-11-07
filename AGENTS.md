@@ -8,55 +8,30 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-10-27)
+## Current Session Snapshot (2026-11-07)
 
-Goal: pantry/shopping UX — cook from Quick Bites and add to the list from
-anywhere, with shopping lines that read like aisle labels.
+Goal: pantry/shopping UX — copy grocery lists for AI sale checks without
+showing specifics on the site; home widgets + leftover + mobile polish as
+roundup.
 
-Shipped and pushed (bd0d7e9 → current):
-- Quick Bites cards open a **Cook `<recipe>`** dialog...
-- Grocery lines collapse onto the canonical root...
-- `/search` cart button, meal-plan `shopped_at` + "On list", home date fit, add-sheet reset (as of 7dd187b).
-- **Pantry math**: container sizes in unit ("6 oz") are expanded; pools track
-  ounces + packages separately. Fixes "3 6oz cans = partial for 6 oz need"
-  (Tomato Paste) and mixed-size roots. Used by plan shop/mark-made, recipe
-  cook, Quick Bites, coverage dialogs.
-- **/plan** "On list" chip and picker now mean *pending* only (live unchecked
-  grocery coverage). Durable stamp shows muted "· shopped".
-- Recipe ingredient dialogs (single + week) gained "On list" badge priority +
-  count in headers ("Have 7/9 · 2 on list").
-- From plan coverage dialog: **Take me to recipe** with `?returnTo=...`;
-  editor back-chevron + save/delete navigate back; actions revalidate /plan + /home.
+Shipped and pushed (6a68e6f → current):
+- **Grocery copy**: `specific_name` captured at add (`addGroceryItem` / `ensureGroceryItem` + restore) before canonical collapse; list display stays canonical-only. Copy buttons are direct, no dialog. Format: `Specific Name (Generic) | 3 lb | UPC: #` (parts omitted when missing). **Copy All Items (N)** first (per-store headers with ZIP, `Any store` for unfiled, regular → `[sale only]`), **Copy Sale-Only (X)** single-store. ZIP editable only on `/grocery/stores/[id]` ("Used in Copy Sale-Only prompts"). UPC resolved client-side from existing `catalog` name map (pantry items) + fallback to `item.barcode`; manual adds without UPC just omit it. No new `specific_barcode` column.
+- **Home widgets**: Pantry & Shopping `self-start` / height-to-content on `/home`.
+- **Leftover reminder**: Clock-only display + hidden native time input with `showPicker()` (no native affordance on Firefox).
+- **Home pantry quick actions**: `...` menu (`− Remove 1` FEFO when qty>1 + Remove all), destructive red hover, no row nav, 5s Undo, confirm on last unit, "Finish shopping here" button.
+- **Mobile**: `overflow-x: clip` guard + bottom-nav fix.
+- (Prior 2026-10-27 items kept in `sessions.md`: Quick Bites, canonical aisle labels, pantry math, plan "On list" pending-only, recipe dialogs.)
 
-Verified: `npx tsc --noEmit` green; `npm run build` successful; `eslint` clean on
-the files touched this session; `npm run lint` 8 pre-existing errors / 16
-warnings (no new); pre-push hook green.
+Verified: `npx tsc --noEmit` clean; pre-push hook green on each push (`6a68e6f` specific_name+ZIP, `b81ff16` Copy All+UPC, `569af84` write-up).
 
 Durable notes:
-- On any schema rebuild keep `20261017140000_restore_schema_privileges.sql` last:
-  a DROP SCHEMA reset wipes role grants (PostgREST 42501).
-- A DROP SCHEMA reset also wipes `notification_settings`,
-  `push_subscriptions`, and `leftover_reminder_deliveries`: every member must
-  re-enable the switch **and** re-subscribe each device. An empty leftovers list
-  never turns the reminder off — the cron just skips (and writes no claim).
-- Reminder saves are partial upserts now (only the patched columns), so saving
-  time / "Hide item names" can never clear `enabled` or `timezone`.
-- Date Bark Quick Bites visibility was fixed as **data**, not code: Medjool
-  Dates inventory 3 → 24, ingredient quantity text “10-12, Naturals Delights”
-  → “10”.
-- `AddGrocerySheet` only resets through its own `handleOpenChange`; a caller
-  that closes it by setting parent state directly would skip the reset.
-  `reset()` deliberately leaves `busy` / `recipeBusy` alone so an in-flight add
-  still resolves and toasts.
+- Apply migrations `20261107120000_add_grocery_item_specific_name.sql` + `20261107120000_add_store_zipcode.sql`, then `NOTIFY pgrst, 'reload schema';` (PostgREST 42501 if skipped).
+- Keep `20261017140000_restore_schema_privileges.sql` last on any schema rebuild.
+- Existing grocery rows with `specific_name = null` show just canonical in copy until re-added; re-adding re-captures. Canonical collapse is why old rows missed UPCs for mapped items — catalog lookup bridges it with no migration.
+- `AddGrocerySheet` only resets through its own `handleOpenChange`.
 
 Open:
-- Signed-in check: the new "On list" chip clears after finishing a trip; "Take
-  me to recipe" from a day card's ingredient list returns to the exact plan
-  view after save or browser back.
-- Signed-in check: Tomato Paste (or any "N oz" pack) now shows full coverage
-  when you have enough total ounces; Chicken / Sauce / Bread mixed packs sum
-  correctly.
-- Still pending (from earlier): Quick Bites cook + Undo, canonical label/aisle
-  on scanned add, deployed `/recipes` counts/redirects.
-- Optional: port the pack-aware pools into the recipe editor list and /recipes
-  page (currently still use raw container presence).
+- Signed-in check: new copy buttons show per-store headers, `[sale only]` ordering, weight/UPC in AI output; ZIP appears only in copy, not on list.
+- Still pending: Quick Bites cook + Undo, canonical label/aisle on scanned add, deployed `/recipes` counts/redirects.
+- Optional: capture durable `specific_barcode` at add time (would need migration) if catalog name changes break lookup; port pack-aware pools to recipe editor / `/recipes`.
+- Untracked `components/home/batch-actions-sheet.tsx` intentionally not committed.

@@ -4,6 +4,29 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Roundup: grocery copy + home widgets + leftover + pantry + mobile
+
+**Everything shipped and pushed (6a68e6f → 569af84)**
+- **Grocery copy (Copy All + Sale-Only)**: Copy All Items (N) first with per-store headers (`Store (ZIP xxx)`), Items lists, regular → `[sale only]` ordering, `Name (Name) | Weight | UPC: #` line format, `specific_name` capture, ZIP only on `/grocery/stores/[id]`. Details in the next entry.
+- **Home widgets**: Pantry & Shopping now `self-start` / height-to-content instead of stretching to the tall meal-planner column.
+- **Leftover reminder**: time input is now our lucide Clock + hidden native `<input type="time">` with `showPicker()`, no more native clock affordance (Firefox fix).
+- **Home pantry quick actions**: `...` menu — `− Remove 1` (earliest FEFO) when `totalQuantity > 1` + full Remove, destructive red hover, no row navigation, 5s Undo, confirm on last unit + prominent "Finish shopping here" button on the list.
+- **Mobile hardening**: `overflow-x: clip` guard on html/body, bottom-nav clipping fix.
+- **Verified**: `npx tsc --noEmit` clean + pre-push hook green on every push; commits `6a68e6f` (specific_name + ZIP), `b81ff16` (Copy All + UPC via existing catalog), `569af84` (this write-up).
+
+**Files of note**
+- `components/grocery/grocery-view.tsx`, `app/(app)/grocery/actions.ts`, `lib/grocery.ts`, `lib/types.ts`, `components/grocery/add-sheet.tsx`, `supabase/migrations/20261107120000_*`
+- `components/home/`, `components/settings/leftover-reminder-section.tsx`, `app/globals.css`
+
+**Durable choices**
+- Shopping list display stays canonical/generic-only; `specific_name` + UPC are copy-only.
+- UPC comes from the already-loaded catalog name map (pantry items) — no new `specific_barcode` column, no SQL needed (dropped the migration).
+- Existing rows with `specific_name = null` keep showing just canonical until re-added.
+
+**Open**
+- Untracked `components/home/batch-actions-sheet.tsx` was deliberately not committed.
+- Optional: capture `specific_barcode` at add time if catalog name churn ever breaks lookup.
+
 ## 2026-11-07 — Grocery copy: Copy All Items, per-store blocks, weight + UPC
 
 **Shipped and pushed (b81ff16, on top of 6a68e6f)**
