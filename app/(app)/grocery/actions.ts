@@ -230,6 +230,7 @@ export async function clearCheckedGrocery(ids?: string[]): Promise<ActionResult>
       : await query;
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
+    revalidatePath("/home");
     return { ok: true, data: null };
   } catch (error) {
     return {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Plus, ShoppingCart, Tag } from "lucide-react";
+import { Check, Plus, ShoppingCart, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { tintFor } from "@/lib/tints";
@@ -283,12 +283,11 @@ export function ShoppingWidget({
 
           {checkedCount > 0 ? (
             <Button
-              variant="ghost"
-              size="sm"
+              size="lg"
               className="mt-3 w-full"
               onClick={() => void clearChecked()}
             >
-              Clear {checkedCount} checked
+              <Check className="h-4 w-4" /> Finish shopping here
             </Button>
           ) : null}
 

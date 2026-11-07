@@ -1317,6 +1317,7 @@ export async function updateInventory(
 
     await maybeAutoRestock(supabase, householdId, updated);
     revalidatePath("/inventory");
+    revalidatePath("/home");
     return { ok: true, data: { inventory: updated } };
   } catch (error) {
     return {
@@ -1341,6 +1342,7 @@ export async function deleteInventory(
     if (error) return { ok: false, error: error.message };
 
     revalidatePath("/inventory");
+    revalidatePath("/home");
     return { ok: true, data: { itemId: current.item_id } };
   } catch (error) {
     return {

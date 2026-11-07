@@ -1,17 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Search, Package } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search, Package, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compareByExpiry } from "@/lib/expiry";
 import { StockRow } from "@/components/home/stock-row";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   earliestEffective,
   groupByItem,
   scopedBatches,
+  pickFefoBatch,
+  toBatchSnapshot,
+  type BatchSnapshot,
+  type ItemGroup,
 } from "@/lib/batches";
+import {
+  restoreBatches,
+  updateInventory,
+  deleteInventory,
+} from "@/app/(app)/inventory/actions";
 import type { InventoryEntry, Location } from "@/lib/types";
 
 const LOCATION_FILTERS: { value: Location | null; label: string }[] = [
@@ -22,8 +40,16 @@ const LOCATION_FILTERS: { value: Location | null; label: string }[] = [
 ];
 
 export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeLocation, setActiveLocation] = useState<Location | null>(null);
+  const [undoItemId, setUndoItemId] = useState<string | null>(null);
+  const [undoSnapshots, setUndoSnapshots] = useState<BatchSnapshot[] | null>(null);
+  const undoTimeoutRef = useRef<number | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<null | {
+    snapshots: BatchSnapshot[];
+    itemId: string;
+  }>(null);
 
   const groups = useMemo(() => groupByItem(rows), [rows]);
 
@@ -51,6 +77,91 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
   }, [groups, query, activeLocation]);
 
   const visible = filtered.slice(0, 7);
+
+  function clearUndoTimeout() {
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+  }
+
+  function handleUndo() {
+    if (!undoSnapshots || !undoItemId) return;
+    clearUndoTimeout();
+    void (async () => {
+      const result = await restoreBatches({ snapshots: undoSnapshots });
+      if (!result.ok) {
+        // non-fatal for UI
+      }
+      setUndoItemId(null);
+      setUndoSnapshots(null);
+      router.refresh();
+    })();
+  }
+
+  useEffect(() => {
+    return () => clearUndoTimeout();
+  }, []);
+
+  function onActionComplete(snapshots: BatchSnapshot[], itemId: string) {
+    clearUndoTimeout();
+    setUndoItemId(itemId);
+    setUndoSnapshots(snapshots);
+    undoTimeoutRef.current = window.setTimeout(() => {
+      setUndoItemId(null);
+      setUndoSnapshots(null);
+      undoTimeoutRef.current = null;
+    }, 5000);
+    router.refresh();
+  }
+
+  async function handleQuickMinus(group: ItemGroup) {
+    const batch = pickFefoBatch(group.batches);
+    if (!batch) return;
+    const snap = toBatchSnapshot(batch);
+    if (batch.quantity <= 1) {
+      const res = await deleteInventory(batch.id);
+      if (res.ok) {
+        onActionComplete([snap], group.item.id);
+      }
+    } else {
+      const res = await updateInventory({
+        inventoryId: batch.id,
+        quantity: batch.quantity - 1,
+      });
+      if (res.ok) {
+        onActionComplete([snap], group.item.id);
+      }
+    }
+  }
+
+  async function handleQuickRemove(group: ItemGroup) {
+    const batches = group.batches;
+    if (batches.length === 0) return;
+    const snapshots = batches.map(toBatchSnapshot);
+    if (group.totalQuantity <= 1) {
+      setConfirmRemove({ snapshots, itemId: group.item.id });
+    } else {
+      const results = await Promise.all(
+        batches.map((b) => deleteInventory(b.id))
+      );
+      if (results.every((r) => r.ok)) {
+        onActionComplete(snapshots, group.item.id);
+      }
+    }
+  }
+
+  async function confirmRemoveBatch() {
+    if (!confirmRemove) return;
+    const { snapshots, itemId } = confirmRemove;
+    const results = await Promise.all(
+      snapshots.map((s) => deleteInventory(s.id))
+    );
+    if (results.every((r) => r.ok)) {
+      onActionComplete(snapshots, itemId);
+    }
+    setConfirmRemove(null);
+  }
 
   return (
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
@@ -101,11 +212,80 @@ export function PantryPreview({ rows }: { rows: InventoryEntry[] }) {
         </p>
       ) : (
         <ul className="space-y-2">
-          {visible.map((group) => (
-            <StockRow key={group.item.id} group={group} />
-          ))}
+          {visible.map((group) => {
+            const isUndoRow = group.item.id === undoItemId;
+            const rowActions = isUndoRow ? (
+              <button
+                type="button"
+                onClick={handleUndo}
+                className="rounded border px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-accent"
+              >
+                Undo
+              </button>
+            ) : (() => {
+              const showRemoveOne = group.totalQuantity > 1;
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Batch actions"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end">
+                    {showRemoveOne && (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => void handleQuickMinus(group)}
+                      >
+                        − Remove 1
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => void handleQuickRemove(group)}
+                    >
+                      <Trash2 className="h-4 w-4" /> Remove
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            })();
+            return (
+              <StockRow key={group.item.id} group={group} actions={rowActions} />
+            );
+          })}
         </ul>
       )}
+
+      {undoItemId && undoSnapshots ? (
+        <div className="mt-1 px-1 text-[10px]">
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="text-primary hover:underline"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={!!confirmRemove}
+        onOpenChange={(o) => {
+          if (!o) setConfirmRemove(null);
+        }}
+        title="Remove last unit?"
+        description="This will delete the batch."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => void confirmRemoveBatch()}
+      />
     </section>
   );
 }

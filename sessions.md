@@ -4,6 +4,36 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-07 — Home pantry quick batch actions
+
+**Shipped**
+- **Pantry widget dropdown on /home**: `...` opens lightweight menu
+  - `− Remove 1` (earliest/FEFO batch only) when item totalQuantity > 1
+  - 🗑 Remove (deletes *all* batches for the item)
+- Both items use `variant="destructive"` so they share the same red hover background (`bg-destructive/10` / dark `bg-destructive/20`)
+- When the earliest batch (or item) has total qty = 1, only the full "Remove" item appears
+- Actions never navigate (stretched-link + `absolute z-10` on the trigger slot in `StockRow`)
+- 5-second inline "Undo" replaces the `...` (plus fallback line); uses `toBatchSnapshot` + `restoreBatches`
+- Full "Remove" on last unit of an item shows the minimal `ConfirmDialog`
+- Shopping list also got the prominent "Finish shopping here" button (size=lg, with check icon) matching the Add Item style
+- Everything stays on `/home`; uses existing `updateInventory`/`deleteInventory` + `router.refresh()`
+
+**Files**
+- `components/home/pantry-preview.tsx` (menu, handlers, conditional on `totalQuantity`, confirm state)
+- `components/home/stock-row.tsx` (relative card + `after:absolute after:inset-0` Link + absolute actions slot)
+- Supporting tweaks in shopping-widget and a couple action revalidate paths
+
+**Verified**
+- `npx tsc --noEmit` clean
+- Dropdown now shows correctly for multi-batch items (e.g. 2× sour cream / butter)
+- Red hover matches on both menu items
+- No navigation on `...` click
+- Undo + confirm flow intact
+
+**Open**
+- Optional polish: icons on the "− Remove 1" item, or a "Remove all" vs "Remove earliest" distinction if needed later.
+- Still pending from earlier: deployed /recipes counts, canonical on scanned adds, etc.
+
 ## 2026-11-07 — Mobile overflow + bottom-nav hardening
 
 **Shipped**
