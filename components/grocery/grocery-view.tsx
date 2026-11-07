@@ -179,6 +179,7 @@ export function GroceryView({
   );
   const saleOnlyCount = saleOnlyItems.length;
   const storeName = sectionStores.length > 0 ? sectionStores[0].name : "Meijer";
+  const primaryStore = sectionStores.length > 0 ? sectionStores[0] : null;
 
   const hasAisleCapableStore = useMemo(
     () => sectionStores.some((s) => s.use_aisles),
@@ -447,6 +448,7 @@ export function GroceryView({
         id: item.id,
         item_id: item.item_id,
         name: item.name,
+        specific_name: item.specific_name ?? null,
         quantity: item.quantity,
         unit: item.unit,
         category_id: item.category_id,
@@ -492,8 +494,14 @@ export function GroceryView({
 
   async function copySaleOnly() {
     if (saleOnlyCount === 0) return;
-    const names = saleOnlyItems.map((item) => item.name);
-    const text = `${storeName} Sale-Only Grocery List\n\nStore: ${storeName}\n\nItems:\n${names.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeName} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
+    const names = saleOnlyItems.map((item) =>
+      item.specific_name && item.specific_name !== item.name
+        ? `${item.specific_name} (${item.name})`
+        : item.name
+    );
+    const zip = primaryStore?.zipcode?.trim();
+    const storeLabel = zip ? `${storeName} (ZIP ${zip})` : storeName;
+    const text = `${storeLabel} Sale-Only Grocery List\n\nStore: ${storeLabel}\n\nItems:\n${names.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeLabel} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Copied");

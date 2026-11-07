@@ -61,6 +61,7 @@ export async function addGroceryItem(
     let categoryId = input.categoryId ?? null;
     let unit = input.unit ?? null;
     let name = input.name;
+    const specificName = input.name;
 
     // Free-text adds (Manual tab, recipe ingredients with no catalog link)
     // must land in the catalog so the type-ahead remembers them after the
@@ -116,6 +117,7 @@ export async function addGroceryItem(
         household_id: householdId,
         item_id: itemId,
         name,
+        specific_name: specificName,
         quantity: input.quantity,
         unit,
         category_id: categoryId,
@@ -246,6 +248,7 @@ const restoreSchema = z
       id: uuid,
       item_id: uuid.nullish(),
       name: z.string().trim().min(1).max(160),
+      specific_name: z.string().trim().max(160).nullish(),
       quantity: z.number().min(0).max(9999),
       unit: z.string().trim().max(32).nullish(),
       category_id: uuid.nullish(),
@@ -275,6 +278,7 @@ export async function restoreGroceryItems(
           household_id: householdId,
           item_id: item.item_id ?? null,
           name: item.name,
+          specific_name: item.specific_name ?? null,
           quantity: item.quantity,
           unit: item.unit ?? null,
           category_id: item.category_id ?? null,
@@ -671,6 +675,7 @@ export async function setGroceryItemStores(
 
 export async function createStore(
   name: string,
+  zipcode?: string | null,
 ): Promise<ActionResult<{ store: StoreRow }>> {
   try {
     const trimmed = name.trim();
@@ -687,9 +692,12 @@ export async function createStore(
       return { ok: false, error: "A store with that name already exists" };
     }
 
+    const insertData: Record<string, unknown> = { household_id: householdId, name: trimmed };
+    if (zipcode !== undefined) insertData.zipcode = zipcode ? zipcode.trim() : null;
+
     const { data, error } = await supabase
       .from("stores")
-      .insert({ household_id: householdId, name: trimmed })
+      .insert(insertData)
       .select("*")
       .single();
 
@@ -709,7 +717,7 @@ export async function createStore(
 
 export async function updateStore(
   id: string,
-  patch: { name?: string; sortOrder?: number; useAisles?: boolean },
+  patch: { name?: string; sortOrder?: number; useAisles?: boolean; zipcode?: string | null },
 ): Promise<ActionResult> {
   try {
     const { supabase, householdId } = await requireDal();
@@ -717,6 +725,7 @@ export async function updateStore(
     if (patch.name !== undefined) body.name = patch.name.trim();
     if (patch.sortOrder !== undefined) body.sort_order = patch.sortOrder;
     if (patch.useAisles !== undefined) body.use_aisles = patch.useAisles;
+    if (patch.zipcode !== undefined) body.zipcode = patch.zipcode ? patch.zipcode.trim() : null;
     const { error } = await supabase
       .from("stores")
       .update(body)

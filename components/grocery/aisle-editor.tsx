@@ -55,6 +55,8 @@ export function AisleEditor({
   const router = useRouter();
   const [storeName, setStoreName] = useState(store.name);
   const [storeDirty, setStoreDirty] = useState(false);
+  const [storeZip, setStoreZip] = useState(store.zipcode ?? "");
+  const [zipDirty, setZipDirty] = useState(false);
   const [newAisle, setNewAisle] = useState("");
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -85,6 +87,20 @@ export function AisleEditor({
     }
     setStoreDirty(false);
     toast.success("Store renamed");
+    router.refresh();
+  }
+
+  async function saveStoreZip() {
+    if (!zipDirty) return;
+    setBusy(true);
+    const result = await updateStore(store.id, { zipcode: storeZip.trim() || null });
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setZipDirty(false);
+    toast.success("ZIP code saved");
     router.refresh();
   }
 
@@ -254,6 +270,17 @@ export function AisleEditor({
               size="icon-sm"
               onClick={() => void saveStoreName()}
               disabled={busy}
+              aria-label="Save ZIP code"
+            >
+              <Check />
+            </Button>
+          ) : null}
+          {storeDirty ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => void saveStoreName()}
+              disabled={busy}
               aria-label="Save store name"
             >
               <Check />
@@ -264,6 +291,31 @@ export function AisleEditor({
               In view
             </span>
           ) : null}
+        </div>
+        <div className="flex items-center gap-1.5 ml-6 -mt-1">
+          <Input
+            value={storeZip}
+            onChange={(event) => {
+              setStoreZip(event.target.value);
+              setZipDirty(true);
+            }}
+            onBlur={() => void saveStoreZip()}
+            className="h-8 w-28 font-mono text-sm"
+            placeholder="ZIP code"
+            aria-label="ZIP code"
+          />
+          {zipDirty ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => void saveStoreZip()}
+              disabled={busy}
+              aria-label="Save ZIP code"
+            >
+              <Check />
+            </Button>
+          ) : null}
+          <span className="text-[10px] text-muted-foreground">Used in Copy Sale-Only prompts</span>
         </div>
         <Button
           variant="outline"

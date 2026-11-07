@@ -258,6 +258,7 @@ export async function ensureGroceryItem(
   let categoryId = input.categoryId ?? null;
   let unit = input.unit ?? null;
   let name = input.name;
+  const specificName = input.name;
 
   // Free-text paths (if any) should also resolve to catalog for memory.
   if (!itemId) {
@@ -305,6 +306,7 @@ export async function ensureGroceryItem(
       household_id: householdId,
       item_id: itemId,
       name,
+      specific_name: specificName,
       quantity: input.quantity ?? 1,
       unit,
       category_id: categoryId,

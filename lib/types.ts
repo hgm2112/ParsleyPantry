@@ -128,6 +128,7 @@ export interface StoreRow {
   name: string;
   sort_order: number;
   use_aisles: boolean;
+  zipcode: string | null;
 }
 
 export interface StoreAisleRow {
@@ -168,6 +169,7 @@ export interface GroceryItemRow {
   household_id: string;
   item_id: string | null;
   name: string;
+  specific_name: string | null;
   quantity: number;
   unit: string | null;
   category_id: string | null;
