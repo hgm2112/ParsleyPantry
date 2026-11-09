@@ -4,6 +4,33 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-09 — Inventory brand editing, barcode lookup, duplicate name handling, sidebar reorder, grocery badge removal
+
+**Shipped and pushed (c6ffede)**
+- **Inventory detail**: Brand now fully editable (optional + Clear). "Lookup" button next to barcode (uses resolveBarcode) shows OFF preview and offers "Use brand". Brand flows through the normal updateInventory path.
+- **Duplicate names**: Name editor runs search pre-check before commitName. Clear, actionable error instead of raw DB violation. Guidance points user at the list search.
+- **Add form**: Dialog now scrolls to Save. Barcode + different typed name blocks with explicit message ("belongs to X — clear it") rather than mutating the wrong catalog row.
+- **Sidebar**: Desktop tabs reordered to Home / Meal plan / Shopping list / Pantry / Household / Recipes / Stats / Settings.
+- **Grocery list**: Household badge removed (still deduped server-side via household_item_id).
+- **Branded variant example**: Ginger Snaps resolved by user with specific name "Stauffer's Ginger Snaps" + canonical "Ginger Snaps". Brand/lookup fields make this sustainable.
+- Verified clean + pre-push green on push.
+
+**Files of note**
+- `components/inventory/detail-form.tsx`, `app/(app)/inventory/actions.ts` (brand, lookup, name pre-check)
+- `components/inventory/add-form.tsx` (scroll + conflict block)
+- `app/(app)/nav.tsx` (reorder)
+- `components/inventory/inventory-view.tsx` (search + card updates)
+- `app/(app)/grocery/actions.ts`, `lib/types.ts`
+
+**Durable choices**
+- Brand is a normal catalog attribute (clearable, independent of name).
+- Name duplicates are blocked at the editor + DB level; specific display names + canonicals are the supported pattern for variants.
+- Untracked household/ and batch-actions-sheet left as before.
+
+**Open / next**
+- Household canonical work (earlier migrations + support) currently untracked in working tree.
+- Continue carrying prior open items (recipes, Quick Bites, etc.).
+
 ## 2026-11-07 — Roundup: grocery copy + home widgets + leftover + pantry + mobile
 
 **Everything shipped and pushed (6a68e6f → 569af84)**

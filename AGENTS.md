@@ -8,30 +8,28 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-11-07)
+## Current Session Snapshot (2026-11-09)
 
-Goal: pantry/shopping UX — copy grocery lists for AI sale checks without
-showing specifics on the site; home widgets + leftover + mobile polish as
-roundup.
+Goal: inventory + pantry UX polish — editable brand on catalog items, "Lookup" from barcode (OFF data), safer barcode/name conflict handling, duplicate name pre-checks, sidebar tab reordering, removal of Household badge from shopping list. Branded variants handled via specific display name + canonical generic (user example: Stauffer's Ginger Snaps).
 
-Shipped and pushed (6a68e6f → current):
-- **Grocery copy**: `specific_name` captured at add (`addGroceryItem` / `ensureGroceryItem` + restore) before canonical collapse; list display stays canonical-only. Copy buttons are direct, no dialog. Format: `Specific Name (Generic) | 3 lb | UPC: #` (parts omitted when missing). **Copy All Items (N)** first (per-store headers with ZIP, `Any store` for unfiled, regular → `[sale only]`), **Copy Sale-Only (X)** single-store. ZIP editable only on `/grocery/stores/[id]` ("Used in Copy Sale-Only prompts"). UPC resolved client-side from existing `catalog` name map (pantry items) + fallback to `item.barcode`; manual adds without UPC just omit it. No new `specific_barcode` column.
-- **Home widgets**: Pantry & Shopping `self-start` / height-to-content on `/home`.
-- **Leftover reminder**: Clock-only display + hidden native time input with `showPicker()` (no native affordance on Firefox).
-- **Home pantry quick actions**: `...` menu (`− Remove 1` FEFO when qty>1 + Remove all), destructive red hover, no row nav, 5s Undo, confirm on last unit, "Finish shopping here" button.
-- **Mobile**: `overflow-x: clip` guard + bottom-nav fix.
-- (Prior 2026-10-27 items kept in `sessions.md`: Quick Bites, canonical aisle labels, pantry math, plan "On list" pending-only, recipe dialogs.)
+Shipped and pushed (c6ffede + prior in thread):
+- **Inventory detail form**: Brand is now editable (optional field + Clear button). New "Lookup" button next to Barcode calls resolveBarcode, shows OFF name/brands preview card, and "Use brand" to apply it to the form. Brand is written through updateInventory (added to patchSchema + itemPatch logic, null clears safely).
+- **Name safety / duplicates**: Name editor (commitName) now runs a proactive searchCatalog pre-check before any update. Blocks early with actionable message instead of raw 23505. "An item named X already exists. Search the list for the other record..."
+- **Add form**: +Add overlay dialog is now scrollable (`max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain`). Barcode + mismatched name now blocks save with clear guidance (`Barcode belongs to Glacier Freeze Gatorade — clear it to add a new item.`) — no more silent hijack or rename attempts on the wrong row.
+- **Sidebar nav**: Desktop left panel reordered to Home, Meal plan, Shopping list, Pantry, Household, Recipes, Stats, Settings. (Mobile bottom nav stays the original 5 tabs.)
+- **Grocery list**: "Household" badge removed from item rows (they continue to dedupe via household_item_id and are handled distinctly on the backend).
+- **Branded variant handling** (Ginger Snaps case): User resolved the Gatorade/wrong-barcode mix-up by using a specific display name ("Stauffer's Ginger Snaps") + canonical "Ginger Snaps". The new brand field + lookup make this pattern easy and visible. Duplicate protection prevents cross-renaming.
+- (Earlier thread work: household canonical self-referential support + resolve-or-create generics, with shopping list collapsing to the root.)
 
-Verified: `npx tsc --noEmit` clean; pre-push hook green on each push (`6a68e6f` specific_name+ZIP, `b81ff16` Copy All+UPC, `569af84` write-up).
+Verified: `npx tsc --noEmit` clean; pre-push hook green on the push for c6ffede (and prior).
 
 Durable notes:
-- Apply migrations `20261107120000_add_grocery_item_specific_name.sql` + `20261107120000_add_store_zipcode.sql`, then `NOTIFY pgrst, 'reload schema';` (PostgREST 42501 if skipped).
-- Keep `20261017140000_restore_schema_privileges.sql` last on any schema rebuild.
-- Existing grocery rows with `specific_name = null` show just canonical in copy until re-added; re-adding re-captures. Canonical collapse is why old rows missed UPCs for mapped items — catalog lookup bridges it with no migration.
-- `AddGrocerySheet` only resets through its own `handleOpenChange`.
+- Brand and barcode are now normal editable catalog fields on the detail page (no auto name mutation).
+- Name uniqueness on lower(name) remains strict; use specific names + canonicals for variants (as with food items and the household canonical work).
+- Untracked `components/home/batch-actions-sheet.tsx` and household/ tree remain per prior convention.
+- (Prior grocery copy / home / leftover / mobile notes carried forward from 2026-11-07 snapshot.)
 
 Open:
-- Signed-in check: new copy buttons show per-store headers, `[sale only]` ordering, weight/UPC in AI output; ZIP appears only in copy, not on list.
-- Still pending: Quick Bites cook + Undo, canonical label/aisle on scanned add, deployed `/recipes` counts/redirects.
-- Optional: capture durable `specific_barcode` at add time (would need migration) if catalog name changes break lookup; port pack-aware pools to recipe editor / `/recipes`.
-- Untracked `components/home/batch-actions-sheet.tsx` intentionally not committed.
+- Household canonical (migrations + full actions/forms) currently showing as untracked in this view.
+- Carry-forward prior opens (Quick Bites, recipes counts, etc.).
+- Optional future: surface brand/barcode more prominently in list cards or add a "duplicates" warning.
