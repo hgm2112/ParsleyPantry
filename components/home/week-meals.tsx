@@ -83,10 +83,12 @@ export function WeekMeals({
 
   return (
     <section className="flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Utensils className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-extrabold">This Week&apos;s Dinners</h2>
-        <div className="mx-auto flex min-w-0 items-center gap-1">
+      <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 justify-self-start">
+          <Utensils className="h-5 w-5 shrink-0 text-primary" />
+          <h2 className="min-w-0 truncate text-lg font-extrabold">This Week&apos;s Dinners</h2>
+        </div>
+        <div className="flex min-w-0 items-center justify-center gap-1 justify-self-center">
           <button
             type="button"
             aria-label="Previous 7 days"
@@ -107,9 +109,11 @@ export function WeekMeals({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <Button size="sm" onClick={() => setOpenDate(firstUnplanned)}>
-          <Plus className="h-4 w-4" /> Add Meal
-        </Button>
+        <div className="justify-self-end">
+          <Button size="sm" onClick={() => setOpenDate(firstUnplanned)}>
+            <Plus className="h-4 w-4" /> Add Meal
+          </Button>
+        </div>
       </div>
 
       <div className="grid flex-1 auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
