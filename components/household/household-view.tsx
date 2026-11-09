@@ -162,24 +162,23 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
                 Household
               </span>
             </div>
-            <Button
-              variant="default"
-              size="sm"
-              className="h-9 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-              render={<Link href="/household/add" />}
-            >
-              <Plus /> Add
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              type="button"
-              aria-label="Scan a household supply"
-              title="Scan a household supply"
-              onClick={() => setScanOpen(true)}
-            >
-              <ScanBarcode className="h-4 w-4" />
-            </Button>
+            <div className="flex h-9 shrink-0 overflow-hidden rounded-md">
+              <Link
+                href="/household/add"
+                className="inline-flex items-center gap-1.5 bg-emerald-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <Plus className="h-4 w-4" /> Add
+              </Link>
+              <button
+                type="button"
+                aria-label="Scan a household supply"
+                title="Scan a household supply"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex items-center border-l border-white/25 bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <ScanBarcode className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 

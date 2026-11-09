@@ -4,6 +4,14 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-09 — Household: combined Add/Scan control + fresh add form per visit
+
+- **Combined header control**: `/household` now renders one segmented emerald pill — "+ Add" (link to `/household/add`) + barcode segment that opens the scan sheet — instead of two separate buttons.
+- **Add form no longer prefills**: root cause is `cacheComponents: true` (Next 16 Activity) preserving component/form state across navigations. `household-add-form.tsx` now resets every field after a successful save and via a `useLayoutEffect` cleanup when the route is hidden, so each visit starts blank.
+- **Detail form**: after saving, local state is synced from the returned row so a preserved (hidden) route can't show stale drafts.
+- Removed an unused `eslint-disable` in the detail form.
+- Verified `npx tsc --noEmit` + ESLint clean.
+
 ## 2026-11-09 — Household page fixes: +Add goes to the form, scanner manual entry works
 
 - **`/household` + Add** now links straight to `/household/add` instead of opening the scanner. A separate scan (barcode icon) button keeps scanning one tap away.

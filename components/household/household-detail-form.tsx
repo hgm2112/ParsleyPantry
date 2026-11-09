@@ -64,7 +64,6 @@ export function HouseholdDetailForm({ item }: { item: HouseholdItemRow }) {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.canonical_household_item_id, item.id]);
 
   async function save() {
@@ -98,6 +97,17 @@ export function HouseholdDetailForm({ item }: { item: HouseholdItemRow }) {
       toast.error(result.error);
       return;
     }
+    // Cache Components keeps this route mounted when hidden, so mirror the
+    // saved row back into local state rather than leaving stale draft values.
+    const saved = result.data.item;
+    setName(saved.name);
+    setQuantity(String(saved.quantity));
+    setUnit(saved.unit ?? "");
+    setCategory(saved.category);
+    setStorage(saved.storage_location);
+    setLowThreshold(saved.low_threshold != null ? String(saved.low_threshold) : "");
+    setNotes(saved.notes ?? "");
+    setBarcode(saved.barcode ?? "");
     toast.success("Item saved");
     router.push("/household");
     router.refresh();

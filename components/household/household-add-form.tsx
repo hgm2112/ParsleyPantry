@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, ScanBarcode } from "lucide-react";
@@ -57,6 +63,30 @@ export function HouseholdAddForm({
   const [lookupBusy, setLookupBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
+
+  // With Cache Components, Next keeps this route mounted (hidden) instead of
+  // unmounting it, so returning here would restore the last item's values.
+  // An "add new item" form must start blank on every visit.
+  const resetForm = useCallback(() => {
+    setName("");
+    setQuantity("1");
+    setUnit("");
+    setCategory("Miscellaneous");
+    setStorage("Other");
+    setLowThreshold("");
+    setNotes("");
+    setBarcode("");
+    setCanonicalName("");
+    setMatches([]);
+    setScanOpen(false);
+    setBusy(false);
+    setLookupBusy(false);
+  }, []);
+
+  // Reset when the route is hidden (navigating away or after saving).
+  useLayoutEffect(() => {
+    return () => resetForm();
+  }, [resetForm]);
 
   useEffect(() => {
     if (!initialBarcode) return;
@@ -153,6 +183,7 @@ export function HouseholdAddForm({
       return;
     }
     toast.success(`${result.data.item.name} saved`);
+    resetForm();
     router.push("/household");
     router.refresh();
   }
