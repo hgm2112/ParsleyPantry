@@ -117,6 +117,7 @@ export function AddForm({
   const [scanOpen, setScanOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [barcodeConflictName, setBarcodeConflictName] = useState<string | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
   const busyRef = useRef(false);
   const lastLookupRef = useRef<string | null>(null);
@@ -185,6 +186,37 @@ export function AddForm({
       alive = false;
     };
   }, []);
+
+  // Live detection: if a barcode is present but its owning item has a different name
+  // than the one the user is typing, surface the conflict so they know to clear it.
+  useEffect(() => {
+    const code = barcode.trim();
+    const current = name.trim();
+    if (!code || !current || selectedItem) {
+      setBarcodeConflictName(null);
+      return;
+    }
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await resolveBarcode(code);
+        if (res.ok && res.data.item) {
+          const bcN = res.data.item.name.trim();
+          if (bcN.toLowerCase() !== current.toLowerCase()) {
+            setBarcodeConflictName(bcN);
+          } else {
+            setBarcodeConflictName(null);
+          }
+        } else {
+          setBarcodeConflictName(null);
+        }
+      } catch {
+        setBarcodeConflictName(null);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [barcode, name, selectedItem]);
 
   const canonicalCandidates: CanonicalCandidate[] = useMemo(() => {
     if (!candidatePool) return [];
@@ -298,6 +330,21 @@ export function AddForm({
     }
     const { item, off: product } = result.data;
     if (item) {
+      const currentName = name.trim();
+      if (
+        currentName &&
+        currentName.toLowerCase() !== item.name.trim().toLowerCase()
+      ) {
+        // Do not auto-switch the name away from what the user typed.
+        // This prevents a stale/wrong barcode from clobbering a manual entry.
+        setBarcodeConflictName(item.name);
+        setLookupBusy(false);
+        toast.message(`Barcode is for ${item.name}`, {
+          description:
+            "Clear the barcode field (or match the name) to use this item.",
+        });
+        return;
+      }
       applyItem(item);
       if (product) {
         setOff(product);
@@ -359,6 +406,10 @@ export function AddForm({
       toast.error("Give the item a name");
       return;
     }
+    if (barcodeConflictName) {
+      toast.error(`Barcode belongs to ${barcodeConflictName} — clear it to add a new item.`);
+      return;
+    }
     const batches = entriesToBatches(entries);
     if (batches.length === 0) {
       toast.error("Enter a quantity for at least one date");
@@ -404,6 +455,7 @@ export function AddForm({
 
     // Keep location for rapid entry of a shopping trip.
     setBarcode("");
+    setBarcodeConflictName(null);
     setSelectedItem(null);
     setName("");
     setMatches([]);
@@ -553,6 +605,11 @@ export function AddForm({
                 Scan
               </Button>
             </div>
+            {barcodeConflictName ? (
+              <p className="text-xs text-destructive">
+                Barcode belongs to {barcodeConflictName} — clear it to add a new item.
+              </p>
+            ) : null}
             {off ? (
               <p className="text-xs text-muted-foreground">
                 {off.name}
@@ -702,7 +759,7 @@ export function AddForm({
           <Button
             type="button"
             className="flex-1"
-            disabled={busy}
+            disabled={busy || !!barcodeConflictName}
             onClick={() => void saveCurrent("navigate")}
           >
             {busy ? <Loader2 className="animate-spin" /> : <Plus />}
@@ -711,7 +768,7 @@ export function AddForm({
           <Button
             type="button"
             className="flex-1"
-            disabled={busy}
+            disabled={busy || !!barcodeConflictName}
             onClick={() => void saveCurrent("scan-again")}
           >
             {busy ? <Loader2 className="animate-spin" /> : <Plus />}

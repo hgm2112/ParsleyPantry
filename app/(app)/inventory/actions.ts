@@ -320,7 +320,18 @@ export async function addToInventory(
         .eq("household_id", householdId)
         .eq("barcode", input.barcode)
         .maybeSingle();
-      item = (data as ItemRow | null) ?? null;
+      const bcItem = (data as ItemRow | null) ?? null;
+      if (bcItem) {
+        const bcName = bcItem.name.trim().toLowerCase();
+        const providedName = input.name.trim().toLowerCase();
+        if (providedName && providedName !== bcName) {
+          return {
+            ok: false,
+            error: `Barcode belongs to ${bcItem.name} — clear it to add a new item.`,
+          };
+        }
+        item = bcItem;
+      }
     }
 
     if (!item) {
@@ -934,6 +945,20 @@ export async function restoreBatches(
 const patchSchema = z.object({
   inventoryId: z.string().uuid(),
   itemName: z.string().trim().min(1).max(160).optional(),
+  /** Barcode may be cleared by passing empty or null. */
+  barcode: z
+    .string()
+    .trim()
+    .regex(/^(?:[\x21-\x7e]{1,64})?$/)
+    .nullish()
+    .transform((value) => (value ? value : null)),
+  /** Brand may be cleared by passing empty or null. */
+  brand: z
+    .string()
+    .trim()
+    .max(160)
+    .nullish()
+    .transform((value) => (value ? value : null)),
   subcategoryId: z.string().uuid().nullish(),
   quantity: z.number().min(0).max(9999).optional(),
   unit: z.string().trim().max(32).nullish(),
@@ -1233,6 +1258,8 @@ export async function updateInventory(
       input.lowThreshold !== undefined ||
       input.autoRestock !== undefined ||
       input.itemName !== undefined ||
+      input.barcode !== undefined ||
+      input.brand !== undefined ||
       input.subcategoryId !== undefined ||
       input.freezerFoodType !== undefined ||
       input.packSize !== undefined ||
@@ -1242,6 +1269,8 @@ export async function updateInventory(
       if (lowThreshold !== undefined) itemPatch.low_threshold = lowThreshold;
       if (input.autoRestock !== undefined) itemPatch.auto_restock = input.autoRestock;
       if (input.itemName !== undefined) itemPatch.name = input.itemName;
+      if (input.barcode !== undefined) itemPatch.barcode = input.barcode;
+      if (input.brand !== undefined) itemPatch.brand = input.brand;
       if (input.subcategoryId !== undefined) itemPatch.subcategory_id = input.subcategoryId;
       if (input.packSize !== undefined) {
         itemPatch.pack_size = input.packSize;
@@ -1271,10 +1300,19 @@ export async function updateInventory(
         .eq("id", current.item_id);
       if (itemError) {
         if (itemError.code === "23505") {
-          return {
-            ok: false,
-            error: `An item named "${input.itemName}" already exists`,
-          };
+          if (input.itemName !== undefined) {
+            return {
+              ok: false,
+              error: `An item named "${input.itemName}" already exists`,
+            };
+          }
+          if (input.barcode !== undefined) {
+            return {
+              ok: false,
+              error: "That barcode is already assigned to another item",
+            };
+          }
+          return { ok: false, error: "Duplicate value already exists" };
         }
         return { ok: false, error: itemError.message };
       }

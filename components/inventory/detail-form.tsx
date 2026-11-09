@@ -34,12 +34,15 @@ import {
   deleteInventory,
   listCanonicalCandidates,
   renameCanonicalRoot,
+  resolveBarcode,
   restoreBatches,
+  searchCatalog,
   setItemCanonical,
   updateInventory,
   type CanonicalCandidateView,
   type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
+import type { OffProduct } from "@/lib/off";
 import { expiryChipProps } from "@/lib/freezer";
 import {
   fefoSort,
@@ -96,6 +99,11 @@ export function InventoryDetail({
   const nameBusyRef = useRef(false);
   const nameCancelRef = useRef(false);
 
+  const [barcode, setBarcode] = useState(initialItem.barcode ?? "");
+  const [brand, setBrand] = useState(initialItem.brand ?? "");
+  const [lookupResult, setLookupResult] = useState<OffProduct | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
+
   const batches = fefoSort(entries);
   const total = entries.reduce((sum, row) => sum + row.quantity, 0);
   const low = isItemLow(total, entries, item);
@@ -115,6 +123,9 @@ export function InventoryDetail({
       return [...current.filter((entry) => !drop.has(entry.id)), row];
     });
     setItem(row.item);
+    setBarcode(row.item?.barcode ?? "");
+    setBrand(row.item?.brand ?? "");
+    setLookupResult(null);
   }
 
   function applyAffected(affected: ConsumeItemData["affected"]) {
@@ -163,6 +174,8 @@ export function InventoryDetail({
       packUnit: packUnit.trim() || null,
       lowThreshold: lowThreshold ? Number(lowThreshold) : null,
       autoRestock: item.auto_restock,
+      barcode: barcode.trim() || null,
+      brand: brand.trim() || null,
     });
     setSaveBusy(false);
     if (!ok) {
@@ -185,7 +198,22 @@ export function InventoryDetail({
       return;
     }
     if (!anchorId) return;
+
+    // Proactive duplicate check so we give a helpful message instead of
+    // a raw backend error when the user tries to rename across items.
     nameBusyRef.current = true;
+    const search = await searchCatalog(trimmed, 5);
+    if (search.ok) {
+      const conflict = search.data.items.find(
+        (i) => i.id !== item.id && i.name.trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (conflict) {
+        toast.error(`An item named "${trimmed}" already exists`);
+        nameBusyRef.current = false;
+        return;
+      }
+    }
+
     const result = await updateInventory({
       inventoryId: anchorId,
       itemName: trimmed,
@@ -200,6 +228,41 @@ export function InventoryDetail({
     }
     setNameDraft(trimmed);
     setEditingName(false);
+  }
+
+  async function lookupFromBarcode() {
+    const code = barcode.trim();
+    if (!code || lookupBusy) return;
+    setLookupBusy(true);
+    try {
+      const res = await resolveBarcode(code);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const off = res.data.off;
+      if (off) {
+        setLookupResult(off);
+        toast.message(off.name || "Product found", {
+          description: off.brands
+            ? `Brand: ${off.brands} — you can apply it below.`
+            : "Data found via Open Food Facts.",
+        });
+      } else {
+        toast.message("No Open Food Facts data for this barcode");
+        setLookupResult(null);
+      }
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
+  function applyLookupBrand() {
+    if (lookupResult?.brands) {
+      setBrand(lookupResult.brands);
+      toast.success("Brand set from lookup");
+    }
+    setLookupResult(null);
   }
 
   async function openCanonicalEdit() {
@@ -594,7 +657,7 @@ export function InventoryDetail({
                 ? ` · ${uniqueLocations.map(locationLabel).join(", ")}`
                 : ""}
               {item.barcode ? ` · Barcode ${item.barcode}` : ""}
-              {item.brand ? ` · ${item.brand}` : ""}
+              {item.brand ? ` · Brand: ${item.brand}` : ""}
             </p>
           </div>
           <div className="text-right">
@@ -704,6 +767,96 @@ export function InventoryDetail({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="barcode">Barcode</Label>
+          <div className="flex gap-2">
+            <Input
+              id="barcode"
+              value={barcode}
+              onChange={(event) => {
+                setBarcode(event.target.value);
+                if (lookupResult) setLookupResult(null);
+              }}
+              placeholder="Scan or enter barcode (e.g. 052000133080)"
+              className="font-mono"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void lookupFromBarcode()}
+              disabled={!barcode.trim() || lookupBusy}
+            >
+              {lookupBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Lookup
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBarcode("")}
+              disabled={!barcode}
+            >
+              Clear
+            </Button>
+          </div>
+          {lookupResult ? (
+            <div className="rounded border bg-muted/50 p-2 text-xs">
+              <div>
+                OFF: <span className="font-medium">{lookupResult.name || "unknown"}</span>
+                {lookupResult.brands ? ` · ${lookupResult.brands}` : ""}
+              </div>
+              <div className="mt-1 flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={applyLookupBrand}
+                >
+                  Use brand
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => setLookupResult(null)}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Clear an incorrect barcode here, then open the correct item and assign it there. Duplicates are blocked.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="brand">Brand (optional)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="brand"
+              value={brand}
+              onChange={(event) => setBrand(event.target.value)}
+              placeholder="e.g. Cheez-It, Nabisco"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBrand("")}
+              disabled={!brand}
+            >
+              Clear
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Brand is stored separately from the item name. Use Lookup above to pull official brand data for the current barcode.
+          </p>
         </div>
 
         <div className="space-y-2">

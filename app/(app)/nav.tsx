@@ -13,6 +13,7 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  SprayCan,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,8 +25,9 @@ import { ThemeToggle } from "@/components/theme-switch";
 const sidebarItems = [
   { href: "/home", label: "Home", icon: House },
   { href: "/plan", label: "Meal plan", icon: CalendarDays },
-  { href: "/inventory", label: "Pantry", icon: Package },
   { href: "/grocery", label: "Shopping list", icon: ShoppingCart },
+  { href: "/inventory", label: "Pantry", icon: Package },
+  { href: "/household", label: "Household", icon: SprayCan },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/stats", label: "Stats", icon: ChartColumn },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -170,7 +172,7 @@ export function NavFallback() {
           <span className="h-6 w-36 rounded bg-muted" />
         </div>
         <div className="flex-1 space-y-1 px-3">
-          {Array.from({ length: 7 }).map((_, index) => (
+          {Array.from({ length: 8 }).map((_, index) => (
             <div key={index} className="h-9 rounded-lg bg-muted/60" />
           ))}
         </div>

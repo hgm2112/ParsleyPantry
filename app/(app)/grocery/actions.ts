@@ -247,6 +247,7 @@ const restoreSchema = z
     z.object({
       id: uuid,
       item_id: uuid.nullish(),
+      household_item_id: uuid.nullish(),
       name: z.string().trim().min(1).max(160),
       specific_name: z.string().trim().max(160).nullish(),
       quantity: z.number().min(0).max(9999),
@@ -277,6 +278,7 @@ export async function restoreGroceryItems(
           id: item.id,
           household_id: householdId,
           item_id: item.item_id ?? null,
+          household_item_id: item.household_item_id ?? null,
           name: item.name,
           specific_name: item.specific_name ?? null,
           quantity: item.quantity,

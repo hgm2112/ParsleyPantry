@@ -172,6 +172,7 @@ export interface GroceryItemRow {
   id: string;
   household_id: string;
   item_id: string | null;
+  household_item_id: string | null;
   name: string;
   specific_name: string | null;
   quantity: number;
@@ -307,3 +308,51 @@ export const LOCATIONS: { value: Location; label: string; icon: string }[] = [
   { value: "fridge", label: "Fridge", icon: "refrigerator" },
   { value: "freezer", label: "Freezer", icon: "snowflake" },
 ];
+
+export const HOUSEHOLD_CATEGORIES = [
+  "Paper Products",
+  "Cleaning Supplies",
+  "Personal Care",
+  "Laundry",
+  "Kitchen Supplies",
+  "Miscellaneous",
+] as const;
+
+export type HouseholdCategory = (typeof HOUSEHOLD_CATEGORIES)[number];
+
+export const HOUSEHOLD_STORAGE_LOCATIONS = [
+  "Kitchen",
+  "Bathroom",
+  "Laundry Room",
+  "Garage",
+  "Closet",
+  "Other",
+] as const;
+
+export type HouseholdStorageLocation =
+  (typeof HOUSEHOLD_STORAGE_LOCATIONS)[number];
+
+/** Non-food household supply. One combined quantity per item, no batches. */
+export interface HouseholdItemRow {
+  id: string;
+  household_id: string;
+  name: string;
+  quantity: number;
+  unit: string | null;
+  category: HouseholdCategory;
+  storage_location: HouseholdStorageLocation;
+  low_threshold: number | null;
+  notes: string | null;
+  barcode: string | null;
+  canonical_household_item_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function isHouseholdItemLow(row: {
+  quantity: number;
+  low_threshold: number | null;
+}): boolean {
+  return row.low_threshold !== null && row.quantity <= row.low_threshold;
+}

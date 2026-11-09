@@ -238,6 +238,20 @@ export function InventoryView({
                 <span className="text-orange-600 dark:text-orange-300"> · {lowCount} running low</span>
               ) : null}
             </p>
+            <div
+              className="mt-1.5 flex w-fit overflow-hidden rounded-md border"
+              aria-label="Inventory section"
+            >
+              <span className="bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+                Pantry
+              </span>
+              <Link
+                href="/household"
+                className="bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent"
+              >
+                Household
+              </Link>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Popover>
@@ -414,7 +428,7 @@ export function InventoryView({
 
       <Dialog open={addOverlayOpen} onOpenChange={setAddOverlayOpen}>
         <DialogContent
-          className="max-h-none w-full max-w-[calc(100%-2rem)] box-border overflow-visible p-6 sm:max-w-xl"
+          className="max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] box-border overflow-y-auto overscroll-contain p-6 sm:max-w-xl"
           showCloseButton
         >
           <Suspense>
@@ -818,6 +832,7 @@ function InventoryItemCard({
             >
               <Minus className="h-3.5 w-3.5" />
             </Button>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -874,8 +889,7 @@ function InventoryItemCard({
             </DropdownMenuItem>
           </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-        </div>
+          </div>
 
 
         <Link
