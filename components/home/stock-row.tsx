@@ -60,14 +60,18 @@ export function StockRow({
           href={`/inventory/${group.item.id}`}
           className="block after:absolute after:inset-0 after:content-['']"
         >
-          <div className="flex items-center justify-between gap-2 pr-8">
+          <div
+            className={`flex items-center justify-between gap-2 ${
+              actions ? "pr-16" : "pr-8"
+            }`}
+          >
             {title}
           </div>
           {pills}
         </Link>
         {actions && (
           <div
-            className="absolute right-2 top-2 z-10 shrink-0"
+            className="absolute right-2 top-2 z-10 flex shrink-0 items-center gap-0.5"
             onClick={(e) => e.stopPropagation()}
           >
             {actions}

@@ -3,6 +3,7 @@ import { requireDal } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HomeView } from "@/components/home/home-view";
 import type { HomeMeal } from "@/lib/types";
+import { resolveDashboardOrder } from "@/lib/dashboard-order";
 import type { ShoppingPreviewItem } from "@/components/home/shopping-widget";
 import type {
   CategoryRow,
@@ -10,6 +11,7 @@ import type {
   InventoryEntry,
   LeftoverRow,
   CustomMealRow,
+  NewToTryEntry,
   RecipeRow,
   StoreAisleRow,
   StoreRow,
@@ -20,19 +22,28 @@ export const metadata = { title: "Home" };
 
 function HomeSkeleton() {
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Skeleton className="lg:hidden rounded-2xl h-60" />
-      <Skeleton className="hidden rounded-2xl lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:block h-[26rem]" />
-      <Skeleton className="rounded-2xl lg:col-start-3 lg:row-start-1 h-96" />
-      <div className="space-y-4 lg:col-start-3 lg:row-start-2">
-        <Skeleton className="h-40 rounded-2xl" />
-        <Skeleton className="h-56 rounded-2xl" />
-        <Skeleton className="h-48 rounded-2xl" />
-        <Skeleton className="h-56 rounded-2xl" />
-        <Skeleton className="h-28 rounded-2xl" />
+    <div className="space-y-4">
+      <Skeleton className="rounded-2xl h-60 lg:h-[26rem]" />
+      <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-40 rounded-2xl" />
+        </div>
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-56 rounded-2xl" />
+        </div>
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-48 rounded-2xl" />
+        </div>
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-56 rounded-2xl" />
+        </div>
+        <div className="mb-4 break-inside-avoid">
+          <Skeleton className="h-28 rounded-2xl" />
+        </div>
       </div>
-      <Skeleton className="rounded-2xl lg:col-start-1 lg:row-start-2 h-96" />
-      <Skeleton className="rounded-2xl lg:col-start-2 lg:row-start-2 h-96" />
     </div>
   );
 }
@@ -54,6 +65,7 @@ async function HomeContent() {
     subsResult,
     itemStoresResult,
     leftoversResult,
+    newToTryResult,
   ] = await Promise.all([
     supabase
       .from("meal_plan_days")
@@ -118,6 +130,13 @@ async function HomeContent() {
     supabase
       .from("leftovers")
       .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("new_to_try")
+      .select(
+        "recipe_id, created_at, recipe:recipes(id, name, time)",
+      )
       .eq("household_id", householdId)
       .order("created_at", { ascending: true }),
   ]);
@@ -189,6 +208,25 @@ const recipeIngredients = (recipesResult.data ?? [])
     })),
   );
 
+  const newToTry: NewToTryEntry[] = newToTryResult.error
+    ? []
+    : ((newToTryResult.data ?? []) as unknown as Array<{
+        recipe_id: string;
+        created_at: string;
+        recipe: { id: string; name: string; time: number } | null;
+      }>).flatMap((row) =>
+        row.recipe
+          ? [
+              {
+                id: row.recipe.id,
+                name: row.recipe.name,
+                time: row.recipe.time,
+                created_at: row.created_at,
+              },
+            ]
+          : [],
+      );
+
   return (
     <HomeView
       meals={meals}
@@ -207,6 +245,10 @@ const recipeIngredients = (recipesResult.data ?? [])
       recipeTypeById={recipeTypeById}
       recipeIngredients={recipeIngredients}
       leftovers={leftovers}
+      newToTry={newToTry}
+      initialOrder={resolveDashboardOrder(
+        settings?.dashboard_widget_order,
+      )}
     />
   );
 }

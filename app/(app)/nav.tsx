@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChartColumn,
   House,
+  LayoutDashboard,
   Package,
   Search,
   Settings,
@@ -232,7 +233,11 @@ function SidebarNav({ pathname }: { pathname: string }) {
   );
 }
 
-function MobileHeader() {
+function dispatchCustomizeDashboard() {
+  window.dispatchEvent(new CustomEvent("parlseypantry:customize-dashboard"));
+}
+
+function MobileHeader({ showCustomize }: { showCustomize: boolean }) {
   return (
     <header className="md:hidden sticky top-0 z-40 flex min-w-0 h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
       <Wordmark href="/home" className="text-base" markClassName="h-7.5 w-8.75" />
@@ -252,6 +257,17 @@ function MobileHeader() {
         >
           <Search className="h-5 w-5" />
         </Link>
+        {showCustomize ? (
+          <button
+            type="button"
+            onClick={dispatchCustomizeDashboard}
+            title="Customize Dashboard"
+            aria-label="Customize Dashboard"
+            className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <LayoutDashboard className="h-5 w-5" />
+          </button>
+        ) : null}
         <Link
           href="/settings"
           aria-label="Settings"
@@ -264,7 +280,13 @@ function MobileHeader() {
   );
 }
 
-function DesktopHeader({ name }: { name: string | null }) {
+function DesktopHeader({
+  name,
+  showCustomize,
+}: {
+  name: string | null;
+  showCustomize: boolean;
+}) {
   return (
     <header className="hidden md:block sticky top-0 z-30 border-b bg-background/95 backdrop-blur md:pl-60">
       <div className="flex h-14 items-center gap-4 px-6">
@@ -274,6 +296,17 @@ function DesktopHeader({ name }: { name: string | null }) {
             <Greeting name={name} />
           </span>
           <ThemeToggle />
+          {showCustomize ? (
+            <button
+              type="button"
+              onClick={dispatchCustomizeDashboard}
+              title="Customize Dashboard"
+              aria-label="Customize Dashboard"
+              className="flex h-8 w-8 items-center justify-center rounded-full border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+            </button>
+          ) : null}
           <Link
             href="/settings"
             aria-label="Settings"
@@ -329,11 +362,13 @@ export function Nav({ name }: { name: string | null }) {
   const hideMobileChrome =
     fullscreen && (pathname === "/grocery" || pathname.startsWith("/grocery/"));
 
+  const showCustomize = pathname === "/home";
+
   return (
     <>
       <SidebarNav pathname={pathname} />
-      {!hideMobileChrome && <MobileHeader />}
-      <DesktopHeader name={name} />
+      {!hideMobileChrome && <MobileHeader showCustomize={showCustomize} />}
+      <DesktopHeader name={name} showCustomize={showCustomize} />
       {!hideMobileChrome && <MobileNav pathname={pathname} />}
     </>
   );

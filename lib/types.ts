@@ -148,6 +148,10 @@ export interface HouseholdSettingsRow {
   selected_store_id: string | null;
   grocery_view_mode: GroceryViewMode;
   default_location: Location;
+  /** Stable Home dashboard widget IDs in saved order. Empty = default order. */
+  dashboard_widget_order: string[];
+  /** Manually chosen catalog item IDs shown in the Home Snacks widget. */
+  home_snack_item_ids: string[];
 }
 
 /** Which store a grocery line is bought at. No row = "Any store". */
@@ -252,6 +256,21 @@ export interface LeftoverRow {
   id: string;
   household_id: string;
   name: string;
+  created_at: string;
+}
+
+/** One membership row in the manually managed "New to Try" collection. */
+export interface NewToTryRow {
+  household_id: string;
+  recipe_id: string;
+  created_at: string;
+}
+
+/** Joined row as the Home widget renders it (no tags — title communicates it). */
+export interface NewToTryEntry {
+  id: string;
+  name: string;
+  time: number;
   created_at: string;
 }
 

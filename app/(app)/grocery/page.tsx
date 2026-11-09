@@ -164,6 +164,8 @@ async function GroceryContent() {
           selected_store_id: null,
           grocery_view_mode: "aisle",
           default_location: "pantry",
+          dashboard_widget_order: [],
+          home_snack_item_ids: [],
         }
       }
       inventory={inventory}

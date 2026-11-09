@@ -32,10 +32,18 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
     .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, 40);
+  const isNewToTryFilter =
+    typeof params.filter === "string" && params.filter === "new-to-try";
 
   const { supabase, householdId } = await requireDal();
 
-  const [recipesResult, ingredientsResult, inventoryResult, itemsResult] = await Promise.all([
+  const [
+    recipesResult,
+    ingredientsResult,
+    inventoryResult,
+    itemsResult,
+    newToTryResult,
+  ] = await Promise.all([
     supabase
       .from("recipes")
       .select("*")
@@ -53,9 +61,24 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       .from("items")
       .select("id, name, canonical_item_id")
       .eq("household_id", householdId),
+    supabase
+      .from("new_to_try")
+      .select("recipe_id")
+      .eq("household_id", householdId),
   ]);
 
-  const recipes = (recipesResult.data ?? []) as RecipeRow[];
+  const allRecipes = (recipesResult.data ?? []) as RecipeRow[];
+  // View All from the New to Try widget: membership only, never tag-derived.
+  const newToTryIds = newToTryResult.error
+    ? new Set<string>()
+    : new Set(
+        ((newToTryResult.data ?? []) as { recipe_id: string }[]).map(
+          (row) => row.recipe_id,
+        ),
+      );
+  const recipes = isNewToTryFilter
+    ? allRecipes.filter((recipe) => newToTryIds.has(recipe.id))
+    : allRecipes;
   const itemIdsByRecipe: Record<string, string[]> = {};
   const recipeIdsWithIngredients = new Set<string>();
   const pantryStatus: Record<
@@ -125,6 +148,7 @@ async function RecipesContent({ searchParams }: { searchParams: SearchParams }) 
       onlyItemIds={onlyItemIds}
       pantryStatus={pantryStatus}
       recipeIdsWithIngredients={Array.from(recipeIdsWithIngredients)}
+      newToTryFilter={isNewToTryFilter}
     />
   );
 }

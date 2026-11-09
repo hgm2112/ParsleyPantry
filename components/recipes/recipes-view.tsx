@@ -15,6 +15,7 @@ export function RecipesView({
   onlyItemIds,
   pantryStatus,
   recipeIdsWithIngredients,
+  newToTryFilter,
 }: {
   recipes: RecipeRow[];
   itemIdsByRecipe?: Record<string, string[]>;
@@ -24,6 +25,7 @@ export function RecipesView({
     { covered: number; total: number; optional: number }
   >;
   recipeIdsWithIngredients: string[];
+  newToTryFilter?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const withIngredients = useMemo(
@@ -134,6 +136,17 @@ export function RecipesView({
 
   return (
     <div className="space-y-3">
+      {newToTryFilter ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="font-semibold">
+            Showing your New to Try collection.
+          </span>
+          <Link href="/recipes" className="font-semibold text-primary hover:underline">
+            Show all →
+          </Link>
+        </div>
+      ) : null}
+
       {itemFilter.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
           <span className="font-semibold">
@@ -161,18 +174,26 @@ export function RecipesView({
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
           <BookOpen className="h-6 w-6 text-muted-foreground" />
           <p className="text-sm font-semibold">
-            {recipes.length === 0
-              ? "No recipes yet"
-              : itemFilter.length > 0
-                ? "None of your recipes use those items yet"
-                : "Nothing matches"}
+            {newToTryFilter && recipes.length === 0
+              ? "No recipes in your New to Try collection yet"
+              : newToTryFilter
+                ? "Nothing matches"
+                : recipes.length === 0
+                  ? "No recipes yet"
+                  : itemFilter.length > 0
+                    ? "None of your recipes use those items yet"
+                    : "Nothing matches"}
           </p>
-          {recipes.length === 0 ? (
+          {newToTryFilter && recipes.length === 0 ? (
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Add completed recipes from the New to Try widget on Home.
+            </p>
+          ) : recipes.length === 0 ? (
             <p className="max-w-sm text-xs text-muted-foreground">
               Import from KitchenOwl (Settings → Import) or create one from
               scratch.
             </p>
-          ) : itemFilter.length > 0 ? (
+          ) : itemFilter.length > 0 || newToTryFilter ? (
             <Link href="/recipes" className="text-sm font-semibold text-primary hover:underline">
               Show all recipes →
             </Link>
