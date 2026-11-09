@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, ScanBarcode } from "lucide-react";
@@ -56,6 +56,7 @@ export function HouseholdAddForm({
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const barcodeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!initialBarcode) return;
@@ -236,6 +237,7 @@ export function HouseholdAddForm({
           <div className="flex gap-2">
             <Input
               id="barcode"
+              ref={barcodeRef}
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onBlur={() => void lookupBarcode(barcode)}
@@ -384,6 +386,7 @@ export function HouseholdAddForm({
           setBarcode(code);
           void lookupBarcode(code);
         }}
+        onManualEntry={() => barcodeRef.current?.focus()}
         title="Scan a household supply"
         description="We'll fill in what we know about the product."
       />

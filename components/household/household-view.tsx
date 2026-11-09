@@ -165,11 +165,20 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
             <Button
               variant="default"
               size="sm"
-              type="button"
               className="h-9 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={() => setScanOpen(true)}
+              render={<Link href="/household/add" />}
             >
               <Plus /> Add
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              type="button"
+              aria-label="Scan a household supply"
+              title="Scan a household supply"
+              onClick={() => setScanOpen(true)}
+            >
+              <ScanBarcode className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -376,6 +385,7 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
         open={scanOpen}
         onOpenChange={setScanOpen}
         onBarcode={handleBarcode}
+        onManualEntry={() => router.push("/household/add")}
         title="Scan a household supply"
         description="Opens the add form with this barcode looked up — you review and save."
       />

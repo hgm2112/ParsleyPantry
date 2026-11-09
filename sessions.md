@@ -4,6 +4,14 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-09 — Household page fixes: +Add goes to the form, scanner manual entry works
+
+- **`/household` + Add** now links straight to `/household/add` instead of opening the scanner. A separate scan (barcode icon) button keeps scanning one tap away.
+- **Scanner "Enter Manually"** on `/household` was a no-op because `ScanSheet` was rendered without `onManualEntry`; it now routes to `/household/add`.
+- **Add form scanner** also wires `onManualEntry` to focus the barcode input after the sheet closes.
+- Root cause: `ScanSheet.onManualEntry` is optional and the household view omitted it (inventory passes `setAddOverlayOpen`).
+- Verified `npx tsc --noEmit` + eslint clean.
+
 ## 2026-11-09 — Inventory brand editing, barcode lookup, duplicate name handling, sidebar reorder, grocery badge removal
 
 **Shipped and pushed (c6ffede)**
