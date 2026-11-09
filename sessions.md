@@ -12,6 +12,12 @@ for "what changed", this is for "what's true now / what's next".
 - Removed an unused `eslint-disable` in the detail form.
 - Verified `npx tsc --noEmit` + ESLint clean.
 
+## 2026-11-09 — Batch actions sheet committed (not yet wired)
+
+- Committed the previously untracked `components/home/batch-actions-sheet.tsx` (per-batch +/−/remove bottom sheet for the Home pantry widget).
+- Still not imported anywhere; left for the upcoming home multi-batch flow.
+- `npx tsc --noEmit` clean; pushed as `0b5bff4`.
+
 ## 2026-11-09 — Household page fixes: +Add goes to the form, scanner manual entry works
 
 - **`/household` + Add** now links straight to `/household/add` instead of opening the scanner. A separate scan (barcode icon) button keeps scanning one tap away.
