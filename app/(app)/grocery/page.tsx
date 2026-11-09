@@ -55,6 +55,7 @@ async function GroceryContent() {
     recipesResult,
     catalogResult,
     itemStoresResult,
+    householdCatalogResult,
   ] = await Promise.all([
     supabase
       .from("grocery_items")
@@ -113,7 +114,13 @@ async function GroceryContent() {
     supabase
       .from("grocery_item_stores")
       .select("grocery_item_id, store_id")
-      .eq("household_id", householdId), 
+      .eq("household_id", householdId),
+    // Barcode source for household supplies on the list. Kept separate from
+    // `catalog` so these never leak into the food quick-add search.
+    supabase
+      .from("household_items")
+      .select("id, name, barcode, canonical_household_item_id")
+      .eq("household_id", householdId),
   ]);
   
 
@@ -145,6 +152,12 @@ async function GroceryContent() {
     grocery_item_id: string;
     store_id: string;
   }[];
+  const householdCatalog = (householdCatalogResult.data ?? []) as {
+    id: string;
+    name: string;
+    barcode: string | null;
+    canonical_household_item_id: string | null;
+  }[];
   const settings = (settingsResult.data ?? null) as HouseholdSettingsRow | null;
   const inventory = (inventoryResult.data ?? []) as unknown as InventoryEntry[];
   const recipes = (recipesResult.data ?? []) as unknown as RecipeWithIngredients[];
@@ -172,6 +185,7 @@ async function GroceryContent() {
       recipes={recipes}
       rememberedAisles={rememberedAisles}
       catalog={catalog}
+      householdCatalog={householdCatalog}
     />
   );
 }

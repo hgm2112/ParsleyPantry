@@ -73,6 +73,17 @@ export type CatalogEntry = {
   grocery_last_added_at?: string | null;
 };
 
+/**
+ * Household-supply rows, separate from the food `catalog`. Used only to
+ * resolve UPCs for copy lines — never for quick-add search.
+ */
+export type HouseholdCatalogEntry = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  canonical_household_item_id: string | null;
+};
+
 export type GroceryRecipe = {
   id: string;
   name: string;
@@ -98,6 +109,7 @@ type Props = {
   recipes: GroceryRecipe[];
   rememberedAisles: { item_id: string; store_id: string; aisle_id: string }[];
   catalog: CatalogEntry[];
+  householdCatalog: HouseholdCatalogEntry[];
 };
 
 type Group = {
@@ -126,6 +138,7 @@ export function GroceryView({
   recipes,
   rememberedAisles,
   catalog,
+  householdCatalog,
 }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<GroceryViewMode>(settings.grocery_view_mode);
@@ -509,6 +522,28 @@ export function GroceryView({
     return map;
   }, [catalog]);
 
+  // Household counterparts of the above. Grocery rows for household items
+  // have item_id null, so the food maps never resolve their barcodes.
+  const householdBarcodeById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of householdCatalog) {
+      if (entry.barcode) {
+        map.set(entry.id, entry.barcode);
+      }
+    }
+    return map;
+  }, [householdCatalog]);
+
+  const householdBarcodeByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of householdCatalog) {
+      if (entry.barcode) {
+        map.set(entry.name.toLowerCase(), entry.barcode);
+      }
+    }
+    return map;
+  }, [householdCatalog]);
+
   function formatItemLine(item: GroceryListItem) {
     const namePart = getCopyName(item);
     const parts: string[] = [namePart];
@@ -531,7 +566,19 @@ export function GroceryView({
     // whose barcodes live on the leaf entry, not the canonical root).
     const lookupName = (item.specific_name ?? item.name).toLowerCase();
     const byName = barcodeByName.get(lookupName);
-    const barcode = byName ?? item.item?.barcode;
+    let barcode = byName ?? item.item?.barcode ?? undefined;
+
+    // Household rows have item_id null, so the food lookup above misses.
+    // The typed barcode lives on the variant (leaf) row — look up by the
+    // specific name first, then the canonical root via household_item_id,
+    // then by the generic name as a last resort.
+    if (!barcode && item.household_item_id) {
+      barcode =
+        householdBarcodeByName.get(lookupName) ??
+        householdBarcodeById.get(item.household_item_id) ??
+        householdBarcodeByName.get(item.name.toLowerCase());
+    }
+
     if (barcode) {
       parts.push(`UPC: ${barcode}`);
     }
