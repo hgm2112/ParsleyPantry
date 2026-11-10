@@ -25,6 +25,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  AllFilterPill,
+  FilterPill,
+  ToggleFilterPill,
+} from "@/components/filter-pill";
 import { ScanSheet } from "@/components/scan-sheet";
 import {
   adjustHouseholdQuantity,
@@ -93,7 +98,30 @@ export function HouseholdView({
       });
   }, [rows, query, category, storage, lowOnly, sortKey]);
 
+  const counts = useMemo(() => {
+    const byCategory: Record<string, number> = {};
+    const byStorage: Record<string, number> = {};
+    for (const row of rows) {
+      byCategory[row.category] = (byCategory[row.category] ?? 0) + 1;
+      byStorage[row.storage_location] =
+        (byStorage[row.storage_location] ?? 0) + 1;
+    }
+    return { byCategory, byStorage };
+  }, [rows]);
+
   const lowCount = rows.filter(isHouseholdItemLow).length;
+
+  const locationOptions = HOUSEHOLD_STORAGE_LOCATIONS.map((location) => ({
+    value: location,
+    label: location,
+    count: counts.byStorage[location] ?? 0,
+  }));
+
+  const typeOptions = HOUSEHOLD_CATEGORIES.map((category) => ({
+    value: category,
+    label: category,
+    count: counts.byCategory[category] ?? 0,
+  }));
 
   async function handleQty(row: HouseholdItemRow, delta: number) {
     if (busyId) return;
@@ -203,48 +231,38 @@ export function HouseholdView({
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          <button
-            type="button"
+          <AllFilterPill
+            count={rows.length}
+            active={!category && !storage && !lowOnly}
+            onClick={() => {
+              setCategory(null);
+              setStorage(null);
+              setLowOnly(false);
+            }}
+          />
+          <FilterPill
+            label="Location"
+            allLabel="All locations"
+            options={locationOptions}
+            value={storage}
+            totalCount={rows.length}
+            onChange={setStorage}
+          />
+          <FilterPill
+            label="Type"
+            allLabel="All types"
+            options={typeOptions}
+            value={category}
+            totalCount={rows.length}
+            tone="emerald"
+            onChange={setCategory}
+          />
+          <ToggleFilterPill
+            label="Low stock"
+            count={lowCount}
+            active={lowOnly}
             onClick={() => setLowOnly((v) => !v)}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-              lowOnly
-                ? "border-amber-600 bg-amber-600 text-white"
-                : "border-border bg-background text-muted-foreground hover:bg-accent",
-            )}
-          >
-            Low stock
-          </button>
-          {HOUSEHOLD_CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategory((c) => (c === cat ? null : cat))}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-                category === cat
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {cat}
-            </button>
-          ))}
-          {HOUSEHOLD_STORAGE_LOCATIONS.map((loc) => (
-            <button
-              key={loc}
-              type="button"
-              onClick={() => setStorage((s) => (s === loc ? null : loc))}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-                storage === loc
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-border bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {loc}
-            </button>
-          ))}
+          />
           <div className="ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger

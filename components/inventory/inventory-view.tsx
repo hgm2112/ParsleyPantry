@@ -30,6 +30,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  AllFilterPill,
+  FilterPill,
+  ToggleFilterPill,
+} from "@/components/filter-pill";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { ScanSheet } from "@/components/scan-sheet";
 import {
@@ -42,8 +47,8 @@ import {
   updateInventory,
   type CanonicalCandidateView,
 } from "@/app/(app)/inventory/actions";
-import { compareByExpiry, expiryBucket } from "@/lib/expiry";
-import { effectiveExpiryDate, expiryChipProps } from "@/lib/freezer";
+import { compareByExpiry } from "@/lib/expiry";
+import { expiryChipProps } from "@/lib/freezer";
 import {
   earliestEffective,
   groupByItem,
@@ -59,12 +64,11 @@ import type { InventoryEntry, Location, SubcategoryRow } from "@/lib/types";
 
 type Tab = "all" | Location;
 
-const TABS: { value: Tab; label: string }[] = [
-  { value: "all", label: "All" },
+const LOCATION_OPTIONS = [
   { value: "pantry", label: "Pantry" },
   { value: "fridge", label: "Fridge" },
   { value: "freezer", label: "Freezer" },
-];
+] as const;
 
 const SORT_OPTIONS = [
   { value: "recent-newest", label: "Recently added — newest first" },
@@ -94,7 +98,6 @@ export function InventoryView({
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
-  const [useSoon, setUseSoon] = useState(false);
   const [lowOnly, setLowOnly] = useState(false);
   const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -126,10 +129,15 @@ export function InventoryView({
       fridge: 0,
       freezer: 0,
     };
+    const byType: Record<string, number> = {};
     for (const group of groups) {
       for (const location of group.locations) byLocation[location] += 1;
+      const subcategoryId = group.item.subcategory_id;
+      if (subcategoryId) {
+        byType[subcategoryId] = (byType[subcategoryId] ?? 0) + 1;
+      }
     }
-    return byLocation;
+    return { byLocation, byType };
   }, [groups]);
 
   const visible = useMemo(() => {
@@ -138,14 +146,6 @@ export function InventoryView({
       const scoped = scopedBatches(group.batches, tab);
       if (scoped.length === 0) return false;
       if (subFilter && group.item.subcategory_id !== subFilter) return false;
-      if (useSoon) {
-        // Storage-aware: frozen batches count down by best-quality date.
-        const soon = scoped.some((row) => {
-          const bucket = expiryBucket(effectiveExpiryDate(row));
-          return bucket === "expired" || bucket === "urgent" || bucket === "soon";
-        });
-        if (!soon) return false;
-      }
       if (lowOnly && !group.low) return false;
       if (needle) {
         const name = group.item.name.toLowerCase();
@@ -193,9 +193,28 @@ export function InventoryView({
       }
     });
     return sorted;
-  }, [groups, tab, query, useSoon, lowOnly, subFilter, sortKey]);
+  }, [groups, tab, query, lowOnly, subFilter, sortKey]);
 
   const lowCount = groups.filter((group) => group.low).length;
+
+  const locationOptions = useMemo(
+    () =>
+      LOCATION_OPTIONS.map((option) => ({
+        ...option,
+        count: counts.byLocation[option.value],
+      })),
+    [counts],
+  );
+
+  const typeOptions = useMemo(
+    () =>
+      subcategories.map((subcategory) => ({
+        value: subcategory.id,
+        label: subcategory.name,
+        count: counts.byType[subcategory.id] ?? 0,
+      })),
+    [subcategories, counts],
+  );
 
   const subNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -310,67 +329,40 @@ export function InventoryView({
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {TABS.map((entry) => (
-            <button
-              key={entry.value}
-              type="button"
-              onClick={() => setTab(entry.value)}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-                tab === entry.value
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {entry.label}
-              <span className="ml-1.5 text-xs opacity-80">
-                {counts[entry.value]}
-              </span>
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setUseSoon((value) => !value)}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-              useSoon
-                ? "border-orange-600 bg-orange-600 text-white"
-                : "border-border bg-background text-muted-foreground hover:bg-accent",
-            )}
-          >
-            Use soon
-          </button>
-          <button
-            type="button"
+          <AllFilterPill
+            count={groups.length}
+            active={tab === "all" && !subFilter && !lowOnly}
+            onClick={() => {
+              setTab("all");
+              setSubFilter(null);
+              setLowOnly(false);
+            }}
+          />
+          <FilterPill
+            label="Location"
+            allLabel="All locations"
+            options={locationOptions}
+            value={tab === "all" ? null : tab}
+            totalCount={groups.length}
+            onChange={(value) => setTab((value ?? "all") as Tab)}
+          />
+          {typeOptions.length > 0 ? (
+            <FilterPill
+              label="Type"
+              allLabel="All types"
+              options={typeOptions}
+              value={subFilter}
+              totalCount={groups.length}
+              tone="emerald"
+              onChange={setSubFilter}
+            />
+          ) : null}
+          <ToggleFilterPill
+            label="Low stock"
+            count={lowCount}
+            active={lowOnly}
             onClick={() => setLowOnly((value) => !value)}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-              lowOnly
-                ? "border-amber-600 bg-amber-600 text-white"
-                : "border-border bg-background text-muted-foreground hover:bg-accent",
-            )}
-          >
-            Low stock
-          </button>
-          {subcategories.map((subcategory) => (
-            <button
-              key={subcategory.id}
-              type="button"
-              onClick={() =>
-                setSubFilter((current) =>
-                  current === subcategory.id ? null : subcategory.id,
-                )
-              }
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold uppercase transition-colors",
-                subFilter === subcategory.id
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-border bg-background text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {subcategory.name}
-            </button>
-          ))}
+          />
           <div className="ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -689,7 +681,7 @@ function InventoryItemCard({
             <Link
               href={`/inventory/${item.id}`}
               prefetch
-              className="flex min-w-0 items-center"
+              className="flex min-w-0 items-center hover:text-primary"
             >
               <span className="truncate text-sm font-semibold">
                 {item.name}
