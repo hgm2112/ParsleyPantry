@@ -8,17 +8,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-11-09)
+## Current Session Snapshot (2026-11-10)
 
-Goal: household supplies shipped + polished; earlier in thread, inventory/pantry UX polish (brand editing, barcode lookup, duplicate safety, sidebar reorder, grocery badge removal).
+Goal: pantry/household parity — on-list grocery badges, shared filter pills, inventory Add/Scan pill; tighter grocery copy prompts; small polish (brand descenders, stats card).
 
-Shipped and pushed (2c2e863 → 503dae8):
-- **Household supplies** (`/household`): separate `household_items` table for non-food supplies (paper products, cleaning, personal care, laundry, kitchen, misc), with add/detail pages, barcode scan + OFF lookup, quantity adjust, low-stock thresholds, delete, and "add to shopping list" collapsing to the canonical generic (`specific_name` keeps the variant). Two migrations committed: `20261109150000_household_items.sql`, `20261109160000_household_canonical.sql` (apply via `supabase db push` or the SQL editor).
-- **Household fixes**: header is one segmented pill — "+ Add" (links to `/household/add`) + barcode segment (scan sheet). `ScanSheet` now receives `onManualEntry` so "Enter Manually" works. Add form resets every field per visit (see cacheComponents note); detail form syncs the saved row after update.
-- **Batch actions sheet**: `components/home/batch-actions-sheet.tsx` is now committed (was deliberately untracked) but not yet wired into any caller.
-- **Earlier in thread (c6ffede + prior)**: editable brand + OFF "Lookup" on inventory detail, proactive duplicate-name pre-check, barcode/name conflict blocking on add, sidebar reorder (Home / Meal plan / Shopping list / Pantry / Household / Recipes / Stats / Settings), Household badge removed from grocery rows.
+Shipped and pushed (b850e30 → 38e131d):
+- **On-list badge**: cart icon next to item names on `/inventory` and `/household` when an unchecked `grocery_items` line exists for that item's canonical root (variants match via canonical). Unchecked-only; adding from the list menu refreshes, and list pages are revalidated whenever grocery membership changes.
+- **Inventory Add/Scan pill** (`515de07`): same segmented `[+ Add | barcode]` control as `/household`. Add links to `/inventory/add`; barcode opens the scan sheet; manual entry navigates to `/inventory/add`. Removed the old dialog overlay and the now-unneeded `household_settings` query.
+- **Shared filter pills** (`6af07b8`, `9ca1a2f`): `components/filter-pill.tsx` powers `[All (n)] [Location ▾] [Type ▾] [Low stock (n)]` on both pages. Counts are stable facet counts over the full loaded list; Location/Type pills show no number (dropdown options still do). "Use soon" removed from inventory. Inventory item names now hover green like household.
+- **Grocery copy prompts** (`84aecae`, `f6181c3`): Copy All/Sale-Only ask for per-store markdown tables (`Item | Current | Deal | Recommend`), one-line reasons, and final `Buy now / Buy as planned / Keep waiting / Couldn't match` bullet sections. No digital-coupon section unless verified. Match by name + size first; never blame UPC. Copy lines label non-GTIN codes as `Code:`.
+- **Brand wordmark** (`4cfc502`): `pb-[0.2em] -mb-[0.2em]` on the wordmark span stops `truncate` + `leading-none` from clipping the font's `y` descenders.
+- **Stats** (`38e131d`): "New recipes tried" card shows count + the single latest new recipe by first-cooked date (no 6-name list).
 
-Verified: `npx tsc --noEmit` clean on every push; pre-push hook green through `503dae8`.
+Verified: `npx tsc --noEmit` clean on every push; pre-push hook green through `38e131d`.
 
 Durable notes:
 - `next.config.ts` sets `cacheComponents: true`. Next 16 then uses React `<Activity>` to preserve up to ~3 routes (state + DOM) across client navigations. Forms that must start fresh need an explicit reset — see `household-add-form.tsx` (`resetForm` + `useLayoutEffect` cleanup). Read `node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md`.
@@ -26,8 +28,11 @@ Durable notes:
 - Name uniqueness on lower(name) remains strict; use specific display names + canonicals for variants (food and household).
 - Brand and barcode are normal editable catalog fields on the inventory detail page (no auto name mutation).
 - Mobile bottom nav stays the original 5 tabs (Household is desktop-sidebar only).
+- Both pantry and household filter rows go through `components/filter-pill.tsx`; keep them identical.
+- Grocery on-list badge means an **unchecked** line only; checked/removed lines clear it.
+- Copy UPC label: valid GTIN (8/12/13/14 digits) → `UPC:`, anything else → `Code:`.
 
 Open:
-- Verify Quick Bites cook/undo end-to-end and confirm `/recipes` counts/redirects on a fresh deploy.
 - Wire `batch-actions-sheet.tsx` into the Home pantry widget (or remove it).
+- Verify Quick Bites cook/undo end-to-end and confirm `/recipes` counts/redirects on a fresh deploy.
 - Optional: surface brand/barcode on list cards; add a "duplicates" warning.

@@ -4,6 +4,37 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-10 — Pantry/household parity: on-list badges, filter pills, copy prompts, polish
+
+**Shipped and pushed (b850e30 → 38e131d)**
+- **On-list badge**: `/inventory` and `/household` show a small emerald cart icon next to an item's name when an unchecked `grocery_items` line exists for its canonical root (variants light up via `canonical_*_id`). Unchecked-only; adding from the list menu refreshes, and list pages are revalidated whenever grocery membership changes.
+- **Inventory header parity** (`515de07`): `/inventory` uses the same segmented `[+ Add | barcode]` pill as `/household`. Add links to `/inventory/add`; barcode opens the scan sheet; "Enter Manually" routes to `/inventory/add`. Removed the old dialog overlay and the now-unneeded `household_settings.default_location` query.
+- **Shared filter pills** (`6af07b8`, `9ca1a2f`): new `components/filter-pill.tsx` powers `[All (n)] [Location ▾] [Type ▾] [Low stock (n)] … [Sort]` on both pages. Counts are stable facet counts over the full loaded list; Location/Type pills show no number (dropdown options still do). "Use soon" removed from inventory. Inventory item names now hover green like household.
+- **Grocery copy prompts** (`84aecae`, `f6181c3`): Copy All and Copy Sale-Only now ask for per-store markdown tables (`Item | Current | Deal | Recommend`), one-line reasons, and final `Buy now / Buy as planned / Keep waiting / Couldn't match` bullet sections. No digital-coupon section unless verified/supplied. Match by name + size first; never blame the UPC. Copy lines label valid GTINs (8/12/13/14 digits) as `UPC:` and everything else as `Code:`.
+- **Brand wordmark fix** (`4cfc502`): `pb-[0.2em] -mb-[0.2em]` on the `Wordmark` span stops `truncate` + `leading-none` from clipping the font's `y` descenders (font descent is 0.218em).
+- **Stats card** (`38e131d`): "New recipes tried" now shows the count plus the single latest new recipe by first-cooked date in the period, instead of a 6-name list.
+
+**Files of note**
+- `components/filter-pill.tsx` (new shared filter control)
+- `components/inventory/inventory-view.tsx`, `app/(app)/inventory/page.tsx`
+- `components/household/household-view.tsx`, `app/(app)/household/page.tsx`
+- `components/grocery/grocery-view.tsx`, `app/(app)/grocery/actions.ts`
+- `app/(app)/inventory/actions.ts`, `app/(app)/household/actions.ts`
+- `components/brand.tsx`, `components/stats/stats-view.tsx`
+
+**Durable choices**
+- Both pantry and household filter rows go through `components/filter-pill.tsx`; keep them identical.
+- "On list" = an **unchecked** grocery line only; checked/removed lines clear the badge.
+- Copy UPC label: valid GTIN → `UPC:`, otherwise `Code:`.
+- `FONTE___.ttf` needs descender room (`leading-none` + `truncate` clips ~0.17em).
+
+**Open / next**
+- Wire `components/home/batch-actions-sheet.tsx` into the Home pantry widget (or remove it).
+- Verify Quick Bites cook/undo end-to-end and `/recipes` counts/redirects on a fresh deploy.
+- Optional: surface brand/barcode on list cards; add a duplicates warning.
+
+**Verified**: `npx tsc --noEmit` clean on every push; pre-push hook green through `38e131d`.
+
 ## 2026-11-09 — Household: combined Add/Scan control + fresh add form per visit
 
 - **Combined header control**: `/household` now renders one segmented emerald pill — "+ Add" (link to `/household/add`) + barcode segment that opens the scan sheet — instead of two separate buttons.
