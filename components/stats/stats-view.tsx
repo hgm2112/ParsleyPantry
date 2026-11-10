@@ -205,6 +205,21 @@ export function StatsView({
     const avgPerWeek = occurrences.length / weeksInPeriod;
 
     const recipeNames = new Map(recipes.map((recipe) => [recipe.id, recipe.name]));
+    // Most recent first-cook among this period's new recipes (dates are
+    // YYYY-MM-DD, so lexicographic comparison works).
+    const lastNewTriedId =
+      newTried.length === 0
+        ? null
+        : newTried.reduce<string | null>((latest, id) => {
+            const date = firstCooked.get(id);
+            if (!date) return latest;
+            if (!latest) return id;
+            const latestDate = firstCooked.get(latest);
+            return latestDate && date > latestDate ? id : latest;
+          }, null);
+    const lastNewTriedName = lastNewTriedId
+      ? (recipeNames.get(lastNewTriedId) ?? "Recipe")
+      : null;
     const itemNameById = new Map(items.map((item) => [item.id, item.name]));
 
     const upcomingRows = meals.filter(
@@ -251,9 +266,7 @@ export function StatsView({
       buckets,
       activeDay,
       newTried,
-      newTriedNames: newTried
-        .map((id) => recipeNames.get(id) ?? "Recipe")
-        .slice(0, 6),
+      lastNewTriedName,
       milestones,
       planning,
       otherMeals,
@@ -412,11 +425,7 @@ export function StatsView({
               <StatCard
                 label="New recipes tried"
                 value={stats.newTried.length}
-                sub={
-                  stats.newTriedNames.length > 0
-                    ? stats.newTriedNames.join(", ")
-                    : "First cooks in this period"
-                }
+                sub={stats.lastNewTriedName ?? "First cooks in this period"}
               />
             </div>
             <div className="rounded-xl border bg-card p-3 shadow-sm">
