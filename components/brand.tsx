@@ -83,7 +83,7 @@ export function Wordmark({
       <span
         className={cn(
           brand.className,
-          "min-w-0 truncate text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap",
+          "min-w-0 truncate text-[1.4em] font-normal leading-none -translate-y-[0.08em] whitespace-nowrap pb-[0.2em] -mb-[0.2em]",
         )}
       >
         ParsleyPantry
