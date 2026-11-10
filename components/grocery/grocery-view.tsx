@@ -580,7 +580,10 @@ export function GroceryView({
     }
 
     if (barcode) {
-      parts.push(`UPC: ${barcode}`);
+      // Only call it a UPC when it's a real GTIN length; store/CODE_128 scans
+      // are labeled "Code" so the AI doesn't try a UPC lookup on them.
+      const isGtin = /^(\d{8}|\d{12,13,14})$/.test(barcode);
+      parts.push(`${isGtin ? "UPC" : "Code"}: ${barcode}`);
     }
 
     return parts.join(" | ");
@@ -642,6 +645,9 @@ Rules:
 - Items marked [sale only] are waiting for a sale: recommend Yes only if there is a real sale or a significantly better deal.
 - Use the store headings from the list above. One table per store; do not repeat the store heading on every row.
 - Keep each Recommend reason to a few words. No sourcing notes, disclaimers, or market-variation caveats.
+- Match by product name and size/weight first. Use the UPC only to confirm identity when multiple listings could fit.
+- Never report "UPC not matched" as a reason. If you cannot find a listing, write "no listing found".
+- Only flag a UPC as invalid if it is not a valid GTIN (not 8, 12, 13, or 14 digits).
 - Do not add extra tables, charts, comparison sections, or per-store summaries.
 - Do not mention digital coupons at all unless you found a verified one or the user supplied one; then add one short line per item with the coupon.
 
@@ -682,6 +688,9 @@ Rules:
 - These items are all marked [sale only] and are waiting for a sale. Recommend Yes only if there is a real sale or a significantly better deal; otherwise No.
 - "Current" = regular/listed price. "Deal" = sale price if one exists; otherwise "none".
 - Keep each Recommend reason to a few words. No sourcing notes, disclaimers, or market-variation caveats.
+- Match by product name and size/weight first. Use the UPC only to confirm identity when multiple listings could fit.
+- Never report "UPC not matched" as a reason. If you cannot find a listing, write "no listing found".
+- Only flag a UPC as invalid if it is not a valid GTIN (not 8, 12, 13, or 14 digits).
 - Do not add extra tables, charts, comparison sections, or store summaries.
 - Do not mention digital coupons at all unless you found a verified one or the user supplied one; then add one short line per item.
 
