@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -32,8 +32,6 @@ import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ConsumeDialog } from "@/components/inventory/consume-dialog";
 import { ScanSheet } from "@/components/scan-sheet";
-import { AddForm } from "@/components/inventory/add-form";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   addInventoryToGrocery,
   consumeFromItem,
@@ -81,14 +79,12 @@ const SORT_OPTIONS = [
 export function InventoryView({
   rows,
   subcategories,
-  defaultLocation = "pantry",
   holdsByItem,
   canonicalNames,
   onGroceryIds,
 }: {
   rows: InventoryEntry[];
   subcategories: SubcategoryRow[];
-  defaultLocation?: Location;
   holdsByItem: Record<string, number>;
   /** Item id → display name of its generic ingredient ("as Ground Beef"). */
   canonicalNames: Record<string, string>;
@@ -102,7 +98,6 @@ export function InventoryView({
   const [lowOnly, setLowOnly] = useState(false);
   const [subFilter, setSubFilter] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
-  const [addOverlayOpen, setAddOverlayOpen] = useState(false);
   const [sortKey, setSortKey] = useState<string>(() => {
     if (typeof window === "undefined") return "recent-newest";
     try {
@@ -282,15 +277,23 @@ export function InventoryView({
                 </p>
               </PopoverContent>
             </Popover>
-            <Button
-              variant="default"
-              size="sm"
-              type="button"
-              className="h-9 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={() => setScanOpen(true)}
-            >
-              <Plus /> Add
-            </Button>
+            <div className="flex h-9 shrink-0 overflow-hidden rounded-md">
+              <Link
+                href="/inventory/add"
+                className="inline-flex items-center gap-1.5 bg-emerald-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <Plus className="h-4 w-4" /> Add
+              </Link>
+              <button
+                type="button"
+                aria-label="Scan an item"
+                title="Scan an item"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex items-center border-l border-white/25 bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <ScanBarcode className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -428,33 +431,10 @@ export function InventoryView({
         open={scanOpen}
         onOpenChange={setScanOpen}
         onBarcode={handleBarcode}
-        onManualEntry={() => setAddOverlayOpen(true)}
+        onManualEntry={() => router.push("/inventory/add")}
         title="Scan an item"
         description="Opens the add form with this barcode looked up — you review and save."
       />
-
-      <Dialog open={addOverlayOpen} onOpenChange={setAddOverlayOpen}>
-        <DialogContent
-          className="max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] box-border overflow-y-auto overscroll-contain p-6 sm:max-w-xl"
-          showCloseButton
-        >
-          <Suspense>
-            <AddForm
-              subcategories={subcategories}
-              defaultLocation={defaultLocation ?? "pantry"}
-              initialBarcode={null}
-              lookupKey={null}
-              returnTo="/inventory"
-              onSaved={() => setAddOverlayOpen(false)}
-              onCancel={() => setAddOverlayOpen(false)}
-              onScanAgain={() => {
-                setAddOverlayOpen(false);
-                setScanOpen(true);
-              }}
-            />
-          </Suspense>
-        </DialogContent>
-      </Dialog>
 
       {consumeTarget ? (
         <ConsumeDialog
