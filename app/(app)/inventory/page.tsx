@@ -33,8 +33,14 @@ function InventorySkeleton() {
 async function InventoryContent() {
   const { supabase, householdId } = await requireDal();
 
-  const [inventoryResult, holdsResult, subsResult, settingsResult, itemsResult] =
-    await Promise.all([
+  const [
+    inventoryResult,
+    holdsResult,
+    subsResult,
+    settingsResult,
+    itemsResult,
+    groceryResult,
+  ] = await Promise.all([
       supabase
         .from("inventory")
         .select("*, item:items!inner(*)")
@@ -58,6 +64,12 @@ async function InventoryContent() {
         .from("items")
         .select("id, name, canonical_item_id")
         .eq("household_id", householdId),
+      supabase
+        .from("grocery_items")
+        .select("item_id")
+        .eq("household_id", householdId)
+        .eq("checked", false)
+        .not("item_id", "is", null),
     ]);
 
   const rows = ((inventoryResult.data ?? []) as unknown as InventoryEntry[])
@@ -86,6 +98,13 @@ async function InventoryContent() {
     }[],
   );
 
+  // Catalog roots with an unchecked shopping-list line: `item_id` already
+  // points at the canonical root, so variants share the indicator.
+  const onGroceryIds: Record<string, true> = {};
+  for (const row of (groceryResult.data ?? []) as { item_id: string | null }[]) {
+    if (row.item_id) onGroceryIds[row.item_id] = true;
+  }
+
   return (
     <InventoryView
       rows={rows}
@@ -96,6 +115,7 @@ async function InventoryContent() {
       }
       holdsByItem={holdsByItem}
       canonicalNames={canonicalNames}
+      onGroceryIds={onGroceryIds}
     />
   );
 }

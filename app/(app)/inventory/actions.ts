@@ -1456,6 +1456,7 @@ export async function addInventoryToGrocery(
     });
 
     revalidatePath("/grocery");
+    revalidatePath("/inventory");
     return {
       ok: true,
       data: { created: result.created, name: result.name },

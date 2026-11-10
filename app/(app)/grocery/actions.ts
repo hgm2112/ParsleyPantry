@@ -105,6 +105,8 @@ export async function addGroceryItem(
       | undefined;
     if (existing) {
       revalidatePath("/grocery");
+      revalidatePath("/inventory");
+      revalidatePath("/household");
       return {
         ok: true,
         data: { id: existing.id, created: false, name: existing.name },
@@ -136,6 +138,8 @@ export async function addGroceryItem(
     await fileGroceryItem(supabase, householdId, (data as { id: string }).id, itemId);
 
     revalidatePath("/grocery");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
     return {
       ok: true,
       data: { id: (data as { id: string }).id, created: true, name },
@@ -187,6 +191,8 @@ export async function updateGroceryItem(
 
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
     return { ok: true, data: null };
   } catch (error) {
     return {
@@ -206,6 +212,8 @@ export async function deleteGroceryItem(id: string): Promise<ActionResult> {
       .eq("household_id", householdId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
     return { ok: true, data: null };
   } catch (error) {
     return {
@@ -233,6 +241,8 @@ export async function clearCheckedGrocery(ids?: string[]): Promise<ActionResult>
     if (error) return { ok: false, error: error.message };
     revalidatePath("/grocery");
     revalidatePath("/home");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
     return { ok: true, data: null };
   } catch (error) {
     return {
@@ -300,6 +310,8 @@ export async function restoreGroceryItems(
     }
 
     revalidatePath("/grocery");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
     return { ok: true, data: { restored: parsed.data.length } };
   } catch (error) {
     return {

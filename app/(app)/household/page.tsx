@@ -29,15 +29,32 @@ function HouseholdSkeleton() {
 
 async function HouseholdContent() {
   const { supabase, householdId } = await requireDal();
-  const { data } = await supabase
-    .from("household_items")
-    .select("*")
-    .eq("household_id", householdId)
-    .gt("quantity", 0)
-    .order("name", { ascending: true });
+  const [itemsResult, groceryResult] = await Promise.all([
+    supabase
+      .from("household_items")
+      .select("*")
+      .eq("household_id", householdId)
+      .gt("quantity", 0)
+      .order("name", { ascending: true }),
+    supabase
+      .from("grocery_items")
+      .select("household_item_id")
+      .eq("household_id", householdId)
+      .eq("checked", false)
+      .not("household_item_id", "is", null),
+  ]);
 
-  const rows = (data ?? []) as HouseholdItemRow[];
-  return <HouseholdView rows={rows} />;
+  const rows = (itemsResult.data ?? []) as HouseholdItemRow[];
+
+  // Household roots with an unchecked shopping-list line.
+  const onGroceryIds: Record<string, true> = {};
+  for (const row of (groceryResult.data ?? []) as {
+    household_item_id: string | null;
+  }[]) {
+    if (row.household_item_id) onGroceryIds[row.household_item_id] = true;
+  }
+
+  return <HouseholdView rows={rows} onGroceryIds={onGroceryIds} />;
 }
 
 export default function HouseholdPage() {

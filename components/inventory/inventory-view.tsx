@@ -84,6 +84,7 @@ export function InventoryView({
   defaultLocation = "pantry",
   holdsByItem,
   canonicalNames,
+  onGroceryIds,
 }: {
   rows: InventoryEntry[];
   subcategories: SubcategoryRow[];
@@ -91,6 +92,8 @@ export function InventoryView({
   holdsByItem: Record<string, number>;
   /** Item id → display name of its generic ingredient ("as Ground Beef"). */
   canonicalNames: Record<string, string>;
+  /** Canonical root item ids currently on the unchecked shopping list. */
+  onGroceryIds: Record<string, true>;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -409,6 +412,10 @@ export function InventoryView({
                   stockPoolKey(group.item.id, group.batches[0]?.unit ?? null)
                 ] ?? 0
               }
+              onGrocery={
+                Boolean(onGroceryIds[group.item.canonical_item_id ?? group.item.id]) ||
+                Boolean(onGroceryIds[group.item.id])
+              }
               onConsume={(mode) =>
                 setConsumeTarget({ item: group.item, mode })
               }
@@ -523,6 +530,7 @@ function InventoryItemCard({
   canonicalName,
   subcategoryName,
   onHold,
+  onGrocery,
   onConsume,
 }: {
   group: ItemGroup;
@@ -531,6 +539,8 @@ function InventoryItemCard({
   canonicalName: string | null;
   subcategoryName: string | null;
   onHold: number;
+  /** The canonical root already has an unchecked shopping-list line. */
+  onGrocery: boolean;
   onConsume: (mode: "partial" | "last") => void;
 }) {
   const router = useRouter();
@@ -785,6 +795,15 @@ function InventoryItemCard({
                 </PopoverContent>
               </Popover>
             ) : null}
+            {onGrocery ? (
+              <span
+                className="inline-flex shrink-0 items-center text-emerald-600 dark:text-emerald-400"
+                title="On shopping list"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                <span className="sr-only">On shopping list</span>
+              </span>
+            ) : null}
           </div>
           {low ? (
             <Popover>
@@ -868,6 +887,7 @@ function InventoryItemCard({
                       ? `${result.data.name} added to grocery list`
                       : "Already on the grocery list",
                   );
+                  router.refresh();
                 });
               }}
             >

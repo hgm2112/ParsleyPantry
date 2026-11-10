@@ -492,6 +492,7 @@ export async function addHouseholdItemToGrocery(
     const existing = (existingRows ?? [])[0] as { id: string; name: string } | undefined;
     if (existing) {
       revalidatePath("/grocery");
+      revalidatePath("/household");
       return { ok: true, data: { created: false, name: existing.name } };
     }
 
@@ -515,6 +516,7 @@ export async function addHouseholdItemToGrocery(
       .single();
     if (error || !data) return { ok: false, error: error?.message ?? "Could not add item" };
     revalidatePath("/grocery");
+    revalidatePath("/household");
     return { ok: true, data: { created: true, name: rootName } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Could not add item" };

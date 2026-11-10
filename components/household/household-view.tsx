@@ -47,7 +47,14 @@ const SORTS = [
   { value: "recent", label: "Recently added" },
 ];
 
-export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
+export function HouseholdView({
+  rows,
+  onGroceryIds,
+}: {
+  rows: HouseholdItemRow[];
+  /** Canonical household item ids currently on the unchecked shopping list. */
+  onGroceryIds: Record<string, true>;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -112,6 +119,7 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
         ? `${result.data.name} added to shopping list`
         : "Already on the grocery list",
     );
+    router.refresh();
   }
 
   async function handleDelete() {
@@ -285,6 +293,10 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((row) => {
             const low = isHouseholdItemLow(row);
+            const onGrocery =
+              Boolean(
+                onGroceryIds[row.canonical_household_item_id ?? row.id],
+              ) || Boolean(onGroceryIds[row.id]);
             return (
               <li
                 key={row.id}
@@ -315,6 +327,15 @@ export function HouseholdView({ rows }: { rows: HouseholdItemRow[] }) {
                             </p>
                           </PopoverContent>
                         </Popover>
+                      ) : null}
+                      {onGrocery ? (
+                        <span
+                          className="inline-flex shrink-0 items-center text-emerald-600 dark:text-emerald-400"
+                          title="On shopping list"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                          <span className="sr-only">On shopping list</span>
+                        </span>
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
