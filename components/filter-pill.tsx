@@ -117,9 +117,6 @@ export function FilterPill({
         }
       >
         {selected ? selected.label : label}
-        <span className={COUNT_CLASS}>
-          {selected ? selected.count : totalCount}
-        </span>
         <ChevronDown className="h-3.5 w-3.5 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
