@@ -628,7 +628,34 @@ export function GroceryView({
 
     if (blocks.length === 0) return;
 
-    const prompt = `Check current weekly sales, advertised promotions, and available digital coupons for these items at their respective stores. Items marked [sale only] are the ones I am waiting to buy on sale. I plan to buy the unmarked items. For the [sale only] items, only buy if on sale or a significantly better deal. Report regular prices and sale prices when available, and identify which items are worth waiting for.`;
+    const prompt = `For each store above, check current weekly sales, advertised promotions, and digital coupons (only if verified or supplied). Use one markdown table per store with exactly these columns:
+
+<Store name>
+| Item | Current | Deal | Recommend |
+|---|---|---|---|
+| <Item name> | <regular/listed price> | <sale price or "none"> | Yes/No/Maybe — <brief reason> |
+
+Rules:
+- "Current" = the regular/listed price. "Deal" = the sale or promotional price if one exists; otherwise write "none".
+- "Recommend: Yes" = buy now. "No" = don't buy. "Maybe" = explain briefly why neither.
+- Unmarked items are planned purchases: recommend Yes unless there is a clear reason not to.
+- Items marked [sale only] are waiting for a sale: recommend Yes only if there is a real sale or a significantly better deal.
+- Use the store headings from the list above. One table per store; do not repeat the store heading on every row.
+- Keep each Recommend reason to a few words. No sourcing notes, disclaimers, or market-variation caveats.
+- Do not add extra tables, charts, comparison sections, or per-store summaries.
+- Do not mention digital coupons at all unless you found a verified one or the user supplied one; then add one short line per item with the coupon.
+
+Finish with exactly these sections (include a section only if it has items; each section is a bullet list of item names):
+
+What I'd buy or wait on
+- Buy now:
+  - <Item name>
+- Buy as planned:
+  - <Item name>
+- Keep waiting:
+  - <Item name>
+- Couldn't match: (only for items with no reliable store match)
+  - <Item name> — <reason>`;
 
     const text = `${blocks.join("\n\n")}\n\n${prompt}`;
 
@@ -645,7 +672,28 @@ export function GroceryView({
     const lines = saleOnlyItems.map(formatItemLine);
     const zip = primaryStore?.zipcode?.trim();
     const storeLabel = zip ? `${storeName} (ZIP ${zip})` : storeName;
-    const text = `${storeLabel} Sale-Only Grocery List\n\nStore: ${storeLabel}\n\nItems:\n${lines.map((n) => `- ${n}`).join("\n")}\n\nCheck current ${storeLabel} weekly sales, advertised promotions, and available digital coupons for these items. Report regular prices and sale prices when available, and identify which items are worth buying.`;
+    const text = `${storeLabel} Sale-Only Grocery List\n\nStore: ${storeLabel}\n\nItems:\n${lines.map((n) => `- ${n}`).join("\n")}\n\nFor the store above, check current weekly sales, advertised promotions, and digital coupons (only if verified or supplied). Use one markdown table with exactly these columns:
+
+| Item | Current | Deal | Recommend |
+|---|---|---|---|
+| <Item name> | <regular/listed price> | <sale price or "none"> | Yes/No/Maybe — <brief reason> |
+
+Rules:
+- These items are all marked [sale only] and are waiting for a sale. Recommend Yes only if there is a real sale or a significantly better deal; otherwise No.
+- "Current" = regular/listed price. "Deal" = sale price if one exists; otherwise "none".
+- Keep each Recommend reason to a few words. No sourcing notes, disclaimers, or market-variation caveats.
+- Do not add extra tables, charts, comparison sections, or store summaries.
+- Do not mention digital coupons at all unless you found a verified one or the user supplied one; then add one short line per item.
+
+Finish with exactly these sections (include a section only if it has items; each section is a bullet list of item names):
+
+What I'd buy or wait on
+- Buy now:
+  - <Item name>
+- Keep waiting:
+  - <Item name>
+- Couldn't match: (only for items with no reliable store match)
+  - <Item name> — <reason>`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Copied");
