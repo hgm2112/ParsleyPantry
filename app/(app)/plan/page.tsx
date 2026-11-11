@@ -6,7 +6,7 @@ import {
   type PlannedDay,
   type WeekPlan,
 } from "@/components/plan/plan-view";
-import { addDays, isIsoDate, mondayOf } from "@/lib/plan";
+import { addDays, dayLabel, isIsoDate, mondayOf } from "@/lib/plan";
 import {
   buildRecipeCoverage,
   buildWeekSummary,
@@ -14,6 +14,10 @@ import {
   type RecipeCoverage,
   type WeekSummary,
 } from "@/lib/meal-summary";
+import {
+  buildPlanIngredientTotals,
+  type PlanIngredientSource,
+} from "@/lib/plan-ingredients";
 import type { CustomMealRow, MealPlanDayRow, RecipeRow } from "@/lib/types";
 
 export const metadata = { title: "Meal plan" };
@@ -126,44 +130,66 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
     new Set(recipeIdsByWeek.flatMap((set) => Array.from(set))),
   );
 
+  // Every recipe scheduled in the 14 days (cooked or not) drives the
+  // two-week ingredient summary.
+  const plannedRecipeIds = Array.from(
+    new Set(
+      weekDayLists
+        .flatMap((days) => days.map((day) => day.entry?.recipe_id ?? null))
+        .filter((id): id is string => id !== null),
+    ),
+  );
+
+  type PlanIngredientRow = {
+    recipe_id: string;
+    name: string;
+    quantity_text: string;
+    item_id: string | null;
+    optional: boolean;
+    on_shopping_list: boolean;
+  };
+  let ingredientRows: PlanIngredientRow[] = [];
+  if (plannedRecipeIds.length > 0) {
+    // One wide fetch serves the weekly tiles, per-recipe coverage, and the
+    // summary — optional / off-list rows are filtered in memory.
+    const ingredientsResult = await supabase
+      .from("recipe_ingredients")
+      .select(
+        "recipe_id, name, quantity_text, item_id, optional, on_shopping_list",
+      )
+      .eq("household_id", householdId)
+      .in("recipe_id", plannedRecipeIds);
+    ingredientRows = (ingredientsResult.data ?? []) as PlanIngredientRow[];
+  }
+
+  const inventory = (inventoryResult.data ?? []) as {
+    item_id: string;
+    quantity: number;
+    unit: string | null;
+  }[];
+  const items = (itemsResult.data ?? []) as {
+    id: string;
+    name: string;
+    canonical_item_id: string | null;
+  }[];
+  const groceryItems = (groceryResult.data ?? []) as {
+    item_id: string | null;
+    name: string;
+  }[];
+
+  // Weekly tiles keep their existing "shopping list ingredients only" scope.
+  const shoppingRows = ingredientRows.filter((row) => row.on_shopping_list);
+
   const summaries: Record<string, WeekSummary> = {
     [weekStart]: emptyWeekSummary(),
     [week2Start]: emptyWeekSummary(),
   };
   let coverageById: Record<string, RecipeCoverage> = {};
   if (allRecipeIds.length > 0) {
-    const ingredientsResult = await supabase
-      .from("recipe_ingredients")
-      .select("recipe_id, name, quantity_text, item_id")
-      .eq("household_id", householdId)
-      .eq("on_shopping_list", true)
-      .in("recipe_id", allRecipeIds);
-
-    const ingredientRows = (ingredientsResult.data ?? []) as {
-      recipe_id: string;
-      name: string;
-      quantity_text: string;
-      item_id: string | null;
-    }[];
-    const inventory = (inventoryResult.data ?? []) as {
-      item_id: string;
-      quantity: number;
-      unit: string | null;
-    }[];
-    const items = (itemsResult.data ?? []) as {
-      id: string;
-      name: string;
-      canonical_item_id: string | null;
-    }[];
-    const groceryItems = (groceryResult.data ?? []) as {
-      item_id: string | null;
-      name: string;
-    }[];
-
     for (let index = 0; index < 2; index += 1) {
       const start = index === 0 ? weekStart : week2Start;
       const ids = recipeIdsByWeek[index];
-      const lines = ingredientRows
+      const lines = shoppingRows
         .filter((row) => ids.has(row.recipe_id))
         .map((row) => ({
           name: row.name,
@@ -175,7 +201,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
 
     coverageById = Object.fromEntries(
       buildRecipeCoverage(
-        ingredientRows.map((row) => ({
+        shoppingRows.map((row) => ({
           recipeId: row.recipe_id,
           name: row.name,
           quantityText: row.quantity_text,
@@ -187,6 +213,50 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       ),
     );
   }
+
+  // 2-week summary: every non-optional recipe line, split into original
+  // (all planned days) and remaining (days not cooked). Pantry stock is the
+  // current inventory only — cooking already deducted it.
+  const recipeNameById = new Map(
+    recipes.map((recipe) => [recipe.id, recipe.name]),
+  );
+  const rowsByRecipe = new Map<string, PlanIngredientRow[]>();
+  for (const row of ingredientRows) {
+    const list = rowsByRecipe.get(row.recipe_id) ?? [];
+    list.push(row);
+    rowsByRecipe.set(row.recipe_id, list);
+  }
+  const ingredientUses: PlanIngredientSource[] = [];
+  weekDayLists.forEach((days, weekIndex) => {
+    const start = weekIndex === 0 ? weekStart : week2Start;
+    for (const day of days) {
+      const recipeId = day.entry?.recipe_id;
+      if (!recipeId) continue;
+      const rows = rowsByRecipe.get(recipeId) ?? [];
+      if (rows.length === 0) continue;
+      const label = dayLabel(day.index, start);
+      const date = addDays(start, day.index);
+      const dateLabel = `${label.weekday} ${label.month} ${label.dayOfMonth}`;
+      for (const row of rows) {
+        ingredientUses.push({
+          recipeId,
+          recipeName: recipeNameById.get(recipeId) ?? "Recipe",
+          date,
+          dateLabel,
+          made: Boolean(day.entry?.made_at),
+          name: row.name,
+          quantityText: row.quantity_text,
+          itemId: row.item_id,
+          optional: row.optional,
+        });
+      }
+    }
+  });
+  const ingredientTotals = buildPlanIngredientTotals(
+    ingredientUses,
+    inventory,
+    items,
+  );
 
   const weeks: WeekPlan[] = [
     { start: weekStart, days: week1Days, summary: summaries[weekStart] },
@@ -200,6 +270,7 @@ async function PlanContent({ weekStart }: { weekStart: string }) {
       recipes={recipes}
       coverageById={coverageById}
       customMeals={customMeals}
+      ingredientTotals={ingredientTotals}
     />
   );
 }
@@ -225,7 +296,7 @@ async function PlanWrapper({
     // No ?week= yet: the client redirects with its local Monday so the
     // server never reads wall-clock time during prerender.
     return (
-      <PlanView weekStart={null} weeks={[]} recipes={[]} coverageById={{}} />
+      <PlanView weekStart={null} weeks={[]} recipes={[]} coverageById={{}} ingredientTotals={[]} />
     );
   }
   const weekStart = mondayOf(new Date(`${raw}T00:00:00Z`));

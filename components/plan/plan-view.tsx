@@ -22,9 +22,11 @@ import {
   planDaysToGrocery,
 } from "@/app/(app)/plan/actions";
 import type { RecipeCoverage, WeekSummary } from "@/lib/meal-summary";
+import type { PlanIngredientGroup } from "@/lib/plan-ingredients";
 import type { CustomMealRow, MealPlanDayRow } from "@/lib/types";
 import { DayDialog, type RecipeOption } from "@/components/plan/day-dialog";
 import { MealIcon } from "@/components/plan/meal-icon";
+import { PlanIngredientSummary } from "@/components/plan/plan-ingredient-summary";
 import { ShopDaysDialog } from "@/components/plan/shop-days-dialog";
 import {
   WeekIngredientsDialog,
@@ -51,6 +53,8 @@ type Props = {
   customMeals?: CustomMealRow[];
   /** Per-recipe pantry coverage ("6/9") for planned recipe days. */
   coverageById: Record<string, RecipeCoverage>;
+  /** Aggregated 14-day ingredient totals for the summary section. */
+  ingredientTotals: PlanIngredientGroup[];
 };
 
 type ShopResult = Awaited<ReturnType<typeof planDaysToGrocery>>;
@@ -81,7 +85,7 @@ function weekRangeLabel(start: string): string {
   return `${a.month} ${a.dayOfMonth} – ${b.month} ${b.dayOfMonth}`;
 }
 
-export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverageById }: Props) {
+export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverageById, ingredientTotals }: Props) {
   const router = useRouter();
   const today = useToday();
   const [openDay, setOpenDay] = useState<{
@@ -229,6 +233,14 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
         .filter((group): group is WeekIngredientGroup => group !== null)
     : [];
 
+  const recipeDays = weeks.flatMap((week) =>
+    week.days.filter((day) => day.entry?.recipe_id),
+  );
+  const mealStats = {
+    total: recipeDays.length,
+    cooked: recipeDays.filter((day) => day.entry?.made_at).length,
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -310,6 +322,8 @@ export function PlanView({ weekStart, weeks, recipes, customMeals = [], coverage
           </div>
         </section>
       ))}
+
+      <PlanIngredientSummary groups={ingredientTotals} mealStats={mealStats} />
 
       {recipes.length === 0 ? (
         <div className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">

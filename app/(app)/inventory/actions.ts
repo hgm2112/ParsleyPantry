@@ -552,6 +552,7 @@ export async function addToInventory(
     }
 
     revalidatePath("/inventory");
+    revalidatePath("/plan");
     return {
       ok: true,
       data: {
@@ -664,6 +665,7 @@ export async function consumeInventory(
 
     revalidatePath("/inventory");
     revalidatePath("/grocery");
+    revalidatePath("/plan");
     return {
       ok: true,
       data: { quantity, low, groceryAdded, deleted, inventoryId: input.inventoryId },
@@ -788,6 +790,7 @@ export async function consumeFromItem(
 
     revalidatePath("/inventory");
     revalidatePath("/grocery");
+    revalidatePath("/plan");
     return {
       ok: true,
       data: { affected, snapshots, remaining: Math.max(0, remaining), low, groceryAdded },
@@ -933,6 +936,7 @@ export async function restoreBatches(
 
     revalidatePath("/inventory");
     revalidatePath("/home");
+    revalidatePath("/plan");
     return { ok: true, data: { restored } };
   } catch (error) {
     return {
@@ -1348,6 +1352,7 @@ export async function updateInventory(
       if (row) {
         await maybeAutoRestock(supabase, householdId, row);
         revalidatePath("/inventory");
+        revalidatePath("/plan");
         return { ok: true, data: { inventory: row } };
       }
       return { ok: false, error: "Could not load updated item" };
@@ -1356,6 +1361,7 @@ export async function updateInventory(
     await maybeAutoRestock(supabase, householdId, updated);
     revalidatePath("/inventory");
     revalidatePath("/home");
+    revalidatePath("/plan");
     return { ok: true, data: { inventory: updated } };
   } catch (error) {
     return {
@@ -1381,6 +1387,7 @@ export async function deleteInventory(
 
     revalidatePath("/inventory");
     revalidatePath("/home");
+    revalidatePath("/plan");
     return { ok: true, data: { itemId: current.item_id } };
   } catch (error) {
     return {
