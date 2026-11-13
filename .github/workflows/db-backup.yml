@@ -1,0 +1,45 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dump database
+        run: |
+          mkdir -p backups
+          docker run --rm \
+            -e SUPABASE_DB_URL \
+            -v "$PWD/backups":/backups \
+            postgres:17 \
+            pg_dump "$SUPABASE_DB_URL" -Fc -f "/backups/db-$(date -u +%Y-%m-%d).dump"
+
+      - name: Encrypt dump
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass "pass:$BACKUP_PASSPHRASE" \
+            -in "backups/db-$(date -u +%Y-%m-%d).dump" \
+            -out "backups/db-$(date -u +%Y-%m-%d).dump.enc"
+          rm "backups/db-$(date -u +%Y-%m-%d).dump"
+
+      - name: Prune old backups (keep 14)
+        run: ls -1t backups/db-*.dump.enc | tail -n +15 | xargs -r rm --
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/
+          git commit -m "chore: database backup $(date -u +%F)" || exit 0
+          git push
