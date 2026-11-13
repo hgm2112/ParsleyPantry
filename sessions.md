@@ -4,6 +4,22 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-12 — Supabase DB backup workflow (repo-committed encrypted dumps)
+
+**Shipped and pushed (`819faca`)**
+- Added `.github/workflows/db-backup.yml` (daily `03:00 UTC` + `workflow_dispatch`, `contents: write`). Dumps with `postgres:17` `pg_dump -Fc`, encrypts with AES-256-CBC/PBKDF2 to `backups/db-YYYY-MM-DD.dump.enc`, prunes to 14, then commits/pushes `chore: database backup YYYY-MM-DD`. `backups/` is created by the workflow (`mkdir -p`), not committed up front.
+- **First manual run succeeded** and pushed an encrypted dump to `main` under `backups/`.
+
+**Durable choices / gotchas**
+- Secrets are **repository secrets** (not environment secrets): `SUPABASE_DB_URL` and `BACKUP_PASSPHRASE`. The job has no `environment:`.
+- `SUPABASE_DB_URL` must be the Supabase **Session pooler** URI (port 5432, user `postgres.<project-ref>`). The direct `db.<ref>.supabase.co` host resolved to IPv6 from the runner and failed (`Network is unreachable`).
+- `BACKUP_PASSPHRASE` is the DB password for the pooler URI (the Postgres database password), stored as a repository secret; keep a copy elsewhere to decrypt backups.
+- Workflow-generated backup commits are pushed from the runner — local clone only sees them after `git pull` (no auto-fetch).
+- Node 20 deprecation warning for `actions/checkout@v4` is non-fatal; optionally bump to `actions/checkout@v6` later.
+
+**Open / next**
+- None blocking; optional checkout version bump, and confirm the daily scheduled run (and 14-file pruning) on a later run.
+
 ## 2026-11-10 — Pantry/household parity: on-list badges, filter pills, copy prompts, polish
 
 **Shipped and pushed (b850e30 → 38e131d)**

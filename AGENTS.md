@@ -8,7 +8,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-11-10)
+## Current Session Snapshot (2026-11-12)
+
+Goal: set up automated Supabase database backups for the repo, matching the working `bigolerankings` approach, and verify a real backup run.
+
+Shipped and pushed:
+- **Database backup workflow** (`819faca`): added `.github/workflows/db-backup.yml` (daily `03:00 UTC` + `workflow_dispatch`, `contents: write`). Dumps with `postgres:17` `pg_dump -Fc`, encrypts with AES-256-CBC/PBKDF2 to `backups/db-YYYY-MM-DD.dump.enc`, prunes to 14, then commits/pushes `chore: database backup YYYY-MM-DD`. `backups/` is created by the workflow (no `backups/` committed up front).
+- **Verified**: first manual run completed and pushed an encrypted dump. Setup used **repository secrets** `SUPABASE_DB_URL` + `BACKUP_PASSPHRASE` (workflow has no `environment:`). The secret must be the Supabase **Session pooler** URI (port 5432, user `postgres.<project-ref>`); the direct `db.<ref>.supabase.co` host failed from the runner because it resolved to IPv6 (`Network is unreachable`). Password is the Postgres database password (percent-encoded in the URI if it has special characters).
+
+Durable notes:
+- Backup file lives in git under `backups/db-*.dump.enc` on `main` (workflow runner commits/pushes it). It is **not** fetched to local automatically — run `git pull` to see it in the working tree.
+- Node 20 deprecation warning for `actions/checkout@v4` is non-fatal; optionally bump to `actions/checkout@v6` later.
+
+## Completed Session (2026-11-10)
 
 Goal: pantry/household parity — on-list grocery badges, shared filter pills, inventory Add/Scan pill; tighter grocery copy prompts; small polish (brand descenders, stats card).
 
