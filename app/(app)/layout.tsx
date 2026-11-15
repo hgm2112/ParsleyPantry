@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { getDal } from "@/lib/auth";
 import { AppMain } from "@/components/app-main";
+import { AssistantLauncher } from "@/components/assistant/assistant-panel";
 import { Nav, NavFallback } from "./nav";
 import { RealtimeSync } from "./realtime-sync";
 
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <AppMain>{children}</AppMain>
       </div>
       <RealtimeSync />
+      <AssistantLauncher />
     </div>
   );
 }
