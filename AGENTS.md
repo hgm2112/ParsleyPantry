@@ -8,7 +8,24 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Current Session Snapshot (2026-11-12)
+## Current Session Snapshot (2026-11-15)
+
+Goal: refine mobile headers/layouts for Inventory, Household, Grocery, and batch/edit flows; remove the Pantry/Household bar on mobile `/household/add`; wrap up session notes.
+
+Shipped and pushed:
+- **Grocery mobile header + batch edit info** (`3462b7f`): trimmed mobile `/grocery` header (title+count, green Add, ⋮ menu for copy/manage stores/grouping), thin progress, single scrolling store chips, quick-add bar with fullscreen control (exit reachable in fullscreen), groups shown expanded. Batch edit supports unit editing and shows Unit/Expiration (freezer-note) help as info icons.
+- **Mobile header parity** (`103dc3d`): `/inventory` mobile header redesigned with centered wide `[ Pantry | Household ]` toggle (Pantry selected), centered item/batch count below, and equal-width Name Matching + `[+ Add | Barcode]` row with equal Add/Barcode halves (desktop unchanged). `/household` mobile header matched (Household selected, centered count, full-width equal-split `[+ Add | Barcode]`). Removed the Pantry/Household bar on mobile `/household/add`.
+- **Verified**: `npx tsc --noEmit` clean; pre-push hook passed on pushes.
+
+Durable notes:
+- `batches-mockup.png` remains untracked in the working tree (reference only; not committed).
+
+Open (carried forward):
+- Wire `batch-actions-sheet.tsx` into the Home pantry widget (or remove it).
+- Verify Quick Bites cook/undo end-to-end and confirm `/recipes` counts/redirects on a fresh deploy.
+- Optional: surface brand/barcode on list cards; add a "duplicates" warning.
+
+## Completed Session (2026-11-12)
 
 Goal: set up automated Supabase database backups for the repo, matching the working `bigolerankings` approach, and verify a real backup run.
 
