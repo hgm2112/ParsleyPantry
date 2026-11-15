@@ -92,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<Interpret
     if (provider.mode === "ai") {
       const fallback = await getProvider(true).interpret(input);
       if (fallback.ok) {
-        const grounded = await groundActions(dal.supabase, dal.householdId, fallback.data.actions);
+        const grounded = await groundActions(dal.supabase, dal.householdId, fallback.data.actions, dal.user.id);
         const questions = Array.from(
           new Set([
             ...(fallback.data.questions ?? []),
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<Interpret
     if (outcome.error.code === "not_configured") {
       const fallback = await getProvider(true).interpret(input);
       if (fallback.ok) {
-        const grounded = await groundActions(dal.supabase, dal.householdId, fallback.data.actions);
+        const grounded = await groundActions(dal.supabase, dal.householdId, fallback.data.actions, dal.user.id);
         return NextResponse.json({
           ok: true,
           mode: "no_ai",
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<Interpret
     );
   }
 
-  const grounded = await groundActions(dal.supabase, dal.householdId, outcome.data.actions);
+  const grounded = await groundActions(dal.supabase, dal.householdId, outcome.data.actions, dal.user.id);
   const questions = Array.from(
     new Set([
       ...(outcome.data.questions ?? []),

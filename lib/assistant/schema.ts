@@ -43,6 +43,11 @@ export const proposedActionSchema = z.object({
   clarificationQuestion: z.string().trim().max(300).nullable().optional(),
   /** Human-readable summary for review UI. */
   summary: z.string().trim().max(300).nullable().optional(),
+  /**
+   * User explicitly confirmed creating a new catalog/household item when no
+   * existing match should be used (organization safeguard).
+   */
+  allowCreateNew: z.boolean().optional().default(false),
 });
 export type ProposedAction = z.infer<typeof proposedActionSchema>;
 

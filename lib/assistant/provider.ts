@@ -296,6 +296,7 @@ export class NoAiProvider implements AssistantProvider {
       needsClarification,
       clarificationQuestion,
       summary: needsClarification ? "Needs clarification (no-AI mode)" : `Proposed: ${intent.replace(/_/g, " ")} — ${cleanedItem}`,
+      allowCreateNew: false,
     };
 
     const questions = needsClarification && clarificationQuestion ? [clarificationQuestion] : [];
