@@ -32,12 +32,20 @@ const dayKeySchema = z.object({
 });
 
 /**
- * Confirming a meal as made: day key plus the ingredient indices (order of
- * the preview's recipe_ingredients sort_order) the user selected for pantry
- * deduction. Absent = every eligible ingredient (legacy default).
+ * Confirming a meal as made: day key plus optional per-ingredient amounts (in
+ * the recipe's own unit, preview order). `amounts` wins when present; absent or
+ * missing for an index falls back to the recipe take (up to what's available).
+ * `selected` is kept for legacy callers (treated as "use the default take" for
+ * those indices only).
  */
+const madeAmountSchema = z.object({
+  index: z.number().int().min(0).max(99),
+  amount: z.number().finite().min(0),
+});
+
 const madeMealSchema = dayKeySchema.extend({
   selected: z.array(z.number().int().min(0).max(99)).optional(),
+  amounts: z.array(madeAmountSchema).max(100).optional(),
 });
 
 const setMealSchema = dayKeySchema.extend({
@@ -767,13 +775,14 @@ async function resolveDayIngredients(
 }
 
 /**
- * Confirms a meal was cooked: consumes what the day's RECIPE can take from
- * inventory (FEFO across the whole canonical group — batches of any unit,
- * weight chunks convert per-batch, never below zero), then releases the day's
- * stock holds — but only for the ingredient indices the user selected
- * (`selected`, in preview order; absent = every eligible one). Idempotent —
- * an already-made day returns success without deducting again. Shortfalls
- * never block recording.
+ * Confirms a meal was cooked: consumes the (optionally tweaked) amount of each
+ * ingredient from inventory (FEFO across the whole canonical group — batches of
+ * any unit, weight chunks convert per-batch, never below zero), then releases
+ * the day's stock holds. Amounts are in the recipe's own unit and clamped to
+ * what's available; omitted amounts default to the recipe take. Legacy
+ * `selected` (no `amounts`) limits deduction to those indices. Idempotent — an
+ * already-made day returns success without deducting again. Shortfalls never
+ * block recording.
  */
 export async function markMealMade(
   input: z.input<typeof madeMealSchema>,
@@ -781,9 +790,14 @@ export async function markMealMade(
   try {
     const parsed = madeMealSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid day" };
-    // Indices are a filter only — every quantity is recomputed server-side.
+    const amountByIndex =
+      parsed.data.amounts == null
+        ? null
+        : new Map(parsed.data.amounts.map((entry) => [entry.index, entry.amount]));
+    // Legacy: `selected` with no `amounts` means "deduct the default take" for
+    // those indices only. When `amounts` is provided it is the source of truth.
     const wanted =
-      parsed.data.selected == null
+      amountByIndex != null || parsed.data.selected == null
         ? null
         : new Set<number>(parsed.data.selected);
     const { supabase, householdId } = await requireDal();
@@ -816,16 +830,37 @@ export async function markMealMade(
       parsed.data.dayIndex,
     );
 
-    // Deduct only what the user selected AND the pantry can legitimately
-    // cover, FEFO across the whole canonical group. The need's basis decides
-    // how a batch is consumed: a weight need converts per batch (so a "6 oz"
-    // can gives up exactly 6 oz), while a container need eats one container
-    // per unit ("2 cans" takes two batches). Optional ingredients are
-    // displayed but never consumed.
+    // Deduct the chosen amount (recipe-unit, tweaked by the user) converted
+    // to the need's pool basis and clamped to what's available, FEFO across
+    // the whole canonical group. Weight needs convert per batch (so a "6 oz"
+    // can gives up exactly 6 oz); container needs eat one container per unit.
+    // Optional ingredients are deducted when given an explicit amount > 0.
     for (const [index, ingredient] of resolved.items.entries()) {
       if (wanted && !wanted.has(index)) continue;
-      if (!ingredient.rootId || ingredient.takePool <= 0) continue;
-      if (ingredient.optional) continue;
+      if (!ingredient.rootId || ingredient.available <= 0) continue;
+
+      const requestedAmount = amountByIndex
+        ? (amountByIndex.get(index) ?? ingredient.take)
+        : ingredient.take;
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) continue;
+
+      const requestedPool =
+        ingredient.poolBasis === "oz" && ingredient.unit
+          ? toOunces(requestedAmount, ingredient.unit)
+          : requestedAmount;
+      if (requestedPool == null || requestedPool <= 0) continue;
+
+      // Clamp to what's actually available in pool space (never over-deduct).
+      const availablePoolAmount =
+        ingredient.poolBasis === "oz"
+          ? (toOunces(ingredient.available, ingredient.unit) ?? 0)
+          : ingredient.available;
+      const takePoolAmount = Math.min(
+        Math.max(0, requestedPool),
+        Math.max(0, availablePoolAmount),
+      );
+      if (takePoolAmount <= 0) continue;
+
       const groupIds =
         resolved.groupByRoot.get(ingredient.rootId) ?? [ingredient.rootId];
       const { data: rows, error: rowsError } = await supabase
@@ -835,7 +870,7 @@ export async function markMealMade(
         .order("expiration_date", { ascending: true, nullsFirst: false });
       if (rowsError) return { ok: false, error: rowsError.message };
 
-      let remaining = ingredient.takePool;
+      let remaining = takePoolAmount;
       for (const row of (rows ?? []) as {
         id: string;
         quantity: number;
@@ -980,6 +1015,7 @@ export async function previewMealMade(
       available: ingredient.available,
       take: ingredient.take,
       shortfall: ingredient.shortfall,
+      poolBasis: ingredient.poolBasis,
     }));
     return { ok: true, data: { items } };
   } catch (error) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChefHat, Loader2, RefreshCw } from "lucide-react";
+import { ChefHat, Loader2, Minus, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,7 @@ type PreviewItem = {
   available: number;
   take: number;
   shortfall: number;
+  poolBasis: "oz" | "count";
 };
 
 function qtyText(quantity: number, unit: string | null): string {
@@ -39,20 +40,36 @@ function qtyText(quantity: number, unit: string | null): string {
   return `${qtyText}${unitText ? ` ${unitText}` : ""}`;
 }
 
-/** One-line pantry status for an ingredient. Never hides shortfalls. */
-function statusLine(item: PreviewItem): string {
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function unitLabel(unit: string | null): string | null {
+  if (!unit) return null;
+  const { unitText } = displayQtyUnit(1, unit);
+  return unitText;
+}
+
+/** One-line pantry status for an ingredient given the chosen amount to use. */
+function statusLine(item: PreviewItem, useAmount: number): string {
   if (!item.matched) {
     return "Not matched to pantry — nothing will be deducted";
   }
-  if (item.shortfall <= 0) {
-    return item.pantryName
-      ? `Using ${qtyText(item.take, item.unit)} from ${item.pantryName}`
-      : `Using ${qtyText(item.take, item.unit)} from your pantry`;
+  if (item.available <= 0) {
+    return `Not in pantry — need ${qtyText(item.needed, item.unit)}`;
   }
-  if (item.take > 0) {
-    return `Have ${qtyText(item.available, item.unit)} — short ${qtyText(item.shortfall, item.unit)}`;
+  if (useAmount <= 0) {
+    return `Have ${qtyText(item.available, item.unit)} — using none`;
   }
-  return `Not in pantry — need ${qtyText(item.needed, item.unit)}`;
+  const pantry = item.pantryName ? ` from ${item.pantryName}` : " from your pantry";
+  const stillShort = Math.max(0, item.needed - useAmount);
+  if (stillShort > 0) {
+    return `Using ${qtyText(useAmount, item.unit)}${pantry} — short ${qtyText(stillShort, item.unit)} for the recipe`;
+  }
+  if (useAmount > item.needed) {
+    return `Using ${qtyText(useAmount, item.unit)}${pantry} (more than the recipe calls for)`;
+  }
+  return `Using ${qtyText(useAmount, item.unit)}${pantry}`;
 }
 
 type Props = {
@@ -67,10 +84,9 @@ type Props = {
 
 /**
  * Confirmation step before marking a meal made: shows EVERY ingredient of the
- * day's planned recipe with its pantry match and coverage. Each row toggles
- * whether that ingredient is deducted from inventory on confirm (selected =
- * ingredients with available stock, by default). Read-only preview;
- * markMealMade deducts only the selected ingredients' eligible stock.
+ * day's planned recipe with its pantry match and lets you tweak how much to
+ * use (in the recipe's unit, capped at what's available). `markMealMade`
+ * deducts the chosen amounts (0 = nothing).
  */
 export function MadeConfirmContent({
   weekStart,
@@ -83,7 +99,7 @@ export function MadeConfirmContent({
   const router = useRouter();
   const effectiveTint = tint ?? (mealName ? tintFor(mealName.split("·")[0].trim()) : null);
   const [items, setItems] = useState<PreviewItem[] | null>(null);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [amounts, setAmounts] = useState<number[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -96,15 +112,10 @@ export function MadeConfirmContent({
         setLoadError(true);
         return;
       }
-      setItems(result.data.items);
-      // Default: select ingredients the pantry can actually contribute to.
-      setSelected(
-        new Set(
-          result.data.items
-            .map((item, index) => (item.take > 0 ? index : -1))
-            .filter((index) => index >= 0),
-        ),
-      );
+      const previewItems = result.data.items as PreviewItem[];
+      setItems(previewItems);
+      // Default: use up to the recipe amount (capped by what's available).
+      setAmounts(previewItems.map((item) => item.take));
     });
     return () => {
       alive = false;
@@ -114,26 +125,45 @@ export function MadeConfirmContent({
   function retry() {
     setLoadError(false);
     setItems(null);
-    setSelected(new Set());
+    setAmounts([]);
     setAttempt((value) => value + 1);
   }
 
-  function toggle(index: number) {
-    if (busy) return;
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+  function clampAmount(item: PreviewItem, value: number): number {
+    if (!item.matched || item.available <= 0) return 0;
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return round3(Math.min(value, item.available));
+  }
+
+  function setAmount(index: number, value: number) {
+    if (busy || !items) return;
+    const item = items[index];
+    if (!item) return;
+    setAmounts((prev) => {
+      const next = [...prev];
+      next[index] = clampAmount(item, value);
       return next;
     });
   }
 
+  function adjustAmount(index: number, delta: number) {
+    if (!items) return;
+    const item = items[index];
+    if (!item) return;
+    const current = amounts[index] ?? 0;
+    setAmount(index, round3(current + delta));
+  }
+
   async function confirm() {
+    if (!items) return;
     setBusy(true);
     const result = await markMealMade({
       weekStart,
       dayIndex,
-      selected: [...selected],
+      amounts: items.map((_, index) => ({
+        index,
+        amount: Number.isFinite(amounts[index] ?? 0) ? Math.max(0, amounts[index] ?? 0) : 0,
+      })),
     });
     setBusy(false);
     if (!result.ok) {
@@ -151,8 +181,8 @@ export function MadeConfirmContent({
         <DialogTitle>Mark dinner as made?</DialogTitle>
         <DialogDescription>
           {mealName
-            ? `“${mealName}” — tap an ingredient to choose what leaves your pantry:`
-            : "These are the recipe's ingredients:"}
+            ? `“${mealName}” — tweak how much of each ingredient to take from your pantry:`
+            : "Tweak how much of each ingredient to take from your pantry:"}
         </DialogDescription>
       </DialogHeader>
 
@@ -175,7 +205,7 @@ export function MadeConfirmContent({
             {[0, 1, 2].map((index) => (
               <li
                 key={index}
-                className="h-9 animate-pulse rounded-lg bg-muted"
+                className="h-16 animate-pulse rounded-lg bg-muted"
               />
             ))}
           </ul>
@@ -192,58 +222,91 @@ export function MadeConfirmContent({
         ) : (
           <ul className="space-y-1.5">
             {items.map((item, index) => {
-              const isSelected = selected.has(index);
+              const amount = amounts[index] ?? 0;
+              const editable = item.matched && item.available > 0 && !busy;
+              const isUsing = amount > 0;
+              const step = item.poolBasis === "oz" ? 0.25 : 1;
+              const uLabel = unitLabel(item.unit);
               return (
-                <li key={`${item.name}-${index}`}>
-                  <button
-                    type="button"
-                    aria-pressed={isSelected}
-                    disabled={busy}
-                    onClick={() => toggle(index)}
-                    className={[
-                      "w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      "disabled:cursor-default",
-                      isSelected
-                        ? "border-primary/40 bg-primary text-primary-foreground"
-                        : "border bg-background hover:border-primary/30 hover:bg-primary/10 active:bg-primary/15",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 truncate font-semibold">
-                        {item.name}
-                        {item.optional ? (
-                          <span
-                            className={
-                              isSelected
-                                ? "ml-1 text-[11px] font-normal text-primary-foreground/70"
-                                : "ml-1 text-[11px] font-normal text-muted-foreground"
+                <li
+                  key={`${item.name}-${index}`}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-sm transition-colors",
+                    isUsing
+                      ? "border-primary/40 bg-primary/5"
+                      : "border bg-background",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="min-w-0 truncate font-semibold">
+                          {item.name}
+                          {item.optional ? (
+                            <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                              optional
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {item.quantityText || "—"}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {statusLine(item, amount)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        onClick={() => adjustAmount(index, -step)}
+                        disabled={!editable || amount <= 0}
+                        aria-label={`Use less ${item.name}`}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          max={item.available}
+                          step={step}
+                          value={amount}
+                          disabled={!editable}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === "") {
+                              setAmount(index, 0);
+                              return;
                             }
-                          >
-                            optional
+                            setAmount(index, Number(raw));
+                          }}
+                          aria-label={`Amount of ${item.name} to use`}
+                          className="h-7 w-16 rounded-md border bg-background px-1.5 text-center text-sm tabular-nums disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        {uLabel ? (
+                          <span className="w-8 text-xs text-muted-foreground">
+                            {uLabel}
                           </span>
                         ) : null}
-                      </span>
-                      <span
-                        className={
-                          isSelected
-                            ? "shrink-0 tabular-nums text-primary-foreground/80"
-                            : "shrink-0 tabular-nums text-muted-foreground"
-                        }
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        onClick={() => adjustAmount(index, step)}
+                        disabled={!editable || amount >= item.available}
+                        aria-label={`Use more ${item.name}`}
                       >
-                        {item.quantityText}
-                      </span>
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <p
-                      className={
-                        isSelected
-                          ? "mt-0.5 text-xs text-primary-foreground/80"
-                          : "mt-0.5 text-xs text-muted-foreground"
-                      }
-                    >
-                      {statusLine(item)}
-                    </p>
-                  </button>
+                  </div>
                 </li>
               );
             })}
