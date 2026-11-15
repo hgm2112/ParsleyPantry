@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Check,
+  Info,
   Loader2,
   Pencil,
   Plus,
@@ -24,6 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ExpiryChip } from "@/components/expiry-chip";
 import { LocationBadge, locationLabel } from "@/components/location-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -43,7 +49,8 @@ import {
   type ConsumeItemData,
 } from "@/app/(app)/inventory/actions";
 import type { OffProduct } from "@/lib/off";
-import { expiryChipProps } from "@/lib/freezer";
+import { effectiveExpiryDate, expiryChipProps } from "@/lib/freezer";
+import { parseDate } from "@/lib/expiry";
 import {
   fefoSort,
   isItemLow,
@@ -436,19 +443,36 @@ export function InventoryDetail({
     if (target) toast.success(`${item.name} flagged as running low`);
   }
 
+  const totalQtyLabel = total % 1 === 0 ? String(total) : total.toFixed(1);
+  const batchUnitLabels = batches.map((batch) => {
+    const { unitText } = displayQtyUnit(batch.quantity, batch.unit);
+    return unitText?.trim().toLowerCase() || "";
+  });
+  const sharedBatchUnit =
+    batchUnitLabels.length > 0 && batchUnitLabels.every((u) => u && u === batchUnitLabels[0])
+      ? batchUnitLabels[0]
+      : null;
+  const totalLabel = sharedBatchUnit ? `${totalQtyLabel} ${sharedBatchUnit}` : totalQtyLabel;
+  const earliestBatch = earliest ?? pickFefoBatch(batches);
+  const earliestDate = earliestBatch ? effectiveExpiryDate(earliestBatch) : null;
+  const earliestLabel = earliestDate
+    ? parseDate(earliestDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
+  const showBatchSummary = batches.length > 1;
+
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            render={<Link href="/inventory" />}
-            aria-label="Back to inventory"
-          >
-            <ArrowLeft />
-          </Button>
-          <div className="min-w-0 flex-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-8 w-8 shrink-0"
+          render={<Link href="/inventory" />}
+          aria-label="Back to inventory"
+        >
+          <ArrowLeft />
+        </Button>
+        <div className="min-w-0 flex-1 text-center">
             {editingName ? (
               <form
                 onSubmit={(event) => {
@@ -460,7 +484,7 @@ export function InventoryDetail({
                   autoFocus
                   value={nameDraft}
                   aria-label="Item name"
-                  className="h-8 text-lg font-extrabold"
+                  className="h-8 text-center text-lg font-extrabold"
                   onChange={(event) => setNameDraft(event.target.value)}
                   onBlur={() => void commitName()}
                   onKeyDown={(event) => {
@@ -477,7 +501,7 @@ export function InventoryDetail({
               <h1 className="truncate">
                 <button
                   type="button"
-                  className="block w-full max-w-full truncate cursor-text text-lg font-extrabold hover:text-primary"
+                  className="block w-full max-w-full cursor-text truncate text-center text-lg font-extrabold hover:text-primary"
                   onClick={() => {
                     setNameDraft(item.name);
                     nameCancelRef.current = false;
@@ -488,7 +512,7 @@ export function InventoryDetail({
                 </button>
               </h1>
             )}
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
               {uniqueLocations.map((location) => (
                 <LocationBadge key={location} location={location} />
               ))}
@@ -506,11 +530,11 @@ export function InventoryDetail({
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="mt-1 flex flex-col items-center gap-1 text-center text-xs text-muted-foreground">
               <span>Matches recipes as:</span>
               {editingCanonical ? (
                 <form
-                  className="flex min-w-0 flex-1 items-center gap-1"
+                  className="flex min-w-0 w-full max-w-xs items-center justify-center gap-1"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void commitCanonical();
@@ -529,12 +553,7 @@ export function InventoryDetail({
                       <option key={option.id} value={option.name} />
                     ))}
                   </datalist>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-xs"
-                  >
+                  <Button type="submit" size="sm" variant="outline" className="h-6 px-2 text-xs">
                     Save
                   </Button>
                   <Button
@@ -552,7 +571,7 @@ export function InventoryDetail({
                 </form>
               ) : editingRename ? (
                 <form
-                  className="flex min-w-0 flex-1 items-center gap-1"
+                  className="flex min-w-0 w-full max-w-xs items-center justify-center gap-1"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void commitRename();
@@ -565,12 +584,7 @@ export function InventoryDetail({
                     className="h-6 w-40 text-xs"
                     onChange={(event) => setRenameDraft(event.target.value)}
                   />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-xs"
-                  >
+                  <Button type="submit" size="sm" variant="outline" className="h-6 px-2 text-xs">
                     Save
                   </Button>
                   <Button
@@ -599,7 +613,7 @@ export function InventoryDetail({
                     {canonical?.name ?? item.name}
                   </button>
                   {canonical ? (
-                    <>
+                    <div className="flex flex-wrap items-center justify-center gap-1">
                       <Button
                         type="button"
                         variant="ghost"
@@ -624,22 +638,19 @@ export function InventoryDetail({
                       >
                         Clear match
                       </Button>
-                    </>
+                    </div>
                   ) : null}
                 </>
               )}
               {!canonical && !editingCanonical && !editingRename ? (
-                <span>
-                  ({item.canonical_reviewed ? "kept as its own name" : "its own name"})
-                </span>
+                <span>({item.canonical_reviewed ? "kept as its own name" : "its own name"})</span>
               ) : null}
-            </div>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon-sm"
-          className="text-destructive"
+          className="h-8 w-8 shrink-0 text-destructive"
           onClick={() => setDeleteOpen(true)}
           aria-label="Remove from inventory"
         >
@@ -649,87 +660,74 @@ export function InventoryDetail({
 
       <section className="space-y-3 rounded-xl border bg-background p-4">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <Label>Quantity</Label>
-            <p className="text-xs text-muted-foreground">
-              {batches.length} {batches.length === 1 ? "batch" : "batches"}
-              {uniqueLocations.length > 1
-                ? ` · ${uniqueLocations.map(locationLabel).join(", ")}`
-                : ""}
-              {item.barcode ? ` · Barcode ${item.barcode}` : ""}
-              {item.brand ? ` · Brand: ${item.brand}` : ""}
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="text-xl font-extrabold tabular-nums">
-              {total % 1 === 0 ? total : total.toFixed(1)}
-            </span>
-            {item.pack_size != null && item.pack_size > 1 ? (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {packUnitLabel(item)}
-                {packHintText(total, item) ? ` · ${packHintText(total, item)}` : ""}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-3 rounded-xl border bg-background p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <Label>Batches</Label>
-            <p className="text-xs text-muted-foreground">
-              Quantity and dates are tracked per batch.
-            </p>
-          </div>
+          <Label>Batches</Label>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setBatchDialog({ batch: null })}
           >
-            <Plus /> Add More
+            <Plus /> Add more
           </Button>
         </div>
-        <ul className="space-y-2">
+        {showBatchSummary ? (
+          <div className="flex items-baseline justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2">
+            <span className="text-lg font-extrabold tabular-nums text-foreground">
+              {totalLabel} <span className="text-sm font-semibold text-muted-foreground">total</span>
+            </span>
+            <span className="text-right text-xs font-medium text-muted-foreground">
+              {batches.length} {batches.length === 1 ? "batch" : "batches"}
+              {earliestLabel ? ` / Earliest: ${earliestLabel}` : ""}
+            </span>
+          </div>
+        ) : null}
+        <ul className="space-y-3">
           {batches.map((batch) => {
             const { unitText } = displayQtyUnit(batch.quantity, batch.unit);
+            const qtyLabel =
+              batch.quantity % 1 === 0
+                ? String(batch.quantity)
+                : batch.quantity.toFixed(2).replace(/0$/, "");
+            const nameLabel = (unitText || item.name || "").trim();
             return (
               <li
                 key={batch.id}
-                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                className="relative rounded-xl border bg-muted/20 p-3 md:flex md:items-center md:justify-between md:gap-3"
               >
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <LocationBadge
-                    location={batch.location}
-                    className="uppercase"
-                  />
-                  <ExpiryChip
-                    {...expiryChipProps(batch)}
-                    className="uppercase"
-                    short
-                  />
-                  <span className="text-sm font-extrabold tabular-nums">
-                    {batch.quantity % 1 === 0
-                      ? batch.quantity
-                      : batch.quantity.toFixed(2).replace(/0$/, "")}
-                  </span>
-                  {unitText ? (
-                    <span className="text-xs font-semibold uppercase text-muted-foreground">
-                      {" - "}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute right-2 top-2 h-8 w-8 text-muted-foreground hover:text-foreground md:hidden"
+                  onClick={() => setBatchDialog({ batch })}
+                  aria-label="Edit batch"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <div className="pr-10 md:flex md:min-w-0 md:flex-1 md:flex-wrap md:items-center md:gap-x-3 md:gap-y-1 md:pr-0">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="text-2xl font-extrabold tabular-nums leading-none text-foreground">
+                      {qtyLabel}
                     </span>
-                  ) : null}
-                  {unitText ? (
-                    <span className="text-xs font-semibold uppercase text-muted-foreground">
-                      {unitText}
-                    </span>
-                  ) : null}
+                    {nameLabel ? (
+                      <span className="text-base font-semibold lowercase text-foreground">
+                        {nameLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 md:mt-0">
+                    <LocationBadge location={batch.location} />
+                    <ExpiryChip {...expiryChipProps(batch)} showIcon bestBy />
+                  </div>
                 </div>
                 <Button
+                  type="button"
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
+                  className="hidden h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground md:inline-flex"
                   onClick={() => setBatchDialog({ batch })}
+                  aria-label="Edit batch"
                 >
-                  Edit
+                  <Pencil className="h-4 w-4" />
                 </Button>
               </li>
             );
@@ -770,7 +768,25 @@ export function InventoryDetail({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="barcode">Barcode</Label>
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex text-muted-foreground hover:text-foreground"
+                    aria-label="Barcode info"
+                  />
+                }
+              >
+                <Info className="h-3.5 w-3.5" />
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={4} className="max-w-xs text-xs">
+                Clear an incorrect barcode here, then open the correct item and assign it there. Duplicates are blocked.
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className="flex gap-2">
             <Input
               id="barcode"
@@ -830,13 +846,28 @@ export function InventoryDetail({
               </div>
             </div>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            Clear an incorrect barcode here, then open the correct item and assign it there. Duplicates are blocked.
-          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="brand">Brand (optional)</Label>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="brand">Brand (optional)</Label>
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex text-muted-foreground hover:text-foreground"
+                    aria-label="Brand info"
+                  />
+                }
+              >
+                <Info className="h-3.5 w-3.5" />
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={4} className="max-w-xs text-xs">
+                Brand is stored separately from the item name. Use Lookup above to pull official brand data for the current barcode.
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className="flex gap-2">
             <Input
               id="brand"
@@ -854,9 +885,6 @@ export function InventoryDetail({
               Clear
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Brand is stored separately from the item name. Use Lookup above to pull official brand data for the current barcode.
-          </p>
         </div>
 
         <div className="space-y-2">
@@ -890,11 +918,21 @@ export function InventoryDetail({
               aria-label="Piece name"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            {packActive
-              ? `1 pack = ${parsedPackSize} ${packUnit.trim() || "pieces"} — buying counts packs, stock and low-threshold count pieces.`
-              : "Optional — buying a box of 12 would be pack size 12 (blank = not a pack item)."}
-          </p>
+          <div className="text-xs text-muted-foreground">
+            {packActive ? (
+              <>
+                <p className="md:hidden">
+                  1 pack = {parsedPackSize} {packUnit.trim() || "pieces"} — buying counts packs
+                </p>
+                <p className="md:hidden">stock and low-threshold count pieces</p>
+                <p className="hidden md:block">
+                  1 pack = {parsedPackSize} {packUnit.trim() || "pieces"} — buying counts packs, stock and low-threshold count pieces.
+                </p>
+              </>
+            ) : (
+              <p>Optional — buying a box of 12 would be pack size 12 (blank = not a pack item).</p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">

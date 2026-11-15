@@ -241,12 +241,12 @@ export function expiryChipProps(row: {
   };
 }
 
-/** "Best quality by Feb 10" / "Quality date passed" — never "expired". */
+/** "Best by Feb 10" / "Quality date passed" — never "expired" (safety), but can warn. */
 export function formatFreezerQuality(date: string | null): string {
   if (!date) return "Frozen";
   const days = daysUntil(date);
   if (days !== null && days < 0) return "Quality date passed";
-  return `Best by: ${parseDate(date).toLocaleDateString(undefined, {
+  return `Best by ${parseDate(date).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   })}`;
