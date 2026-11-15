@@ -511,7 +511,7 @@ function ConfirmItemSheet({
   use(io());
   const [location, setLocation] = useState<Location>(initialLocation);
   const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
-    newExpirationEntry(),
+    newExpirationEntry(null, "1"),
   ]);
   const [freeze, setFreeze] = useState<FreezeValue>(() => ({
     frozen: true,

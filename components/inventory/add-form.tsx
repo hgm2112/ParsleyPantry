@@ -97,7 +97,7 @@ export function AddForm({
   const [name, setName] = useState("");
   const [matches, setMatches] = useState<ItemRow[]>([]);
   const [entries, setEntries] = useState<ExpirationEntryValue[]>(() => [
-    newExpirationEntry(),
+    newExpirationEntry(null, "1"),
   ]);
   const [unit, setUnit] = useState("");
   const [packSize, setPackSize] = useState("");
@@ -160,7 +160,7 @@ export function AddForm({
     setCanonicalName("");
     canonicalTouchedRef.current = false;
     nameDirtyRef.current = false;
-    setEntries([newExpirationEntry()]);
+    setEntries([newExpirationEntry(null, "1")]);
     void lookupBarcode(initialBarcode ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupToken, initialBarcode]);
@@ -459,7 +459,7 @@ export function AddForm({
     setSelectedItem(null);
     setName("");
     setMatches([]);
-    setEntries([newExpirationEntry()]);
+    setEntries([newExpirationEntry(null, "1")]);
     setUnit("");
     setPackSize("");
     setPackUnit("");
