@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -95,6 +101,7 @@ export function BatchDialog({
     ),
   ]);
   const [location, setLocation] = useState<Location>(editing?.location ?? "pantry");
+  const [unit, setUnit] = useState(editing?.unit ?? item.unit ?? "");
   // Editing touches one batch; the freezer flow hands off per batch too.
   const single = Boolean(editing) || location === "freezer";
   const [busy, setBusy] = useState(false);
@@ -117,6 +124,8 @@ export function BatchDialog({
     setBusy(true);
 
     const wantsFreezer = location === "freezer" && !wasFrozen;
+    const unitValue = unit.trim() || null;
+
     if (editing) {
       const batch = batches[0];
       const result = await updateInventory({
@@ -124,6 +133,7 @@ export function BatchDialog({
         quantity: batch.quantity,
         expirationDate: batch.expirationDate,
         location,
+        unit: unitValue,
       });
       setBusy(false);
       if (!result.ok) {
@@ -223,13 +233,40 @@ export function BatchDialog({
               onChange={setEntries}
               single={single}
               qtyScale={qtyScale}
+              labelInfo={
+                freezerBatch
+                  ? "Refrigerated date — kept while frozen; the quality date governs."
+                  : undefined
+              }
             />
 
-            {freezerBatch ? (
-              <p className="text-xs text-muted-foreground">
-                Refrigerated date — kept while frozen; the quality date governs.
-              </p>
-            ) : null}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="batch-unit">Unit</Label>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="inline-flex text-muted-foreground hover:text-foreground"
+                        aria-label="Unit info"
+                      />
+                    }
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" sideOffset={4} className="max-w-xs text-xs">
+                    Optional label for this batch (leave blank to use the item name).
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Input
+                id="batch-unit"
+                value={unit}
+                onChange={(event) => setUnit(event.target.value)}
+                placeholder="e.g. drumsticks, lb, oz"
+              />
+            </div>
 
             <div className="space-y-2">
               <Label>Location</Label>

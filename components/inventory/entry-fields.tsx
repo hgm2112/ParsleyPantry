@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Info, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -501,6 +506,7 @@ export function ExpirationEntries({
   single = false,
   disabled = false,
   qtyScale,
+  labelInfo,
 }: {
   entries: ExpirationEntryValue[];
   onChange: (entries: ExpirationEntryValue[]) => void;
@@ -508,6 +514,8 @@ export function ExpirationEntries({
   disabled?: boolean;
   /** Set when rows count packs and stored stock counts pieces. */
   qtyScale?: QtyScale;
+  /** Optional info popover shown next to the Expiration label. */
+  labelInfo?: string;
 }) {
   const total = entries.reduce((sum, entry) => {
     const value = Number(entry.quantity);
@@ -532,7 +540,27 @@ export function ExpirationEntries({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <Label>Expiration</Label>
+        <div className="flex items-center gap-1.5">
+          <Label>Expiration</Label>
+          {labelInfo ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex text-muted-foreground hover:text-foreground"
+                    aria-label="Expiration info"
+                  />
+                }
+              >
+                <Info className="h-3.5 w-3.5" />
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={4} className="max-w-xs text-xs">
+                {labelInfo}
+              </PopoverContent>
+            </Popover>
+          ) : null}
+        </div>
         {!single ? (
           <span className="text-xs text-muted-foreground">
             {qtyScale ? `${qtyScale.noun}s for each date` : "Quantity for each date"}

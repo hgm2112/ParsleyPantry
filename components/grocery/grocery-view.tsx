@@ -9,6 +9,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
@@ -19,6 +20,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useFullscreen, useToggleFullscreen } from "@/lib/fullscreen";
 import {
@@ -309,6 +317,7 @@ export function GroceryView({
 
   const totalLeft = visibleItems.filter((item) => !item.checked).length;
   const totalChecked = visibleItems.length - totalLeft;
+  const progressPct = visibleItems.length === 0 ? 0 : Math.round((totalChecked / visibleItems.length) * 100);
 
   const sections = useMemo<Section[]>(() => {
     const built = buildStoreSections<GroceryListItem>({
@@ -745,9 +754,205 @@ What I'd buy or wait on
     );
   }
 
+  const searchDropdown = searchFocused && query.trim() ? (
+    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border bg-background shadow-md">
+      {searchResults.length === 0 ? (
+        <p className="px-3 py-2.5 text-sm text-muted-foreground">
+          No catalog match — use Add for recipes or a new item.
+        </p>
+      ) : (
+        searchResults.map((entry) => (
+          <button
+            type="button"
+            key={entry.id}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void quickAdd(entry)}
+            disabled={addingId === entry.id}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-60"
+          >
+            {addingId === entry.id ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+            ) : null}
+            <span className="min-w-0 flex-1 truncate">
+              {entry.name}
+              {entry.unit ? (
+                <span className="text-muted-foreground"> · {entry.unit}</span>
+              ) : null}
+            </span>
+            {stockByItem.get(rootOf(entry.id)) ? (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                ×{stockByItem.get(rootOf(entry.id))} in pantry
+              </span>
+            ) : null}
+            {onListSet.has(rootOf(entry.id)) ? (
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                on list
+              </span>
+            ) : null}
+          </button>
+        ))
+      )}
+    </div>
+  ) : null;
+
+  const quickAddInput = (className?: string, inputClassName?: string) => (
+    <div
+      className={cn("relative flex-1", className)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setSearchFocused(false);
+        }
+      }}
+    >
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onFocus={() => setSearchFocused(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            const first = searchResults[0];
+            if (first) void quickAdd(first);
+          } else if (event.key === "Escape") {
+            setQuery("");
+            setSearchFocused(false);
+          }
+        }}
+        placeholder="Type to add an item..."
+        className={cn("h-10 pl-8 pr-3", inputClassName)}
+        aria-label="Search catalog to add to grocery list"
+      />
+      {searchDropdown}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
+      {/* Mobile header (spec) */}
+      <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:hidden">
+        <div className="space-y-3">
+          {/* 1. Title row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-lg font-extrabold leading-tight">Shopping list</h1>
+              <p className="text-xs text-muted-foreground">{totalLeft} to buy</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {fullscreen ? (
+                <Button
+                  size="icon-sm"
+                  variant="default"
+                  onClick={toggleFullscreen}
+                  aria-label="Exit fullscreen"
+                  aria-pressed={fullscreen}
+                >
+                  <Minimize2 />
+                </Button>
+              ) : (
+                <>
+                  <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setAddOpen(true)}>
+                    <Plus /> Add
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button size="icon-sm" variant="outline" aria-label="More options" />
+                      }
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" sideOffset={6} className="w-56">
+                      <DropdownMenuItem onClick={() => void copyAllItems()} disabled={allItemsCount === 0}>
+                        <Copy className="h-4 w-4" /> Copy all items{allItemsCount > 0 ? ` (${allItemsCount})` : ""}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void copySaleOnly()} disabled={saleOnlyCount === 0}>
+                        <Tag className="h-4 w-4" /> Copy sale-only{saleOnlyCount > 0 ? ` (${saleOnlyCount})` : ""}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem render={<Link href="/grocery/stores" />}>
+                        <Store className="h-4 w-4" /> Manage stores
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => void changeMode(mode === "aisle" ? "category" : "aisle")}
+                        disabled={stores.length === 0 || (!hasAisleCapableStore && mode === "category")}
+                      >
+                        {mode === "aisle" ? "Group by category" : "Group by aisle"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 2. Progress */}
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              {totalChecked} of {visibleItems.length}
+            </span>
+          </div>
+
+          {/* 3. Store filter chips */}
+          {fullscreen || stores.length === 0 ? null : (
+            <div className="-mx-3">
+              <div className="relative">
+                <div className="flex gap-2 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {stores.map((entry) => {
+                    const on = selectedIds.includes(entry.id);
+                    const count = toBuyByStore.get(entry.id) ?? 0;
+                    const dimEmpty = !on && count === 0;
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => void toggleStore(entry.id)}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors",
+                          on
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background text-muted-foreground hover:bg-accent",
+                          dimEmpty && "opacity-60",
+                        )}
+                      >
+                        {entry.name}
+                        {count > 0 ? <span className="text-xs font-bold tabular-nums opacity-80">{count}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
+              </div>
+            </div>
+          )}
+
+          {/* 4. Add box and fullscreen */}
+          {fullscreen ? null : (
+            <div className="flex items-center gap-2">
+              {quickAddInput(undefined, "h-10")}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                onClick={toggleFullscreen}
+                aria-label="Enter fullscreen"
+                aria-pressed={fullscreen}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop header (kept) */}
+      <div className="sticky top-0 z-30 -mx-3 hidden border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:block md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div>
@@ -757,70 +962,34 @@ What I'd buy or wait on
                 {totalChecked > 0 ? ` · ${totalChecked} in cart` : ""}
               </p>
             </div>
-            {fullscreen ? null : modeToggle("hidden md:flex")}
+            {modeToggle("flex")}
           </div>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {fullscreen ? null : (
-              <>
-                <Button size="sm" onClick={() => setAddOpen(true)}>
-                  <Plus /> Add
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void copyAllItems()}
-                  disabled={allItemsCount === 0}
-                >
-                  <Copy /> {allItemsCount > 0 ? `Copy All Items (${allItemsCount})` : "Copy All Items"}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void copySaleOnly()}
-                  disabled={saleOnlyCount === 0}
-                >
-                  <Copy /> {saleOnlyCount > 0 ? `Copy Sale-Only (${saleOnlyCount})` : "Copy Sale-Only"}
-                </Button>
-                <Button size="sm" render={<Link href="/grocery/stores" />}>
-                  <Store /> Stores
-                </Button>
-                {modeToggle("md:hidden")}
-              </>
-            )}
-            <Button
-              size="icon-sm"
-              variant={fullscreen ? "default" : "outline"}
-              className="md:hidden"
-              onClick={toggleFullscreen}
-              aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              aria-pressed={fullscreen}
-            >
-              {fullscreen ? <Minimize2 /> : <Maximize2 />}
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus /> Add
+            </Button>
+            <Button size="sm" onClick={() => void copyAllItems()} disabled={allItemsCount === 0}>
+              <Copy /> {allItemsCount > 0 ? `Copy All Items (${allItemsCount})` : "Copy All Items"}
+            </Button>
+            <Button size="sm" onClick={() => void copySaleOnly()} disabled={saleOnlyCount === 0}>
+              <Copy /> {saleOnlyCount > 0 ? `Copy Sale-Only (${saleOnlyCount})` : "Copy Sale-Only"}
+            </Button>
+            <Button size="sm" render={<Link href="/grocery/stores" />}>
+              <Store /> Stores
             </Button>
           </div>
         </div>
 
         <div className="mt-2.5 flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-                style={{
-                  width: `${
-                    visibleItems.length === 0
-                      ? 0
-                      : Math.round((totalChecked / visibleItems.length) * 100)
-                  }%`,
-                }}
-              />
-            </div>
-            <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
-              {totalChecked} of {visibleItems.length} ·{" "}
-              {visibleItems.length === 0
-                ? 0
-                : Math.round((totalChecked / visibleItems.length) * 100)}
-              %
-            </span>
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
+          </div>
+          <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">
+            {totalChecked} of {visibleItems.length} · {progressPct}%
+          </span>
         </div>
 
-        {fullscreen || stores.length === 0 ? null : (
+        {stores.length === 0 ? null : (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             {stores.map((entry) => {
               const on = selectedIds.includes(entry.id);
@@ -839,91 +1008,18 @@ What I'd buy or wait on
                   )}
                 >
                   {entry.name}
-                  {count > 0 ? (
-                    <span className="text-xs font-bold tabular-nums opacity-80">
-                      {count}
-                    </span>
-                  ) : null}
+                  {count > 0 ? <span className="text-xs font-bold tabular-nums opacity-80">{count}</span> : null}
                 </button>
               );
             })}
           </div>
         )}
 
-        {fullscreen ? null : (
-          <div className="mt-2.5 flex items-center gap-2">
-            <div
-              className="relative flex-1"
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                  setSearchFocused(false);
-                }
-              }}
-            >
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    const first = searchResults[0];
-                    if (first) void quickAdd(first);
-                  } else if (event.key === "Escape") {
-                    setQuery("");
-                    setSearchFocused(false);
-                  }
-                }}
-                placeholder="Type to add an item…"
-                className="h-9 pl-8 pr-3"
-                aria-label="Search catalog to add to grocery list"
-              />
-              {searchFocused && query.trim() ? (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border bg-background shadow-md">
-                  {searchResults.length === 0 ? (
-                    <p className="px-3 py-2.5 text-sm text-muted-foreground">
-                      No catalog match — use Add for recipes or a new item.
-                    </p>
-                  ) : (
-                    searchResults.map((entry) => (
-                      <button
-                        type="button"
-                        key={entry.id}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => void quickAdd(entry)}
-                        disabled={addingId === entry.id}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-60"
-                      >
-                        {addingId === entry.id ? (
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                        ) : null}
-                        <span className="min-w-0 flex-1 truncate">
-                          {entry.name}
-                          {entry.unit ? (
-                            <span className="text-muted-foreground"> · {entry.unit}</span>
-                          ) : null}
-                        </span>
-                        {stockByItem.get(rootOf(entry.id)) ? (
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            ×{stockByItem.get(rootOf(entry.id))} in pantry
-                          </span>
-                        ) : null}
-                        {onListSet.has(rootOf(entry.id)) ? (
-                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                            on list
-                          </span>
-                        ) : null}
-                      </button>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )}
+        <div className="mt-2.5 flex items-center gap-2">
+          {quickAddInput(undefined, "h-9")}
+        </div>
 
-        {fullscreen || mode !== "aisle" || stores.length > 0 ? null : (
+        {mode !== "aisle" || stores.length > 0 ? null : (
           <p className="mt-2 text-xs text-muted-foreground">
             Showing your categories —{" "}
             <Link href="/grocery/stores" className="underline">
@@ -976,6 +1072,7 @@ What I'd buy or wait on
               {section.groups.map((group) => {
                 const tint = tintFor(group.title);
                 const emoji = aisleEmoji(group.title);
+                const leftCount = group.items.filter((item) => !item.checked).length;
                 return (
                   <section
                     key={group.key}
@@ -994,7 +1091,7 @@ What I'd buy or wait on
                         {group.title}
                       </h2>
                       <span className="shrink-0 whitespace-nowrap text-xs opacity-70">
-                        {group.items.filter((item) => !item.checked).length} left
+                        {leftCount} left
                       </span>
                     </div>
                     {group.hint ? (
