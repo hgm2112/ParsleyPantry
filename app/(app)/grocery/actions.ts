@@ -152,6 +152,127 @@ export async function addGroceryItem(
   }
 }
 
+/**
+ * Like addGroceryItem, but if an unchecked line already exists it increases its
+ * quantity instead of skipping. Used where a repeated "add" should mean "add
+ * more" (e.g. the global search add button).
+ */
+export async function addOrIncrementGroceryItem(
+  rawInput: AddGroceryInput,
+): Promise<ActionResult<{ id: string; created: boolean; name: string; quantity: number }>> {
+  try {
+    const parsed = addSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+    }
+    const input = parsed.data;
+    const { supabase, householdId, user } = await requireDal();
+
+    let itemId = input.itemId ?? null;
+    let categoryId = input.categoryId ?? null;
+    let unit = input.unit ?? null;
+    let name = input.name;
+    const specificName = input.name;
+
+    if (!itemId) {
+      const catalogItem = await findOrCreateCatalogItem(supabase, householdId, {
+        name: input.name,
+        categoryId,
+        unit,
+        createdBy: user.id,
+      });
+      if (catalogItem) {
+        itemId = catalogItem.id;
+        if (!categoryId) categoryId = catalogItem.category_id;
+        if (!unit) unit = catalogItem.unit;
+      }
+    }
+
+    if (itemId) {
+      const root = await resolveCatalogRoot(supabase, householdId, itemId);
+      if (root) {
+        itemId = root.id;
+        name = root.name;
+        categoryId = root.category_id ?? categoryId;
+        if (!unit) unit = root.unit;
+      }
+    }
+
+    const lookup = supabase
+      .from("grocery_items")
+      .select("id, name, quantity")
+      .eq("household_id", householdId)
+      .eq("checked", false);
+
+    const { data: existingRows } = await (
+      itemId ? lookup.eq("item_id", itemId) : lookup.eq("name", input.name)
+    ).limit(1);
+
+    const existing = (existingRows ?? [])[0] as
+      | { id: string; name: string; quantity: number }
+      | undefined;
+    if (existing) {
+      const nextQuantity = Math.min(9999, (existing.quantity ?? 0) + input.quantity);
+      const { error: updateError } = await supabase
+        .from("grocery_items")
+        .update({ quantity: nextQuantity })
+        .eq("id", existing.id)
+        .eq("household_id", householdId);
+      if (updateError) return { ok: false, error: updateError.message };
+
+      revalidatePath("/grocery");
+      revalidatePath("/inventory");
+      revalidatePath("/household");
+      return {
+        ok: true,
+        data: {
+          id: existing.id,
+          created: false,
+          name: existing.name,
+          quantity: nextQuantity,
+        },
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("grocery_items")
+      .insert({
+        household_id: householdId,
+        item_id: itemId,
+        name,
+        specific_name: specificName,
+        quantity: input.quantity,
+        unit,
+        category_id: categoryId,
+        sale_only: input.saleOnly,
+        source: input.source,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Could not add item" };
+    }
+
+    await bumpGroceryAddMemory(supabase, householdId, itemId);
+    await fileGroceryItem(supabase, householdId, (data as { id: string }).id, itemId);
+
+    revalidatePath("/grocery");
+    revalidatePath("/inventory");
+    revalidatePath("/household");
+    return {
+      ok: true,
+      data: { id: (data as { id: string }).id, created: true, name, quantity: input.quantity },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not add item",
+    };
+  }
+}
+
 const updateSchema = z.object({
   id: uuid,
   name: z.string().trim().min(1).max(160).optional(),
