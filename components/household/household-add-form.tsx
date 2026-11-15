@@ -207,21 +207,6 @@ export function HouseholdAddForm({
         </div>
       </div>
 
-      <div
-        className="flex overflow-hidden rounded-md border self-start md:hidden"
-        aria-label="Inventory section"
-      >
-        <Link
-          href="/inventory"
-          className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent"
-        >
-          Pantry
-        </Link>
-        <span className="px-2.5 py-1.5 text-xs font-semibold bg-primary text-primary-foreground">
-          Household
-        </span>
-      </div>
-
       <form
         className="space-y-4"
         onSubmit={(e) => {

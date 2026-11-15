@@ -245,7 +245,79 @@ export function InventoryView({
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Mobile header */}
+        <div className="space-y-2 md:hidden">
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className="flex w-full max-w-xs overflow-hidden rounded-md border"
+              aria-label="Inventory section"
+            >
+              <span className="flex-1 bg-primary px-3 py-1.5 text-center text-sm font-semibold text-primary-foreground">
+                Pantry
+              </span>
+              <Link
+                href="/household"
+                className="flex-1 bg-background px-3 py-1.5 text-center text-sm font-semibold text-muted-foreground hover:bg-accent"
+              >
+                Household
+              </Link>
+            </div>
+            <p className="text-center text-xs text-muted-foreground">
+              {groups.length} {groups.length === 1 ? "item" : "items"} ·{" "}
+              {rows.length} {rows.length === 1 ? "batch" : "batches"}
+              {lowCount > 0 ? (
+                <span className="text-orange-600 dark:text-orange-300"> · {lowCount} running low</span>
+              ) : null}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Popover>
+              <div className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-sm font-semibold text-foreground hover:bg-muted hover:text-foreground">
+                <Link href="/inventory/normalize" className="inline-flex items-center justify-center gap-1.5">
+                  Name Matching
+                </Link>
+                <PopoverTrigger
+                  type="button"
+                  aria-label="What is Name Matching?"
+                  className="inline-flex items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <Info className="h-4 w-4" />
+                </PopoverTrigger>
+              </div>
+              <PopoverContent align="center" sideOffset={6} className="max-w-xs space-y-1">
+                <p className="text-sm font-semibold">What is Name Matching?</p>
+                <p className="text-xs text-muted-foreground">
+                  Name Matching helps Parsley Pantry recognize when differently
+                  named items refer to the same ingredient. For example,
+                  “100% Grass Fed Ground Beef” and “Ground Beef” can be matched so
+                  your pantry inventory is correctly recognized by recipes and meal
+                  planning. Review and manage matches here to improve ingredient
+                  availability and shopping-list accuracy.
+                </p>
+              </PopoverContent>
+            </Popover>
+            <div className="flex h-9 flex-1 overflow-hidden rounded-md">
+              <Link
+                href="/inventory/add"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 bg-emerald-600 px-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <Plus className="h-4 w-4" /> Add
+              </Link>
+              <button
+                type="button"
+                aria-label="Scan an item"
+                title="Scan an item"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex flex-1 items-center justify-center border-l border-white/25 bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <ScanBarcode className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop header */}
+        <div className="hidden flex-wrap items-center justify-between gap-2 md:flex">
           <div className="min-w-0">
             <h1 className="text-lg font-extrabold">Pantry</h1>
             <p className="text-xs text-muted-foreground">

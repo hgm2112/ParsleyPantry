@@ -170,7 +170,54 @@ export function HouseholdView({
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-30 -mx-3 border-b bg-background/95 px-3 pt-3 pb-2.5 backdrop-blur md:top-14 md:-mx-6 md:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Mobile header */}
+        <div className="space-y-2 md:hidden">
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className="flex w-full max-w-xs overflow-hidden rounded-md border"
+              aria-label="Inventory section"
+            >
+              <Link
+                href="/inventory"
+                className="flex-1 bg-background px-3 py-1.5 text-center text-sm font-semibold text-muted-foreground hover:bg-accent"
+              >
+                Pantry
+              </Link>
+              <span className="flex-1 bg-primary px-3 py-1.5 text-center text-sm font-semibold text-primary-foreground">
+                Household
+              </span>
+            </div>
+            <p className="text-center text-xs text-muted-foreground">
+              {rows.length} {rows.length === 1 ? "item" : "items"}
+              {lowCount > 0 ? (
+                <span className="text-orange-600 dark:text-orange-300">
+                  {" "}
+                  · {lowCount} running low
+                </span>
+              ) : null}
+            </p>
+          </div>
+          <div className="flex h-9 w-full overflow-hidden rounded-md">
+            <Link
+              href="/household/add"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 bg-emerald-600 px-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <Plus className="h-4 w-4" /> Add
+            </Link>
+            <button
+              type="button"
+              aria-label="Scan a household supply"
+              title="Scan a household supply"
+              onClick={() => setScanOpen(true)}
+              className="inline-flex flex-1 items-center justify-center border-l border-white/25 bg-emerald-600 px-2 text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <ScanBarcode className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop header */}
+        <div className="hidden flex-wrap items-center justify-between gap-2 md:flex">
           <div className="min-w-0">
             <h1 className="text-lg font-extrabold">Household</h1>
             <p className="text-xs text-muted-foreground">
@@ -184,20 +231,6 @@ export function HouseholdView({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div
-              className="flex overflow-hidden rounded-md border md:hidden"
-              aria-label="Inventory section"
-            >
-              <Link
-                href="/inventory"
-                className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent"
-              >
-                Pantry
-              </Link>
-              <span className="px-2.5 py-1.5 text-xs font-semibold bg-primary text-primary-foreground">
-                Household
-              </span>
-            </div>
             <div className="flex h-9 shrink-0 overflow-hidden rounded-md">
               <Link
                 href="/household/add"
