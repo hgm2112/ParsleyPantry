@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  ChevronDown,
+  ClipboardPaste,
   ExternalLink,
   Loader2,
   Plus,
@@ -17,6 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   addRecipeToGrocery,
@@ -28,6 +38,7 @@ import type { RecipeFormInput } from "@/app/(app)/recipes/actions";
 import { ToGrocerySheet } from "@/components/recipes/to-grocery-sheet";
 import { externalHttpUrl } from "@/lib/external-url";
 import { splitNameAndQuantity, trimDecimal } from "@/lib/stock";
+import { cn } from "@/lib/utils";
 import type { RecipeIngredientRow, RecipeRow } from "@/lib/types";
 
 type IngredientDraft = {
@@ -48,6 +59,172 @@ type Props = {
   /** If set (and starts with /), save/delete navigates back to it using router.back() when possible. */
   returnTo?: string;
 };
+
+/** Words that read as a unit when they follow a pasted amount. */
+const UNIT_WORDS = new Set([
+  "bag",
+  "bags",
+  "bottle",
+  "bottles",
+  "box",
+  "boxes",
+  "bunch",
+  "bunches",
+  "can",
+  "cans",
+  "clove",
+  "cloves",
+  "container",
+  "containers",
+  "cup",
+  "cups",
+  "dash",
+  "dashes",
+  "ear",
+  "ears",
+  "fillet",
+  "fillets",
+  "g",
+  "gallon",
+  "gallons",
+  "gram",
+  "grams",
+  "handful",
+  "handfuls",
+  "head",
+  "heads",
+  "jar",
+  "jars",
+  "kg",
+  "l",
+  "lb",
+  "lbs",
+  "liter",
+  "liters",
+  "ml",
+  "ounce",
+  "ounces",
+  "oz",
+  "package",
+  "packages",
+  "packet",
+  "packets",
+  "piece",
+  "pieces",
+  "pint",
+  "pints",
+  "pkg",
+  "pound",
+  "pounds",
+  "quart",
+  "quarts",
+  "scoop",
+  "scoops",
+  "sheet",
+  "sheets",
+  "slice",
+  "slices",
+  "sprig",
+  "sprigs",
+  "stalk",
+  "stalks",
+  "stick",
+  "sticks",
+  "strip",
+  "strips",
+  "tablespoon",
+  "tablespoons",
+  "teaspoon",
+  "teaspoons",
+  "tbsp",
+  "tsp",
+]);
+
+/**
+ * One pasted line → an ingredient row. A leading number (optionally followed
+ * by a unit word) becomes the amount; everything else becomes the name.
+ * Lines without a leading number stay name-only.
+ */
+function parsePastedLine(
+  raw: string,
+): { name: string; quantity_text: string } | null {
+  const clean = raw.replace(/^\s*[-*•·]\s*/, "").trim();
+  if (!clean) return null;
+
+  const amountMatch = clean.match(
+    /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?)\s+(.+)$/,
+  );
+  if (!amountMatch) return { name: clean, quantity_text: "" };
+
+  const amount = amountMatch[1];
+  let rest = amountMatch[2].trim();
+
+  let unit = "";
+  const unitMatch = rest.match(/^([A-Za-z]+)\.?\s+(.+)$/);
+  if (unitMatch && UNIT_WORDS.has(unitMatch[1].toLowerCase())) {
+    unit = unitMatch[1];
+    rest = unitMatch[2].trim();
+  }
+
+  rest = rest.replace(/^of\s+/i, "").trim();
+  if (!rest) return { name: clean, quantity_text: "" };
+
+  return {
+    name: rest,
+    quantity_text: unit ? `${amount} ${unit}` : amount,
+  };
+}
+
+type PantryTone = "pantry" | "missing" | "optional" | "unknown";
+
+const DESKTOP_QUERY = "(min-width: 640px)";
+
+function subscribeDesktop(callback: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function getDesktopSnapshot() {
+  return window.matchMedia(DESKTOP_QUERY).matches;
+}
+
+function getDesktopServerSnapshot() {
+  return false;
+}
+
+/** Live `sm` breakpoint match without a state-setting effect. */
+function useIsDesktop() {
+  return useSyncExternalStore(
+    subscribeDesktop,
+    getDesktopSnapshot,
+    getDesktopServerSnapshot,
+  );
+}
+
+function PantryChip({ tone, have }: { tone: PantryTone; have: number }) {
+  if (tone === "unknown") return null;
+  const label =
+    tone === "pantry"
+      ? `In pantry · ${trimDecimal(have)}`
+      : tone === "optional"
+        ? "Optional"
+        : "Need to buy";
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold whitespace-nowrap",
+        tone === "pantry"
+          ? "bg-primary/10 text-primary"
+          : tone === "optional"
+            ? "bg-muted text-muted-foreground"
+            : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function RecipeEditor({
   recipe,
@@ -100,6 +277,13 @@ export function RecipeEditor({
   const [busy, setBusy] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+
+  // Details is collapsed on phones but open by default on wider screens.
+  const isDesktop = useIsDesktop();
+  const detailsExpanded = detailsOpen ?? isDesktop;
 
   function updateRow(index: number, patch: Partial<IngredientDraft>) {
     setRows((current) =>
@@ -107,6 +291,118 @@ export function RecipeEditor({
         rowIndex === index ? { ...row, ...patch } : row,
       ),
     );
+  }
+
+  /** Live pantry status for a draft row (chips + grouping). */
+  function rowStatus(row: IngredientDraft): {
+    tone: PantryTone;
+    have: number;
+  } {
+    if (!stockByItem) return { tone: "unknown", have: 0 };
+    const key = matchingKey(row.item_id, row.name);
+    const have = key ? (stockByItem[key] ?? 0) : 0;
+    if (have > 0) return { tone: "pantry", have };
+    return { tone: row.optional ? "optional" : "missing", have };
+  }
+
+  const namedRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.name.trim().length > 0);
+  const blankRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.name.trim().length === 0);
+
+  let covered = 0;
+  let tracked = 0;
+  for (const { row } of namedRows) {
+    if (row.optional) continue;
+    tracked += 1;
+    if (rowStatus(row).have > 0) covered += 1;
+  }
+  const missingCount = Math.max(0, tracked - covered);
+  const progressPct = tracked > 0 ? Math.round((covered / tracked) * 100) : 0;
+
+  const missingRows = namedRows.filter(({ row }) => rowStatus(row).tone === "missing");
+  const pantryRows = namedRows.filter(({ row }) => rowStatus(row).tone !== "missing");
+
+  const pastedLines = pasteText
+    .split("\n")
+    .map(parsePastedLine)
+    .filter((line): line is { name: string; quantity_text: string } =>
+      Boolean(line),
+    );
+
+  // One flat list so a row keeps its DOM node (and input focus) when typing a
+  // name moves it from the blank area into the "Need to buy" group.
+  type IngredientListItem =
+    | {
+        kind: "heading";
+        key: string;
+        tone: "missing" | "pantry";
+        label: string;
+      }
+    | { kind: "row"; key: string; row: IngredientDraft; index: number };
+
+  const ingredientList: IngredientListItem[] = [];
+  if (stockByItem) {
+    if (missingRows.length > 0) {
+      ingredientList.push({
+        kind: "heading",
+        key: "heading-missing",
+        tone: "missing",
+        label: `Need to buy · ${missingRows.length}`,
+      });
+      for (const { row, index } of missingRows) {
+        ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+      }
+    }
+    if (pantryRows.length > 0) {
+      ingredientList.push({
+        kind: "heading",
+        key: "heading-pantry",
+        tone: "pantry",
+        label: `In your pantry · ${pantryRows.length}`,
+      });
+      for (const { row, index } of pantryRows) {
+        ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+      }
+    }
+    for (const { row, index } of blankRows) {
+      ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+    }
+  } else {
+    rows.forEach((row, index) => {
+      ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+    });
+  }
+
+  function addBlankRow() {
+    setRows((current) => [
+      ...current,
+      {
+        name: "",
+        quantity_text: "",
+        optional: false,
+        on_shopping_list: true,
+        item_id: null,
+      },
+    ]);
+  }
+
+  function applyPaste() {
+    if (pastedLines.length === 0) return;
+    setRows((current) => [
+      ...current,
+      ...pastedLines.map((line) => ({
+        name: line.name,
+        quantity_text: line.quantity_text,
+        optional: false,
+        on_shopping_list: true,
+        item_id: null,
+      })),
+    ]);
+    setPasteText("");
+    setPasteOpen(false);
   }
 
   function buildInput(): RecipeFormInput {
@@ -173,6 +469,8 @@ export function RecipeEditor({
     setTagsText("");
     setRecipeType("cooking");
     setRows([]);
+    setPasteText("");
+    setDetailsOpen(null);
     navigateAfterSaveOrDelete();
   }
 
@@ -218,14 +516,117 @@ export function RecipeEditor({
   }
 
   const sourceUrl = externalHttpUrl(source);
+  const totalMinutes = (Number(prepTime) || 0) + (Number(cookTime) || 0);
+  const tagCount = tagsText.split(",").filter((tag) => tag.trim()).length;
+  const detailsSummary =
+    [
+      totalMinutes > 0 ? `${totalMinutes} min` : null,
+      Number(yields) > 1 ? `Serves ${yields}` : null,
+      tagCount > 0 ? `${tagCount} tag${tagCount === 1 ? "" : "s"}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Prep, cook, source, tags";
+
+  const groceryActions = isEdit ? (
+    <>
+      <Button
+        type="button"
+        onClick={() => void handleAddMissing()}
+        disabled={busy || missingCount === 0}
+        className="h-11 sm:h-8"
+        title={
+          missingCount === 0
+            ? "Everything needed is in your pantry"
+            : "Adds the saved ingredients that are not in your pantry"
+        }
+      >
+        <ShoppingCart />
+        {missingCount === 0 ? "Nothing missing" : `Add ${missingCount} missing`}
+        <span className="hidden sm:inline">
+          {missingCount === 0 ? "" : " to list"}
+        </span>
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setGroceryOpen(true)}
+        className="h-11 sm:h-8"
+      >
+        Choose items…
+      </Button>
+    </>
+  ) : null;
+
+  function renderRow(row: IngredientDraft, index: number, key: string) {
+    const status = rowStatus(row);
+    return (
+      <li
+        key={key}
+        className="rounded-lg border border-border/60 p-2 sm:rounded-none sm:border-0 sm:border-b sm:border-border/50 sm:p-0 sm:py-2 sm:last:border-b-0"
+      >
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+          <Input
+            value={row.name}
+            onChange={(event) =>
+              updateRow(index, { name: event.target.value })
+            }
+            placeholder="Black beans"
+            aria-label={`Ingredient ${index + 1} name`}
+            className="h-11 basis-full sm:h-8 sm:basis-0 sm:flex-1"
+          />
+          <Input
+            value={row.quantity_text}
+            onChange={(event) =>
+              updateRow(index, { quantity_text: event.target.value })
+            }
+            placeholder="Amount"
+            aria-label={`Ingredient ${index + 1} amount`}
+            className="h-11 w-[6.75rem] shrink-0 placeholder:text-muted-foreground/60 sm:h-8"
+          />
+          <PantryChip tone={status.tone} have={status.have} />
+          <label
+            className="ml-auto flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground sm:ml-0 sm:h-7"
+            title="Optional ingredient — never added to the grocery list"
+          >
+            <Checkbox
+              checked={row.optional}
+              onCheckedChange={(checked) => {
+                const optional = checked === true;
+                updateRow(index, {
+                  optional,
+                  on_shopping_list: !optional,
+                });
+              }}
+              aria-label={`Ingredient ${index + 1} optional`}
+            />
+            <span>Optional</span>
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
+            onClick={() =>
+              setRows((current) => current.filter((_, i) => i !== index))
+            }
+            aria-label={`Remove ingredient ${index + 1}`}
+          >
+            <Trash2 />
+          </Button>
+        </div>
+      </li>
+    );
+  }
 
   return (
-    <form onSubmit={save} className="space-y-4">
+    <>
+      <form onSubmit={save} className="mx-auto max-w-[880px] space-y-4 pb-10 md:pb-0">
       <div className="flex items-center justify-between gap-2">
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
+          className="h-11 w-11 sm:h-7 sm:w-7"
           render={
             <Link
               href={
@@ -237,34 +638,13 @@ export function RecipeEditor({
         >
           <ArrowLeft />
         </Button>
-        <div className="flex items-center gap-2">
-          {isEdit ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleAddMissing()}
-                disabled={busy}
-              >
-                <ShoppingCart />
-                Add only the missing ones
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setGroceryOpen(true)}
-              >
-                <ShoppingCart />
-                Select for grocery list
-              </Button>
-            </>
-          ) : null}
-        </div>
+        <Button type="submit" disabled={busy} className="h-11 sm:h-8">
+          {busy ? <Loader2 className="animate-spin" /> : null}
+          {isEdit ? "Save changes" : "Create recipe"}
+        </Button>
       </div>
 
-      <section className="space-y-3 rounded-xl border p-4">
+      <section className="space-y-4 rounded-xl border p-4">
         <div className="space-y-2">
           <Label htmlFor="recipe-name">Name</Label>
           <Input
@@ -273,228 +653,259 @@ export function RecipeEditor({
             onChange={(event) => setName(event.target.value)}
             placeholder="Weeknight chili"
             autoFocus={!isEdit}
+            className="h-11 sm:h-8"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="recipe-description">Notes</Label>
-          <Textarea
-            id="recipe-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Steps, tweaks, where the recipe came from…"
-            rows={4}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[5.5rem_5.5rem_5.5rem_minmax(0,1fr)]">
-          <div className="space-y-2">
-            <Label htmlFor="recipe-prep">Prep (min)</Label>
-            <Input
-              id="recipe-prep"
-              type="number"
-              min="0"
-              value={prepTime}
-              onChange={(event) => setPrepTime(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="recipe-cook">Cook (min)</Label>
-            <Input
-              id="recipe-cook"
-              type="number"
-              min="0"
-              value={cookTime}
-              onChange={(event) => setCookTime(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="recipe-yields">Yields</Label>
-            <Input
-              id="recipe-yields"
-              type="number"
-              min="1"
-              value={yields}
-              onChange={(event) => setYields(event.target.value)}
-            />
-          </div>
-          <div className="col-span-2 space-y-2 sm:col-span-1">
-            <Label htmlFor="recipe-source">Source</Label>
-            <div className="flex items-center gap-1.5">
-              <Input
-                id="recipe-source"
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                placeholder="Will"
-              />
-              {sourceUrl ? (
-                <Button
+          <Label>Recipe type</Label>
+          <div
+            role="group"
+            aria-label="Recipe type"
+            className="grid grid-cols-2 gap-1 rounded-lg border p-1 sm:inline-grid"
+          >
+            {(
+              [
+                { value: "cooking", label: "Cooking" },
+                { value: "no_cook", label: "No-cook" },
+              ] as const
+            ).map((option) => {
+              const selected = recipeType === option.value;
+              return (
+                <button
+                  key={option.value}
                   type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label="Open source link in a new tab"
-                  title={sourceUrl}
-                  onClick={() =>
-                    window.open(sourceUrl, "_blank", "noopener,noreferrer")
-                  }
+                  aria-pressed={selected}
+                  onClick={() => setRecipeType(option.value)}
+                  className={cn(
+                    "flex h-11 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors sm:h-8 sm:px-5",
+                    selected
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
                 >
-                  <ExternalLink />
-                </Button>
-              ) : null}
-            </div>
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </div>
+      </section>
 
-          <div className="space-y-2">
-            <Label htmlFor="recipe-tags">Tags</Label>
-            <Input
-              id="recipe-tags"
-              value={tagsText}
-              onChange={(event) => setTagsText(event.target.value)}
-              placeholder="quick, vegetarian (comma separated)"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Recipe type</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={recipeType === "cooking" ? "default" : "outline"}
-                onClick={() => setRecipeType("cooking")}
-              >
-                Cooking Recipe
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={recipeType === "no_cook" ? "default" : "outline"}
-                onClick={() => setRecipeType("no_cook")}
-              >
-                No-Cook Placeholder
-              </Button>
+      {recipeType === "cooking" ? (
+        <section className="space-y-3 rounded-xl border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-extrabold">Ingredients</h2>
             </div>
+            {groceryActions ? (
+              <div className="hidden items-center gap-2 sm:flex">
+                {groceryActions}
+              </div>
+            ) : null}
+          </div>
+
+          {stockByItem && tracked > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold">
+                {covered} of {tracked} in pantry
+                {missingCount > 0 ? (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {missingCount} to buy
+                  </span>
+                ) : null}
+              </p>
+              <div
+                className="h-1.5 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Ingredients in pantry"
+                aria-valuemin={0}
+                aria-valuemax={tracked}
+                aria-valuenow={covered}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          ) : (
             <p className="text-xs text-muted-foreground">
-              Cooking Recipe prepares or cooks a meal. No-Cook Placeholder
-              represents planned days such as Pizza, Eating Out, or No Cooking.
+              {namedRows.length} ingredient
+              {namedRows.length === 1 ? "" : "s"} listed
             </p>
-          </div>
-        </section>
+          )}
 
-      <section className="space-y-3 rounded-xl border p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-extrabold">Ingredients</h2>
-          <span className="text-xs text-muted-foreground">
-            {rows.filter((row) => row.name.trim()).length} listed
-            {stockByItem && (() => {
-              let covered = 0;
-              let total = 0;
-              for (const row of rows) {
-                if (!row.name.trim() || row.optional) continue;
-                total += 1;
-                const effId = matchingKey(row.item_id, row.name);
-                if (effId && (stockByItem[effId] ?? 0) > 0) covered += 1;
-              }
-              return total > 0 ? ` · ✓ ${covered}/${total}` : "";
-            })()}
-          </span>
-        </div>
+          {rows.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No ingredients yet. Add one below, or paste a list you copied
+              from a recipe.
+            </p>
+          ) : (
+            <ul className="space-y-2 sm:space-y-0">
+              {ingredientList.map((item) =>
+                item.kind === "heading" ? (
+                  <li
+                    key={item.key}
+                    className="pt-1 pb-0.5 first:pt-0 sm:pt-2 sm:pb-1"
+                  >
+                    <h3
+                      className={cn(
+                        "text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]",
+                        item.tone === "missing"
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {item.label}
+                    </h3>
+                  </li>
+                ) : (
+                  renderRow(item.row, item.index, item.key)
+                ),
+              )}
+            </ul>
+          )}
 
-        <p className="text-xs text-muted-foreground">
-          Enter amounts like &ldquo;2 cups&rdquo; or &ldquo;6 oz&rdquo; — the
-          number and unit carry over to the grocery list.
-        </p>
-
-        <div className="space-y-2">
-          {rows.map((row, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-[1fr_5rem_auto_auto_auto] items-center gap-2"
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addBlankRow}
+              className="h-11 sm:h-8"
             >
-              <Input
-                value={row.name}
-                onChange={(event) => updateRow(index, { name: event.target.value })}
-                placeholder="Black beans"
-                aria-label={`Ingredient ${index + 1} name`}
-              />
-              <Input
-                value={row.quantity_text}
-                onChange={(event) =>
-                  updateRow(index, { quantity_text: event.target.value })
-                }
-                placeholder="2 cans"
-                aria-label={`Ingredient ${index + 1} amount`}
-              />
-              {stockByItem ? (() => {
-                const effId = matchingKey(row.item_id, row.name);
-                if (effId) {
-                  const haveRaw = stockByItem[effId] || 0;
-                  const sufficient = !row.optional && haveRaw > 0;
-                  const displayHave = trimDecimal(haveRaw);
-                  return (
-                    <span
-                      className={`text-xs ${sufficient ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground"}`}
-                      title={
-                        row.optional
-                          ? `Have ${haveRaw} (optional)`
-                          : sufficient
-                            ? `Have ${haveRaw}`
-                            : "None in pantry"
+              <Plus /> Add ingredient
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPasteOpen(true)}
+              className="h-11 sm:h-8"
+            >
+              <ClipboardPaste /> Paste a list
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Amounts like &ldquo;2 cups&rdquo; or &ldquo;6 oz&rdquo; carry over to
+            the grocery list.
+          </p>
+        </section>
+      ) : (
+        <section className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+          No-cook recipe — ingredients are hidden, and the pantry is left
+          alone.
+        </section>
+      )}
+
+      <section className="rounded-xl border">
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(!detailsExpanded)}
+          aria-expanded={detailsExpanded}
+          className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted/40"
+        >
+          <span className="text-sm font-extrabold">Details</span>
+          <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            <span className="truncate">{detailsSummary}</span>
+            <ChevronDown
+              className={cn(
+                "size-4 transition-transform",
+                detailsExpanded && "rotate-180",
+              )}
+            />
+          </span>
+        </button>
+
+        {detailsExpanded ? (
+          <div className="space-y-3 border-t p-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[5.5rem_5.5rem_5.5rem_minmax(0,1fr)]">
+              <div className="space-y-2">
+                <Label htmlFor="recipe-prep">Prep (min)</Label>
+                <Input
+                  id="recipe-prep"
+                  type="number"
+                  min="0"
+                  value={prepTime}
+                  onChange={(event) => setPrepTime(event.target.value)}
+                  className="h-11 sm:h-8"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="recipe-cook">Cook (min)</Label>
+                <Input
+                  id="recipe-cook"
+                  type="number"
+                  min="0"
+                  value={cookTime}
+                  onChange={(event) => setCookTime(event.target.value)}
+                  className="h-11 sm:h-8"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="recipe-yields">Yields</Label>
+                <Input
+                  id="recipe-yields"
+                  type="number"
+                  min="1"
+                  value={yields}
+                  onChange={(event) => setYields(event.target.value)}
+                  className="h-11 sm:h-8"
+                />
+              </div>
+              <div className="col-span-2 space-y-2 sm:col-span-1">
+                <Label htmlFor="recipe-source">Source</Label>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    id="recipe-source"
+                    value={source}
+                    onChange={(event) => setSource(event.target.value)}
+                    placeholder="Will"
+                    className="h-11 sm:h-8"
+                  />
+                  {sourceUrl ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      className="h-11 w-11 shrink-0 sm:h-7 sm:w-7"
+                      aria-label="Open source link in a new tab"
+                      title={sourceUrl}
+                      onClick={() =>
+                        window.open(sourceUrl, "_blank", "noopener,noreferrer")
                       }
                     >
-                      {sufficient ? "✓ " : ""}{displayHave}
-                    </span>
-                  );
-                }
-                return null;
-              })() : null}
-              <label
-                className="flex cursor-pointer items-center gap-1.5 px-1 text-xs text-muted-foreground"
-                title="Optional ingredient"
-              >
-                <Checkbox
-                  checked={row.optional}
-                  onCheckedChange={(checked) => {
-                    const optional = checked === true;
-                    updateRow(index, {
-                      optional,
-                      on_shopping_list: !optional,
-                    });
-                  }}
-                  aria-label={`Ingredient ${index + 1} optional`}
-                />
-                <span className="hidden sm:inline">opt</span>
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-destructive"
-                onClick={() =>
-                  setRows((current) => current.filter((_, i) => i !== index))
-                }
-                aria-label={`Remove ingredient ${index + 1}`}
-              >
-                <Trash2 />
-              </Button>
+                      <ExternalLink />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setRows((current) => [
-              ...current,
-              { name: "", quantity_text: "", optional: false, on_shopping_list: true, item_id: null },
-            ])
-          }
-        >
-          <Plus /> Add ingredient
-        </Button>
+            <div className="space-y-2">
+              <Label htmlFor="recipe-tags">Tags</Label>
+              <Input
+                id="recipe-tags"
+                value={tagsText}
+                onChange={(event) => setTagsText(event.target.value)}
+                placeholder="quick, vegetarian (comma separated)"
+                className="h-11 sm:h-8"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="recipe-description">Note</Label>
+              <Textarea
+                id="recipe-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="One line — who recommended it, a tweak to remember…"
+                rows={2}
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="flex items-center justify-between gap-2">
@@ -502,7 +913,7 @@ export function RecipeEditor({
           <Button
             type="button"
             variant="destructive"
-            size="sm"
+            className="h-11 sm:h-8"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 /> Delete
@@ -510,11 +921,51 @@ export function RecipeEditor({
         ) : (
           <span />
         )}
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy} className="h-11 sm:h-8">
           {busy ? <Loader2 className="animate-spin" /> : null}
           {isEdit ? "Save changes" : "Create recipe"}
         </Button>
       </div>
+
+      <Dialog open={pasteOpen} onOpenChange={setPasteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Paste a list</DialogTitle>
+            <DialogDescription>
+              One ingredient per line. A leading number becomes the amount —
+              &ldquo;2 cans black beans&rdquo; becomes amount 2 cans, name black
+              beans.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={pasteText}
+            onChange={(event) => setPasteText(event.target.value)}
+            rows={8}
+            placeholder={"2 cans black beans\n1 onion\n1 lb ground beef\nSalt to taste"}
+            aria-label="Ingredients to paste"
+          />
+          <p className="text-xs text-muted-foreground">
+            {pastedLines.length} ingredient
+            {pastedLines.length === 1 ? "" : "s"} found
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPasteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={applyPaste}
+              disabled={pastedLines.length === 0}
+            >
+              Add {pastedLines.length} row{pastedLines.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteOpen}
@@ -535,6 +986,15 @@ export function RecipeEditor({
           ingredients={ingredients}
         />
       ) : null}
-    </form>
+      </form>
+
+      {groceryActions && recipeType === "cooking" ? (
+        <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 px-4 py-2.5 backdrop-blur sm:hidden">
+          <div className="mx-auto flex max-w-[880px] items-center gap-2 pr-14 sm:pr-0">
+            {groceryActions}
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

@@ -11,7 +11,7 @@ export const metadata = { title: "Recipe" };
 
 function RecipeSkeleton() {
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-[880px] space-y-4">
       <Skeleton className="h-6 w-48" />
       <Skeleton className="h-44 w-full rounded-xl" />
       <Skeleton className="h-64 w-full rounded-xl" />
@@ -82,7 +82,7 @@ async function RecipeContent({
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-[880px]">
       <RecipeEditor
         recipe={recipe}
         ingredients={ingredients}

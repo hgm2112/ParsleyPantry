@@ -4,7 +4,7 @@ export const metadata = { title: "New recipe" };
 
 export default function NewRecipePage() {
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-[880px]">
       <RecipeEditor recipe={null} ingredients={[]} />
     </div>
   );
