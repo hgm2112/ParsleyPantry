@@ -177,6 +177,14 @@ function parsePastedLine(
 
 type PantryTone = "pantry" | "missing" | "optional" | "unknown";
 
+function bandTone(tone: "missing" | "pantry" | "optional") {
+  return tone === "missing"
+    ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+    : tone === "optional"
+      ? "bg-muted/40 text-muted-foreground"
+      : "bg-muted/70 text-muted-foreground";
+}
+
 const DESKTOP_QUERY = "(min-width: 640px)";
 
 function subscribeDesktop(callback: () => void) {
@@ -218,15 +226,17 @@ function PantryChip({
       : tone === "optional"
         ? "Optional"
         : "Need to buy";
+  const tones =
+    tone === "pantry"
+      ? "text-primary sm:bg-primary/10"
+      : tone === "optional"
+        ? "text-muted-foreground sm:bg-muted"
+        : "text-amber-700 sm:bg-amber-500/15 dark:text-amber-300";
   return (
     <span
       className={cn(
-        "shrink-0 justify-self-start rounded-md px-2 py-1 text-[11px] font-semibold whitespace-nowrap",
-        tone === "pantry"
-          ? "bg-primary/10 text-primary"
-          : tone === "optional"
-            ? "bg-muted text-muted-foreground"
-            : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+        "justify-self-start text-xs font-semibold whitespace-nowrap sm:rounded-md sm:px-2 sm:py-1 sm:text-[11px]",
+        tones,
         className,
       )}
     >
@@ -287,12 +297,19 @@ export function RecipeEditor({
   const [groceryOpen, setGroceryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null);
+  const [pantryGroupOpen, setPantryGroupOpen] = useState<boolean | null>(null);
+  const [optionalGroupOpen, setOptionalGroupOpen] = useState<boolean | null>(
+    null,
+  );
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
   // Details is collapsed on phones but open by default on wider screens.
   const isDesktop = useIsDesktop();
   const detailsExpanded = detailsOpen ?? isDesktop;
+  // Groups you don't need to act on collapse on phones, open on desktop.
+  const pantryGroupExpanded = pantryGroupOpen ?? isDesktop;
+  const optionalGroupExpanded = optionalGroupOpen ?? isDesktop;
 
   function updateRow(index: number, patch: Partial<IngredientDraft>) {
     setRows((current) =>
@@ -360,6 +377,7 @@ export function RecipeEditor({
         key: string;
         tone: "missing" | "pantry" | "optional";
         label: string;
+        toggle?: { collapsed: boolean; onToggle: () => void };
       }
     | { kind: "row"; key: string; row: IngredientDraft; index: number };
 
@@ -385,8 +403,12 @@ export function RecipeEditor({
         key: "heading-pantry",
         tone: "pantry",
         label: `In your pantry · ${pantryRows.length}`,
+        toggle: {
+          collapsed: !pantryGroupExpanded,
+          onToggle: () => setPantryGroupOpen(!pantryGroupExpanded),
+        },
       });
-      pushRows(pantryRows);
+      if (pantryGroupExpanded) pushRows(pantryRows);
     }
     if (optionalOutRows.length > 0) {
       ingredientList.push({
@@ -394,8 +416,12 @@ export function RecipeEditor({
         key: "heading-optional",
         tone: "optional",
         label: `Optional · not in pantry · ${optionalOutRows.length}`,
+        toggle: {
+          collapsed: !optionalGroupExpanded,
+          onToggle: () => setOptionalGroupOpen(!optionalGroupExpanded),
+        },
       });
-      pushRows(optionalOutRows);
+      if (optionalGroupExpanded) pushRows(optionalOutRows);
     }
     pushRows(blankRows);
   } else {
@@ -575,7 +601,7 @@ export function RecipeEditor({
       type="button"
       onClick={() => void handleAddMissing()}
       disabled={busy || missingCount === 0}
-      className="h-11 shrink-0 sm:h-8"
+      className="h-11 flex-1 sm:h-8 sm:flex-none"
       title={
         missingCount === 0
           ? "Everything needed is in your pantry"
@@ -587,27 +613,14 @@ export function RecipeEditor({
     </Button>
   ) : null;
 
-  // Shorter label in the phone bar so it fits beside "Choose items…".
-  const groceryPrimaryMobile = isEdit ? (
-    <Button
-      type="button"
-      onClick={() => void handleAddMissing()}
-      disabled={busy || missingCount === 0}
-      className="h-11 min-w-0 flex-1 sm:hidden"
-    >
-      <ShoppingCart />
-      {missingCount === 0 ? "Nothing missing" : `Add ${missingCount} missing`}
-    </Button>
-  ) : null;
-
   function renderRow(row: IngredientDraft, index: number, key: string) {
     const status = rowStatus(row);
     return (
       <li
         key={key}
-        className="mt-2 rounded-lg border border-border/60 p-2 sm:mt-0 sm:rounded-none sm:border-0 sm:border-b sm:border-border/50 sm:p-0 sm:py-2 sm:last:border-b-0"
+        className="border-b border-border/50 py-1.5 last:border-b-0"
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_130px_150px_auto_auto]">
+        <div className="grid grid-cols-[minmax(0,1fr)_90px] items-center gap-x-2 gap-y-0.5 sm:grid-cols-[minmax(0,1fr)_130px_150px_auto_auto] sm:gap-2">
           <Input
             value={row.name}
             onChange={(event) =>
@@ -615,7 +628,7 @@ export function RecipeEditor({
             }
             placeholder="Black beans"
             aria-label={`Ingredient ${index + 1} name`}
-            className="col-start-1 row-start-1 h-11 sm:col-auto sm:row-auto sm:h-8"
+            className="col-start-1 row-start-1 h-10 text-[15px] sm:col-auto sm:row-auto sm:h-8 sm:text-sm"
           />
           <Input
             value={row.quantity_text}
@@ -624,16 +637,16 @@ export function RecipeEditor({
             }
             placeholder="Amount"
             aria-label={`Ingredient ${index + 1} amount`}
-            className="col-start-1 row-start-2 h-11 w-[130px] justify-self-start placeholder:text-muted-foreground/60 sm:col-auto sm:row-auto sm:h-8 sm:w-full"
+            className="col-start-2 row-start-1 h-10 w-full text-[15px] placeholder:text-muted-foreground/60 sm:col-auto sm:row-auto sm:h-8 sm:text-sm"
           />
           <PantryChip
             tone={status.tone}
             have={status.have}
-            className="col-start-2 row-start-1 sm:col-auto sm:row-auto"
+            className="col-start-1 row-start-2 sm:col-auto sm:row-auto sm:justify-self-center"
           />
           <div className="col-start-2 row-start-2 flex items-center justify-self-end gap-1 sm:contents">
             <label
-              className="flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground sm:h-7"
+              className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground sm:h-7"
               title="Optional ingredient — never added to the grocery list"
             >
               <Checkbox
@@ -653,7 +666,7 @@ export function RecipeEditor({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7 sm:justify-self-end"
+              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7 sm:justify-self-end"
               onClick={() =>
                 setRows((current) => current.filter((_, i) => i !== index))
               }
@@ -669,7 +682,7 @@ export function RecipeEditor({
 
   return (
     <>
-      <form onSubmit={save} className="mx-auto max-w-[880px] space-y-4 pb-10 md:pb-0">
+      <form onSubmit={save} className="mx-auto max-w-[880px] space-y-4 pb-4 md:pb-0">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Button
@@ -704,7 +717,11 @@ export function RecipeEditor({
             </span>
           </nav>
         </div>
-        <Button type="submit" disabled={busy} className="h-11 shrink-0 sm:h-8">
+        <Button
+          type="submit"
+          disabled={busy}
+          className="hidden h-11 shrink-0 sm:inline-flex sm:h-8"
+        >
           {busy ? <Loader2 className="animate-spin" /> : null}
           {isEdit ? "Save changes" : "Create recipe"}
         </Button>
@@ -798,7 +815,7 @@ export function RecipeEditor({
               )}
             </div>
             {isEdit ? (
-              <div className="hidden shrink-0 items-center gap-2 sm:flex">
+              <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
                 {grocerySecondary}
                 {groceryPrimary}
               </div>
@@ -814,28 +831,47 @@ export function RecipeEditor({
             <div className="space-y-1">
               <div className="hidden items-center gap-2 pb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:grid sm:grid-cols-[minmax(0,1fr)_130px_150px_auto_auto]">
                 <span>Ingredient</span>
-                <span>Amount</span>
-                <span>Pantry</span>
+                <span className="text-center">Amount</span>
+                <span className="text-center">Pantry</span>
                 <span aria-hidden />
                 <span aria-hidden />
               </div>
               <ul className="space-y-0">
                 {ingredientList.map((item) =>
                   item.kind === "heading" ? (
-                    <li
-                      key={item.key}
-                      className={cn(
-                        "mt-4 rounded-md px-3 py-1.5 first:mt-0",
-                        item.tone === "missing"
-                          ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
-                          : item.tone === "optional"
-                            ? "bg-muted/40 text-muted-foreground"
-                            : "bg-muted/70 text-muted-foreground",
+                    <li key={item.key} className="mt-4 first:mt-0">
+                      {item.toggle ? (
+                        <button
+                          type="button"
+                          onClick={item.toggle.onToggle}
+                          aria-expanded={!item.toggle.collapsed}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-left",
+                            bandTone(item.tone),
+                          )}
+                        >
+                          <span className="text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]">
+                            {item.label}
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              "size-3.5 shrink-0 transition-transform",
+                              !item.toggle.collapsed && "rotate-180",
+                            )}
+                          />
+                        </button>
+                      ) : (
+                        <div
+                          className={cn(
+                            "rounded-md px-3 py-1.5",
+                            bandTone(item.tone),
+                          )}
+                        >
+                          <span className="text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]">
+                            {item.label}
+                          </span>
+                        </div>
                       )}
-                    >
-                      <h3 className="text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]">
-                        {item.label}
-                      </h3>
                     </li>
                   ) : (
                     renderRow(item.row, item.index, item.key)
@@ -1095,15 +1131,6 @@ export function RecipeEditor({
         />
       ) : null}
       </form>
-
-      {isEdit && recipeType === "cooking" ? (
-        <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 px-4 py-2.5 backdrop-blur sm:hidden">
-          <div className="mx-auto flex max-w-[880px] items-center gap-2 pr-14">
-            {grocerySecondary}
-            {groceryPrimaryMobile}
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }

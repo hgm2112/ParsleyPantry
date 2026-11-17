@@ -421,7 +421,7 @@ export function AssistantLauncher() {
         onClick={() => setOpen(true)}
         className={cn(
           "fixed z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:bg-primary/90",
-          "bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6",
+          "bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6",
         )}
         aria-label="Open assistant"
         title="Assistant"
