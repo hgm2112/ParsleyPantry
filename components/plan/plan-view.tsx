@@ -485,9 +485,9 @@ function DayCard({
             <span className="block break-words text-sm font-extrabold leading-snug">
               {title}
             </span>
-            {showTime || showCoverage ? (
+            {recipe ? (
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                {showTime ? `${recipe?.time} min` : null}
+                {showTime ? `${recipe.time} min` : null}
                 {showCoverage ? (
                   <>
                     {showTime ? " · " : null}
@@ -508,6 +508,14 @@ function DayCard({
                     </button>
                   </>
                 ) : null}
+                {showTime || showCoverage ? " · " : null}
+                <Link
+                  href={`/recipes/${recipe.id}?returnTo=${encodeURIComponent(`/plan?week=${weekStart}`)}`}
+                  className="relative z-10 rounded px-1 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:opacity-70"
+                  aria-label={`Open recipe: ${recipe.name}`}
+                >
+                  Recipe
+                </Link>
               </span>
             ) : null}
           </span>
