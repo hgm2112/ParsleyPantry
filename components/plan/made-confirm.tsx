@@ -158,11 +158,11 @@ export function MadeConfirmContent({
     return (
       <section className="space-y-1">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
             {title}
           </h3>
-          <div className="flex w-[12.75rem] shrink-0 items-center gap-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <span className="w-[3rem] shrink-0 text-right">Needs</span>
+          <div className="flex w-[11.5rem] shrink-0 items-center gap-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:w-[12.75rem] sm:text-[11px]">
+            <span className="w-[2.75rem] shrink-0 text-right sm:w-[3rem]">Needs</span>
             <span className="flex-1">Using</span>
           </div>
         </div>
@@ -177,7 +177,7 @@ export function MadeConfirmContent({
             return (
               <li
                 key={`${item.name}-${index}`}
-                className="flex items-center gap-2 px-3 py-2 text-sm"
+                className="flex items-center gap-1.5 px-2 py-1.5 text-[13px] sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
               >
                 <div className="min-w-0 flex-1">
                   <span className="block font-medium leading-tight text-foreground">
@@ -190,14 +190,17 @@ export function MadeConfirmContent({
                   </span>
                 </div>
 
-                <div className="flex w-[12.75rem] shrink-0 items-center gap-2">
-                  <span className="w-[3rem] shrink-0 text-right tabular-nums text-muted-foreground">
+                <div className="flex w-[11.5rem] shrink-0 items-center gap-2 sm:w-[12.75rem]">
+                  <span
+                    className="w-[2.75rem] shrink-0 truncate text-right text-[10px] tabular-nums text-muted-foreground sm:w-[3rem] sm:text-sm"
+                    title={needsText}
+                  >
                     {needsText}
                   </span>
 
                   <div className="flex flex-1 items-center justify-end">
                     {variant === "missing" ? (
-                      <span className="inline-flex items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                      <span className="inline-flex items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 sm:px-2 sm:py-1 sm:text-[11px]">
                         Need {qtyText(item.needed, item.unit)}
                       </span>
                     ) : (
@@ -206,21 +209,21 @@ export function MadeConfirmContent({
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-11 w-11 shrink-0"
+                          className="h-10 w-10 shrink-0 sm:h-11 sm:w-11"
                           onClick={() => adjustAmount(index, -step)}
                           disabled={stepperDisabled || atMin}
                           aria-label={`Use less ${item.name}`}
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-12 shrink-0 text-center text-xs font-medium tabular-nums text-foreground">
+                        <span className="w-11 shrink-0 text-center text-[11px] font-medium tabular-nums text-foreground sm:w-12 sm:text-xs">
                           {qtyText(amount, item.unit)}
                         </span>
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          className={cn("h-11 w-11 shrink-0", atMax && "opacity-40")}
+                          className={cn("h-10 w-10 shrink-0 sm:h-11 sm:w-11", atMax && "opacity-40")}
                           onClick={() => adjustAmount(index, step)}
                           disabled={stepperDisabled || atMax}
                           aria-label={`Use more ${item.name}`}
@@ -247,7 +250,7 @@ export function MadeConfirmContent({
           {mealName ? `“${mealName}”` : "Review what to use from your pantry."}
         </DialogDescription>
         {items && items.length > 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground sm:text-sm">
             {usable.length} from your pantry · {missing.length} missing
           </p>
         ) : null}
@@ -294,7 +297,7 @@ export function MadeConfirmContent({
         )}
       </div>
 
-      <DialogFooter className="gap-2 sm:gap-0">
+      <DialogFooter className="-mx-3 -mb-3 gap-2 p-3 sm:-mx-4 sm:-mb-4 sm:gap-0 sm:p-4">
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
