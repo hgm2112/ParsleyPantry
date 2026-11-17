@@ -202,7 +202,15 @@ function useIsDesktop() {
   );
 }
 
-function PantryChip({ tone, have }: { tone: PantryTone; have: number }) {
+function PantryChip({
+  tone,
+  have,
+  className,
+}: {
+  tone: PantryTone;
+  have: number;
+  className?: string;
+}) {
   if (tone === "unknown") return null;
   const label =
     tone === "pantry"
@@ -213,12 +221,13 @@ function PantryChip({ tone, have }: { tone: PantryTone; have: number }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold whitespace-nowrap",
+        "shrink-0 justify-self-start rounded-md px-2 py-1 text-[11px] font-semibold whitespace-nowrap",
         tone === "pantry"
           ? "bg-primary/10 text-primary"
           : tone === "optional"
             ? "bg-muted text-muted-foreground"
             : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+        className,
       )}
     >
       {label}
@@ -298,6 +307,7 @@ export function RecipeEditor({
     tone: PantryTone;
     have: number;
   } {
+    if (!row.name.trim()) return { tone: "unknown", have: 0 };
     if (!stockByItem) return { tone: "unknown", have: 0 };
     const key = matchingKey(row.item_id, row.name);
     const have = key ? (stockByItem[key] ?? 0) : 0;
@@ -317,13 +327,23 @@ export function RecipeEditor({
   for (const { row } of namedRows) {
     if (row.optional) continue;
     tracked += 1;
-    if (rowStatus(row).have > 0) covered += 1;
+    if (rowStatus(row).tone === "pantry") covered += 1;
   }
   const missingCount = Math.max(0, tracked - covered);
+  const optionalCount = namedRows.filter(({ row }) => row.optional).length;
   const progressPct = tracked > 0 ? Math.round((covered / tracked) * 100) : 0;
 
-  const missingRows = namedRows.filter(({ row }) => rowStatus(row).tone === "missing");
-  const pantryRows = namedRows.filter(({ row }) => rowStatus(row).tone !== "missing");
+  // Group strictly by real pantry status: optional items that aren't stocked
+  // get their own band so they never read as "In your pantry" or as missing.
+  const missingRows = namedRows.filter(
+    ({ row }) => rowStatus(row).tone === "missing",
+  );
+  const pantryRows = namedRows.filter(
+    ({ row }) => rowStatus(row).tone === "pantry",
+  );
+  const optionalOutRows = namedRows.filter(
+    ({ row }) => rowStatus(row).tone === "optional",
+  );
 
   const pastedLines = pasteText
     .split("\n")
@@ -338,13 +358,18 @@ export function RecipeEditor({
     | {
         kind: "heading";
         key: string;
-        tone: "missing" | "pantry";
+        tone: "missing" | "pantry" | "optional";
         label: string;
       }
     | { kind: "row"; key: string; row: IngredientDraft; index: number };
 
   const ingredientList: IngredientListItem[] = [];
   if (stockByItem) {
+    const pushRows = (items: { row: IngredientDraft; index: number }[]) => {
+      for (const { row, index } of items) {
+        ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+      }
+    };
     if (missingRows.length > 0) {
       ingredientList.push({
         kind: "heading",
@@ -352,9 +377,7 @@ export function RecipeEditor({
         tone: "missing",
         label: `Need to buy · ${missingRows.length}`,
       });
-      for (const { row, index } of missingRows) {
-        ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
-      }
+      pushRows(missingRows);
     }
     if (pantryRows.length > 0) {
       ingredientList.push({
@@ -363,13 +386,18 @@ export function RecipeEditor({
         tone: "pantry",
         label: `In your pantry · ${pantryRows.length}`,
       });
-      for (const { row, index } of pantryRows) {
-        ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
-      }
+      pushRows(pantryRows);
     }
-    for (const { row, index } of blankRows) {
-      ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
+    if (optionalOutRows.length > 0) {
+      ingredientList.push({
+        kind: "heading",
+        key: "heading-optional",
+        tone: "optional",
+        label: `Optional · not in pantry · ${optionalOutRows.length}`,
+      });
+      pushRows(optionalOutRows);
     }
+    pushRows(blankRows);
   } else {
     rows.forEach((row, index) => {
       ingredientList.push({ kind: "row", key: `row-${index}`, row, index });
@@ -516,45 +544,60 @@ export function RecipeEditor({
   }
 
   const sourceUrl = externalHttpUrl(source);
-  const totalMinutes = (Number(prepTime) || 0) + (Number(cookTime) || 0);
-  const tagCount = tagsText.split(",").filter((tag) => tag.trim()).length;
+  const summaryLead = `${covered} of ${tracked} in pantry`;
+  const summaryExtras = [
+    missingCount > 0 ? `${missingCount} to buy` : null,
+    optionalCount > 0 ? `${optionalCount} optional` : null,
+  ].filter(Boolean);
   const detailsSummary =
     [
-      totalMinutes > 0 ? `${totalMinutes} min` : null,
-      Number(yields) > 1 ? `Serves ${yields}` : null,
-      tagCount > 0 ? `${tagCount} tag${tagCount === 1 ? "" : "s"}` : null,
+      (Number(prepTime) || 0) > 0 ? `Prep ${prepTime}` : null,
+      (Number(cookTime) || 0) > 0 ? `Cook ${cookTime}` : null,
+      `Yields ${Number(yields) || 1}`,
+      source.trim() || null,
     ]
       .filter(Boolean)
       .join(" · ") || "Prep, cook, source, tags";
 
-  const groceryActions = isEdit ? (
-    <>
-      <Button
-        type="button"
-        onClick={() => void handleAddMissing()}
-        disabled={busy || missingCount === 0}
-        className="h-11 sm:h-8"
-        title={
-          missingCount === 0
-            ? "Everything needed is in your pantry"
-            : "Adds the saved ingredients that are not in your pantry"
-        }
-      >
-        <ShoppingCart />
-        {missingCount === 0 ? "Nothing missing" : `Add ${missingCount} missing`}
-        <span className="hidden sm:inline">
-          {missingCount === 0 ? "" : " to list"}
-        </span>
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setGroceryOpen(true)}
-        className="h-11 sm:h-8"
-      >
-        Choose items…
-      </Button>
-    </>
+  const grocerySecondary = isEdit ? (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setGroceryOpen(true)}
+      className="h-11 shrink-0 sm:h-8"
+    >
+      Choose items…
+    </Button>
+  ) : null;
+
+  const groceryPrimary = isEdit ? (
+    <Button
+      type="button"
+      onClick={() => void handleAddMissing()}
+      disabled={busy || missingCount === 0}
+      className="h-11 shrink-0 sm:h-8"
+      title={
+        missingCount === 0
+          ? "Everything needed is in your pantry"
+          : "Adds the saved ingredients that are not in your pantry"
+      }
+    >
+      <ShoppingCart />
+      {missingCount === 0 ? "Nothing missing" : `Add ${missingCount} missing to list`}
+    </Button>
+  ) : null;
+
+  // Shorter label in the phone bar so it fits beside "Choose items…".
+  const groceryPrimaryMobile = isEdit ? (
+    <Button
+      type="button"
+      onClick={() => void handleAddMissing()}
+      disabled={busy || missingCount === 0}
+      className="h-11 min-w-0 flex-1 sm:hidden"
+    >
+      <ShoppingCart />
+      {missingCount === 0 ? "Nothing missing" : `Add ${missingCount} missing`}
+    </Button>
   ) : null;
 
   function renderRow(row: IngredientDraft, index: number, key: string) {
@@ -562,9 +605,9 @@ export function RecipeEditor({
     return (
       <li
         key={key}
-        className="rounded-lg border border-border/60 p-2 sm:rounded-none sm:border-0 sm:border-b sm:border-border/50 sm:p-0 sm:py-2 sm:last:border-b-0"
+        className="mt-2 rounded-lg border border-border/60 p-2 sm:mt-0 sm:rounded-none sm:border-0 sm:border-b sm:border-border/50 sm:p-0 sm:py-2 sm:last:border-b-0"
       >
-        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+        <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_130px_150px_auto_auto]">
           <Input
             value={row.name}
             onChange={(event) =>
@@ -572,7 +615,7 @@ export function RecipeEditor({
             }
             placeholder="Black beans"
             aria-label={`Ingredient ${index + 1} name`}
-            className="h-11 basis-full sm:h-8 sm:basis-0 sm:flex-1"
+            className="col-start-1 row-start-1 h-11 sm:col-auto sm:row-auto sm:h-8"
           />
           <Input
             value={row.quantity_text}
@@ -581,38 +624,44 @@ export function RecipeEditor({
             }
             placeholder="Amount"
             aria-label={`Ingredient ${index + 1} amount`}
-            className="h-11 w-[6.75rem] shrink-0 placeholder:text-muted-foreground/60 sm:h-8"
+            className="col-start-1 row-start-2 h-11 w-[130px] justify-self-start placeholder:text-muted-foreground/60 sm:col-auto sm:row-auto sm:h-8 sm:w-full"
           />
-          <PantryChip tone={status.tone} have={status.have} />
-          <label
-            className="ml-auto flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground sm:ml-0 sm:h-7"
-            title="Optional ingredient — never added to the grocery list"
-          >
-            <Checkbox
-              checked={row.optional}
-              onCheckedChange={(checked) => {
-                const optional = checked === true;
-                updateRow(index, {
-                  optional,
-                  on_shopping_list: !optional,
-                });
-              }}
-              aria-label={`Ingredient ${index + 1} optional`}
-            />
-            <span>Optional</span>
-          </label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
-            onClick={() =>
-              setRows((current) => current.filter((_, i) => i !== index))
-            }
-            aria-label={`Remove ingredient ${index + 1}`}
-          >
-            <Trash2 />
-          </Button>
+          <PantryChip
+            tone={status.tone}
+            have={status.have}
+            className="col-start-2 row-start-1 sm:col-auto sm:row-auto"
+          />
+          <div className="col-start-2 row-start-2 flex items-center justify-self-end gap-1 sm:contents">
+            <label
+              className="flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground sm:h-7"
+              title="Optional ingredient — never added to the grocery list"
+            >
+              <Checkbox
+                checked={row.optional}
+                onCheckedChange={(checked) => {
+                  const optional = checked === true;
+                  updateRow(index, {
+                    optional,
+                    on_shopping_list: !optional,
+                  });
+                }}
+                aria-label={`Ingredient ${index + 1} optional`}
+              />
+              <span>Optional</span>
+            </label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7 sm:justify-self-end"
+              onClick={() =>
+                setRows((current) => current.filter((_, i) => i !== index))
+              }
+              aria-label={`Remove ingredient ${index + 1}`}
+            >
+              <Trash2 />
+            </Button>
+          </div>
         </div>
       </li>
     );
@@ -622,120 +671,139 @@ export function RecipeEditor({
     <>
       <form onSubmit={save} className="mx-auto max-w-[880px] space-y-4 pb-10 md:pb-0">
       <div className="flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="h-11 w-11 sm:h-7 sm:w-7"
-          render={
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="h-11 w-11 shrink-0 sm:h-7 sm:w-7"
+            render={
+              <Link
+                href={
+                  returnTo && returnTo.startsWith("/") ? returnTo : "/recipes"
+                }
+              />
+            }
+            aria-label="Back"
+          >
+            <ArrowLeft />
+          </Button>
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
+          >
             <Link
-              href={
-                returnTo && returnTo.startsWith("/") ? returnTo : "/recipes"
-              }
-            />
-          }
-          aria-label="Back"
-        >
-          <ArrowLeft />
-        </Button>
-        <Button type="submit" disabled={busy} className="h-11 sm:h-8">
+              href="/recipes"
+              className="rounded transition-colors hover:text-foreground"
+            >
+              Recipes
+            </Link>
+            <span aria-hidden>/</span>
+            <span className="truncate font-medium text-foreground">
+              {isEdit ? "Edit recipe" : "New recipe"}
+            </span>
+          </nav>
+        </div>
+        <Button type="submit" disabled={busy} className="h-11 shrink-0 sm:h-8">
           {busy ? <Loader2 className="animate-spin" /> : null}
           {isEdit ? "Save changes" : "Create recipe"}
         </Button>
       </div>
 
-      <section className="space-y-4 rounded-xl border p-4">
+      <section className="space-y-3 rounded-xl border p-4">
         <div className="space-y-2">
-          <Label htmlFor="recipe-name">Name</Label>
+          <Label
+            htmlFor="recipe-name"
+            className="text-xs font-semibold text-muted-foreground"
+          >
+            Name
+          </Label>
           <Input
             id="recipe-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Weeknight chili"
             autoFocus={!isEdit}
-            className="h-11 sm:h-8"
+            className="h-11 text-lg font-semibold sm:h-10 md:text-xl"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Recipe type</Label>
-          <div
-            role="group"
-            aria-label="Recipe type"
-            className="grid grid-cols-2 gap-1 rounded-lg border p-1 sm:inline-grid"
-          >
-            {(
-              [
-                { value: "cooking", label: "Cooking" },
-                { value: "no_cook", label: "No-cook" },
-              ] as const
-            ).map((option) => {
-              const selected = recipeType === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setRecipeType(option.value)}
-                  className={cn(
-                    "flex h-11 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors sm:h-8 sm:px-5",
-                    selected
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+        <div
+          role="group"
+          aria-label="Recipe type"
+          className="grid grid-cols-2 gap-1 rounded-lg border p-1 sm:inline-grid"
+        >
+          {(
+            [
+              { value: "cooking", label: "Cooking recipe" },
+              { value: "no_cook", label: "No-cook placeholder" },
+            ] as const
+          ).map((option) => {
+            const selected = recipeType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setRecipeType(option.value)}
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-md px-2 text-xs font-semibold whitespace-nowrap transition-colors sm:h-8 sm:px-5 sm:text-sm",
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
       {recipeType === "cooking" ? (
         <section className="space-y-3 rounded-xl border p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <h2 className="text-sm font-extrabold">Ingredients</h2>
+              {stockByItem && tracked > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold sm:text-sm">
+                    {summaryLead}
+                    {summaryExtras.length > 0 ? (
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        · {summaryExtras.join(" · ")}
+                      </span>
+                    ) : null}
+                  </p>
+                  <div
+                    className="h-1.5 max-w-md overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label="Ingredients in pantry"
+                    aria-valuemin={0}
+                    aria-valuemax={tracked}
+                    aria-valuenow={covered}
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width] duration-300"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {namedRows.length} ingredient
+                  {namedRows.length === 1 ? "" : "s"} listed
+                </p>
+              )}
             </div>
-            {groceryActions ? (
-              <div className="hidden items-center gap-2 sm:flex">
-                {groceryActions}
+            {isEdit ? (
+              <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                {grocerySecondary}
+                {groceryPrimary}
               </div>
             ) : null}
           </div>
-
-          {stockByItem && tracked > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-sm font-semibold">
-                {covered} of {tracked} in pantry
-                {missingCount > 0 ? (
-                  <span className="font-normal text-muted-foreground">
-                    {" "}
-                    · {missingCount} to buy
-                  </span>
-                ) : null}
-              </p>
-              <div
-                className="h-1.5 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-label="Ingredients in pantry"
-                aria-valuemin={0}
-                aria-valuemax={tracked}
-                aria-valuenow={covered}
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-300"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {namedRows.length} ingredient
-              {namedRows.length === 1 ? "" : "s"} listed
-            </p>
-          )}
 
           {rows.length === 0 ? (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -743,29 +811,38 @@ export function RecipeEditor({
               from a recipe.
             </p>
           ) : (
-            <ul className="space-y-2 sm:space-y-0">
-              {ingredientList.map((item) =>
-                item.kind === "heading" ? (
-                  <li
-                    key={item.key}
-                    className="pt-1 pb-0.5 first:pt-0 sm:pt-2 sm:pb-1"
-                  >
-                    <h3
+            <div className="space-y-1">
+              <div className="hidden items-center gap-2 pb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:grid sm:grid-cols-[minmax(0,1fr)_130px_150px_auto_auto]">
+                <span>Ingredient</span>
+                <span>Amount</span>
+                <span>Pantry</span>
+                <span aria-hidden />
+                <span aria-hidden />
+              </div>
+              <ul className="space-y-0">
+                {ingredientList.map((item) =>
+                  item.kind === "heading" ? (
+                    <li
+                      key={item.key}
                       className={cn(
-                        "text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]",
+                        "mt-4 rounded-md px-3 py-1.5 first:mt-0",
                         item.tone === "missing"
-                          ? "text-amber-700 dark:text-amber-300"
-                          : "text-muted-foreground",
+                          ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                          : item.tone === "optional"
+                            ? "bg-muted/40 text-muted-foreground"
+                            : "bg-muted/70 text-muted-foreground",
                       )}
                     >
-                      {item.label}
-                    </h3>
-                  </li>
-                ) : (
-                  renderRow(item.row, item.index, item.key)
-                ),
-              )}
-            </ul>
+                      <h3 className="text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]">
+                        {item.label}
+                      </h3>
+                    </li>
+                  ) : (
+                    renderRow(item.row, item.index, item.key)
+                  ),
+                )}
+              </ul>
+            </div>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -820,42 +897,62 @@ export function RecipeEditor({
 
         {detailsExpanded ? (
           <div className="space-y-3 border-t p-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[5.5rem_5.5rem_5.5rem_minmax(0,1fr)]">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="space-y-2">
-                <Label htmlFor="recipe-prep">Prep (min)</Label>
+                <Label
+                  htmlFor="recipe-prep"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Prep (min)
+                </Label>
                 <Input
                   id="recipe-prep"
                   type="number"
                   min="0"
                   value={prepTime}
                   onChange={(event) => setPrepTime(event.target.value)}
-                  className="h-11 sm:h-8"
+                  className="h-11 [appearance:textfield] sm:h-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="recipe-cook">Cook (min)</Label>
+                <Label
+                  htmlFor="recipe-cook"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Cook (min)
+                </Label>
                 <Input
                   id="recipe-cook"
                   type="number"
                   min="0"
                   value={cookTime}
                   onChange={(event) => setCookTime(event.target.value)}
-                  className="h-11 sm:h-8"
+                  className="h-11 [appearance:textfield] sm:h-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="recipe-yields">Yields</Label>
+                <Label
+                  htmlFor="recipe-yields"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Yields
+                </Label>
                 <Input
                   id="recipe-yields"
                   type="number"
                   min="1"
                   value={yields}
                   onChange={(event) => setYields(event.target.value)}
-                  className="h-11 sm:h-8"
+                  className="h-11 [appearance:textfield] sm:h-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
               </div>
-              <div className="col-span-2 space-y-2 sm:col-span-1">
-                <Label htmlFor="recipe-source">Source</Label>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="recipe-source"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Source
+                </Label>
                 <div className="flex items-center gap-1.5">
                   <Input
                     id="recipe-source"
@@ -883,26 +980,37 @@ export function RecipeEditor({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="recipe-tags">Tags</Label>
-              <Input
-                id="recipe-tags"
-                value={tagsText}
-                onChange={(event) => setTagsText(event.target.value)}
-                placeholder="quick, vegetarian (comma separated)"
-                className="h-11 sm:h-8"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="recipe-description">Note</Label>
-              <Textarea
-                id="recipe-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="One line — who recommended it, a tweak to remember…"
-                rows={2}
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="recipe-tags"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Tags
+                </Label>
+                <Input
+                  id="recipe-tags"
+                  value={tagsText}
+                  onChange={(event) => setTagsText(event.target.value)}
+                  placeholder="quick, vegetarian (comma separated)"
+                  className="h-11 sm:h-8"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="recipe-description"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Note (optional)
+                </Label>
+                <Input
+                  id="recipe-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Where it came from, tweaks…"
+                  className="h-11 sm:h-8"
+                />
+              </div>
             </div>
           </div>
         ) : null}
@@ -988,10 +1096,11 @@ export function RecipeEditor({
       ) : null}
       </form>
 
-      {groceryActions && recipeType === "cooking" ? (
+      {isEdit && recipeType === "cooking" ? (
         <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 px-4 py-2.5 backdrop-blur sm:hidden">
-          <div className="mx-auto flex max-w-[880px] items-center gap-2 pr-14 sm:pr-0">
-            {groceryActions}
+          <div className="mx-auto flex max-w-[880px] items-center gap-2 pr-14">
+            {grocerySecondary}
+            {groceryPrimaryMobile}
           </div>
         </div>
       ) : null}
