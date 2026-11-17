@@ -161,9 +161,9 @@ export function MadeConfirmContent({
           <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
             {title}
           </h3>
-          <div className="flex w-[11.5rem] shrink-0 items-center gap-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:w-[12.75rem] sm:text-[11px]">
-            <span className="w-[2.75rem] shrink-0 text-right sm:w-[3rem]">Needs</span>
-            <span className="flex-1">Using</span>
+          <div className="flex w-[11.5rem] shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:w-[12.75rem] sm:text-[11px]">
+            <span className="w-[2.75rem] shrink-0 text-center sm:w-[3rem]">Needs</span>
+            <span className="flex-1 text-center">Using</span>
           </div>
         </div>
         <ul className="divide-y divide-border/60 rounded-lg border border-border/60 bg-muted/20">
@@ -192,13 +192,13 @@ export function MadeConfirmContent({
 
                 <div className="flex w-[11.5rem] shrink-0 items-center gap-2 sm:w-[12.75rem]">
                   <span
-                    className="w-[2.75rem] shrink-0 truncate text-right text-[10px] tabular-nums text-muted-foreground sm:w-[3rem] sm:text-sm"
+                    className="w-[2.75rem] shrink-0 truncate text-center text-[10px] tabular-nums text-muted-foreground sm:w-[3rem] sm:text-sm"
                     title={needsText}
                   >
                     {needsText}
                   </span>
 
-                  <div className="flex flex-1 items-center justify-end">
+                  <div className="flex flex-1 items-center justify-center">
                     {variant === "missing" ? (
                       <span className="inline-flex items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 sm:px-2 sm:py-1 sm:text-[11px]">
                         Need {qtyText(item.needed, item.unit)}
