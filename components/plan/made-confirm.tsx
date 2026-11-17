@@ -16,8 +16,6 @@ import {
 import { markMealMade, previewMealMade } from "@/app/(app)/plan/actions";
 import { displayQtyUnit } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import type { Tint } from "@/lib/tints";
-import { tintFor } from "@/lib/tints";
 
 type PreviewItem = {
   name: string;
@@ -36,68 +34,40 @@ type PreviewItem = {
 };
 
 function qtyText(quantity: number, unit: string | null): string {
-  const { qtyText, unitText } = displayQtyUnit(quantity, unit);
-  return `${qtyText}${unitText ? ` ${unitText}` : ""}`;
+  const { qtyText: q, unitText } = displayQtyUnit(quantity, unit);
+  return `${q}${unitText ? ` ${unitText}` : ""}`;
 }
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-function unitLabel(unit: string | null): string | null {
-  if (!unit) return null;
-  const { unitText } = displayQtyUnit(1, unit);
-  return unitText;
-}
-
-/** One-line pantry status for an ingredient given the chosen amount to use. */
-function statusLine(item: PreviewItem, useAmount: number): string {
-  if (!item.matched) {
-    return "Not matched to pantry — nothing will be deducted";
-  }
-  if (item.available <= 0) {
-    return `Not in pantry — need ${qtyText(item.needed, item.unit)}`;
-  }
-  if (useAmount <= 0) {
-    return `Have ${qtyText(item.available, item.unit)} — using none`;
-  }
-  const pantry = item.pantryName ? ` from ${item.pantryName}` : " from your pantry";
-  const stillShort = Math.max(0, item.needed - useAmount);
-  if (stillShort > 0) {
-    return `Using ${qtyText(useAmount, item.unit)}${pantry} — short ${qtyText(stillShort, item.unit)} for the recipe`;
-  }
-  if (useAmount > item.needed) {
-    return `Using ${qtyText(useAmount, item.unit)}${pantry} (more than the recipe calls for)`;
-  }
-  return `Using ${qtyText(useAmount, item.unit)}${pantry}`;
+function isUsable(item: PreviewItem): boolean {
+  return item.matched && item.available > 0;
 }
 
 type Props = {
   weekStart: string;
   dayIndex: number;
   mealName?: string | null;
-  /** Optional tint for the recipe/meal. Falls back to computing from mealName. */
-  tint?: Tint;
   onCancel: () => void;
   onConfirmed?: () => void;
 };
 
 /**
  * Confirmation step before marking a meal made: shows EVERY ingredient of the
- * day's planned recipe with its pantry match and lets you tweak how much to
- * use (in the recipe's unit, capped at what's available). `markMealMade`
- * deducts the chosen amounts (0 = nothing).
+ * day's planned recipe grouped by pantry availability and lets you tweak how
+ * much to use (in the recipe's unit, capped at what's available).
+ * `markMealMade` deducts the chosen amounts (0 = nothing).
  */
 export function MadeConfirmContent({
   weekStart,
   dayIndex,
   mealName,
-  tint,
   onCancel,
   onConfirmed,
 }: Props) {
   const router = useRouter();
-  const effectiveTint = tint ?? (mealName ? tintFor(mealName.split("·")[0].trim()) : null);
   const [items, setItems] = useState<PreviewItem[] | null>(null);
   const [amounts, setAmounts] = useState<number[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -175,15 +145,112 @@ export function MadeConfirmContent({
     onConfirmed?.();
   }
 
+  const indexedItems = (items ?? []).map((item, index) => ({ item, index, amount: amounts[index] ?? 0 }));
+  const usable = indexedItems.filter(({ item }) => isUsable(item));
+  const missing = indexedItems.filter(({ item }) => !isUsable(item));
+
+  function renderSection(
+    title: string,
+    rows: { item: PreviewItem; index: number; amount: number }[],
+    variant: "usable" | "missing",
+  ) {
+    if (rows.length === 0) return null;
+    return (
+      <section className="space-y-1">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {title}
+          </h3>
+          <div className="flex w-[12.75rem] shrink-0 items-center gap-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="w-[3rem] shrink-0 text-right">Needs</span>
+            <span className="flex-1">Using</span>
+          </div>
+        </div>
+        <ul className="divide-y divide-border/60 rounded-lg border border-border/60 bg-muted/20">
+          {rows.map(({ item, index, amount }) => {
+            const needsText = item.quantityText || qtyText(item.needed, item.unit) || "—";
+            const step = item.poolBasis === "oz" ? 0.25 : 1;
+            const atMax = amount >= item.available;
+            const atMin = amount <= 0;
+            const stepperDisabled = busy || !isUsable(item);
+
+            return (
+              <li
+                key={`${item.name}-${index}`}
+                className="flex items-center gap-2 px-3 py-2 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="block font-medium leading-tight text-foreground">
+                    {item.name}
+                    {item.optional ? (
+                      <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                        optional
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+
+                <div className="flex w-[12.75rem] shrink-0 items-center gap-2">
+                  <span className="w-[3rem] shrink-0 text-right tabular-nums text-muted-foreground">
+                    {needsText}
+                  </span>
+
+                  <div className="flex flex-1 items-center justify-end">
+                    {variant === "missing" ? (
+                      <span className="inline-flex items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                        Need {qtyText(item.needed, item.unit)}
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 shrink-0"
+                          onClick={() => adjustAmount(index, -step)}
+                          disabled={stepperDisabled || atMin}
+                          aria-label={`Use less ${item.name}`}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-12 shrink-0 text-center text-xs font-medium tabular-nums text-foreground">
+                          {qtyText(amount, item.unit)}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className={cn("h-11 w-11 shrink-0", atMax && "opacity-40")}
+                          onClick={() => adjustAmount(index, step)}
+                          disabled={stepperDisabled || atMax}
+                          aria-label={`Use more ${item.name}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>Mark dinner as made?</DialogTitle>
         <DialogDescription>
-          {mealName
-            ? `“${mealName}” — tweak how much of each ingredient to take from your pantry:`
-            : "Tweak how much of each ingredient to take from your pantry:"}
+          {mealName ? `“${mealName}”` : "Review what to use from your pantry."}
         </DialogDescription>
+        {items && items.length > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {usable.length} from your pantry · {missing.length} missing
+          </p>
+        ) : null}
       </DialogHeader>
 
       <div className="min-h-24 py-1">
@@ -205,7 +272,7 @@ export function MadeConfirmContent({
             {[0, 1, 2].map((index) => (
               <li
                 key={index}
-                className="h-16 animate-pulse rounded-lg bg-muted"
+                className="h-14 animate-pulse rounded-lg bg-muted"
               />
             ))}
           </ul>
@@ -220,115 +287,23 @@ export function MadeConfirmContent({
             </p>
           </div>
         ) : (
-          <ul className="space-y-1.5">
-            {items.map((item, index) => {
-              const amount = amounts[index] ?? 0;
-              const editable = item.matched && item.available > 0 && !busy;
-              const isUsing = amount > 0;
-              const step = item.poolBasis === "oz" ? 0.25 : 1;
-              const uLabel = unitLabel(item.unit);
-              return (
-                <li
-                  key={`${item.name}-${index}`}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-sm transition-colors",
-                    isUsing
-                      ? "border-primary/40 bg-primary/5"
-                      : "border bg-background",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 truncate font-semibold">
-                          {item.name}
-                          {item.optional ? (
-                            <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-                              optional
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                          {item.quantityText || "—"}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {statusLine(item, amount)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        className="h-7 w-7"
-                        onClick={() => adjustAmount(index, -step)}
-                        disabled={!editable || amount <= 0}
-                        aria-label={`Use less ${item.name}`}
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          max={item.available}
-                          step={step}
-                          value={amount}
-                          disabled={!editable}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === "") {
-                              setAmount(index, 0);
-                              return;
-                            }
-                            setAmount(index, Number(raw));
-                          }}
-                          aria-label={`Amount of ${item.name} to use`}
-                          className="h-7 w-16 rounded-md border bg-background px-1.5 text-center text-sm tabular-nums disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                        {uLabel ? (
-                          <span className="w-8 text-xs text-muted-foreground">
-                            {uLabel}
-                          </span>
-                        ) : null}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        className="h-7 w-7"
-                        onClick={() => adjustAmount(index, step)}
-                        disabled={!editable || amount >= item.available}
-                        aria-label={`Use more ${item.name}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-4">
+            {renderSection("From your pantry", usable, "usable")}
+            {renderSection("Not in pantry", missing, "missing")}
+          </div>
         )}
       </div>
 
       <DialogFooter className="gap-2 sm:gap-0">
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
         <Button
           type="button"
           onClick={() => void confirm()}
           disabled={busy || items === null || loadError}
-          className={effectiveTint ? cn(effectiveTint.header, "hover:opacity-90") : undefined}
         >
-          {busy ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <ChefHat />
-          )}
+          {busy ? <Loader2 className="animate-spin" /> : <ChefHat />}
           {busy ? "Working…" : "Mark as made"}
         </Button>
       </DialogFooter>
@@ -343,23 +318,20 @@ export function MadeConfirmDialog({
   weekStart,
   dayIndex,
   mealName,
-  tint,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weekStart: string;
   dayIndex: number;
   mealName?: string | null;
-  tint?: Tint;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-h-[85vh] max-w-[calc(100%-1rem)] overflow-y-auto p-3 sm:max-w-lg sm:p-4">
         <MadeConfirmContent
           weekStart={weekStart}
           dayIndex={dayIndex}
           mealName={mealName}
-          tint={tint}
           onCancel={() => onOpenChange(false)}
           onConfirmed={() => onOpenChange(false)}
         />

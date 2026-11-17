@@ -346,13 +346,12 @@ export function DayDialog({ weekStart, day, recipes, customMeals, onDone }: Prop
 
   return (
     <Dialog open onOpenChange={(open) => !open && onDone()}>
-      <DialogContent className="max-h-[85vh] gap-3 overflow-y-auto">
+      <DialogContent className={cn("max-h-[85vh] gap-3 overflow-y-auto", confirmOpen && "max-w-[calc(100%-1rem)] p-3 sm:max-w-lg sm:p-4")}>
         {confirmOpen ? (
           <MadeConfirmContent
             weekStart={weekStart}
             dayIndex={day.index}
             mealName={mealTitle}
-            tint={currentTint}
             onCancel={() => setConfirmOpen(false)}
             onConfirmed={onDone}
           />
