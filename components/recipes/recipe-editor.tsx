@@ -735,14 +735,31 @@ export function RecipeEditor({
           >
             Name
           </Label>
-          <Input
-            id="recipe-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Weeknight chili"
-            autoFocus={!isEdit}
-            className="h-11 text-lg font-semibold sm:h-10 md:text-xl"
-          />
+          <div className="flex items-center gap-1.5">
+            <Input
+              id="recipe-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Weeknight chili"
+              autoFocus={!isEdit}
+              className="h-11 flex-1 text-lg font-semibold sm:h-10 md:text-xl"
+            />
+            {sourceUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="h-11 w-11 shrink-0 sm:h-10 sm:w-10"
+                aria-label="Open source link in a new tab"
+                title={sourceUrl}
+                onClick={() =>
+                  window.open(sourceUrl, "_blank", "noopener,noreferrer")
+                }
+              >
+                <ExternalLink />
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div
@@ -989,30 +1006,13 @@ export function RecipeEditor({
                 >
                   Source
                 </Label>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    id="recipe-source"
-                    value={source}
-                    onChange={(event) => setSource(event.target.value)}
-                    placeholder="Will"
-                    className="h-11 sm:h-8"
-                  />
-                  {sourceUrl ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className="h-11 w-11 shrink-0 sm:h-7 sm:w-7"
-                      aria-label="Open source link in a new tab"
-                      title={sourceUrl}
-                      onClick={() =>
-                        window.open(sourceUrl, "_blank", "noopener,noreferrer")
-                      }
-                    >
-                      <ExternalLink />
-                    </Button>
-                  ) : null}
-                </div>
+                <Input
+                  id="recipe-source"
+                  value={source}
+                  onChange={(event) => setSource(event.target.value)}
+                  placeholder="Will"
+                  className="h-11 sm:h-8"
+                />
               </div>
             </div>
 
