@@ -4,6 +4,64 @@ Rolling journal of dev sessions — newest at top. Append an entry when wrapping
 up and commit it with the session's work; git history is the source of truth
 for "what changed", this is for "what's true now / what's next".
 
+## 2026-11-16 — Recipe editor redesign + mobile compaction, mark-as-made polish
+
+**Goal**: rebuild the recipe edit screen around pantry status; polish the "Mark dinner as made" dialog; plan→recipe navigation; Next.js security upgrade; move session notes into this file.
+
+**Shipped and pushed**
+- **Next.js 16.4.3 → 16.4.6** (`852b04d`).
+- **Mark-as-made dialog** (`components/plan/made-confirm.tsx`): grouped "From your pantry / Not in pantry" with Needs/Using column headers, amber "Need X" badges, 40px mobile steppers, centered Needs/Using columns, header padding aligned with the rows (`06cab34` → `7422a92`).
+- **`/plan` day tiles**: a small "Recipe" link after the time/coverage → `/recipes/<id>?returnTo=/plan?week=<weekStart>`, so the recipe page's back returns to the plan (`1a4db64`).
+- **Recipe editor redesign** (`7c2ed31`): Name → Cooking/No-cook toggle → Ingredients → collapsible Details; pantry summary "x of y in pantry · z to buy" + progress bar; green/amber status chips; missing-first grouping; "Add N missing to list" + "Choose items…"; "+ Add ingredient" and "Paste a list"; 880px single column; real design tokens (mockup colors were approximations).
+- **Mockup alignment** (`5523905`): optional-not-in-pantry band; fixed columns (name flexible / 130 / 150 / optional / delete); column header row; full-width shaded group bands; `Recipes / Edit recipe` breadcrumb; Details row layout; quieter field labels.
+- **Mobile compaction** (`f79d4a5`): card-less divider rows, 40px inputs, name + 90px amount on line 1, colored status text + Optional + delete on line 2; grocery buttons moved into the ingredients header (sticky bar removed); only the bottom Save on phones; pantry/optional groups collapse by default on phones; assistant sparkle moved onto the nav edge.
+- **Source link button** moved next to the Name field (`13faa8d`).
+
+**Verified**: `npx tsc --noEmit`, `npm run build`, ESLint clean on each change; pre-push TypeScript hook green on every push.
+
+**Durable choices**
+- Recipe rows are one flat list with explicit grid placement and an `sm:contents` controls wrapper, so typing a name that moves a row between groups keeps the input focused.
+- Status groups: missing / pantry / optional-not-in-pantry bands; the last two collapse on phones via the same `useSyncExternalStore` breakpoint as Details.
+- Pantry status = presence (>0 stock) at the canonical root; optional rows never count as missing.
+- Paste parser: leading number (+ optional unit word) → amount, rest → name; unit list lives in `recipe-editor.tsx`.
+- Assistant sparkle is now `bottom-[calc(3.5rem+env(safe-area-inset-bottom))]` on phones (nav edge), app-wide.
+- Session notes for prior days moved here from `AGENTS.md`.
+
+**Open / next**
+- (carry-overs) Wire or remove `components/home/batch-actions-sheet.tsx`; Quick Bites cook/undo end-to-end; `/recipes` counts/redirects on a fresh deploy; optional brand/barcode + duplicates warning.
+- Deferred: read-only recipe rows with an edit bottom sheet (option 2).
+
+## 2026-11-15 — Mobile header parity: grocery header, inventory/household headers
+
+**Shipped and pushed**
+- **Grocery mobile header + batch edit info** (`3462b7f`): trimmed mobile `/grocery` header (title + count, green Add, ⋮ menu for copy/manage stores/grouping), thin progress, single scrolling store chips, quick-add bar with fullscreen control (exit reachable in fullscreen), groups shown expanded. Batch edit supports unit editing and shows Unit/Expiration (freezer-note) help as info icons.
+- **Mobile header parity** (`103dc3d`): `/inventory` mobile header redesigned with centered wide `[ Pantry | Household ]` toggle (Pantry selected), centered item/batch count below, and equal-width Name Matching + `[+ Add | Barcode]` row with equal Add/Barcode halves (desktop unchanged). `/household` mobile header matched (Household selected, centered count, full-width equal-split `[+ Add | Barcode]`). Removed the Pantry/Household bar on mobile `/household/add`.
+- **Verified**: `npx tsc --noEmit` clean; pre-push hook passed.
+
+**Durable notes**
+- `batches-mockup.png` remains untracked (reference only).
+
+## 2026-11-11 — 2-Week Ingredient Summary on /plan
+
+**Shipped and pushed (38e131d → 7a073e4)**
+- **2-Week Ingredient Summary** (`lib/plan-ingredients.ts`, `components/plan/plan-ingredient-summary.tsx`): new section rendered after week 2 on `/plan`.
+  - Groups by `canonical_item_id` (name fallback); optional ingredients excluded.
+  - `original` = all scheduled recipe days (cooked included); `remaining` = `made_at IS NULL` only.
+  - Pantry stock read fresh from `inventory` (cooking already deducted via `markMealMade`).
+  - Strict unit bucketing: weights → ounces; known packaging (cup/can/jar/…) keep own buckets; unknown piece nouns ("eggs", "cookies", "fillets") normalize to an `each` bucket while preserving the original noun for display.
+  - Bare numeric units (e.g. "10.75" with no unit word) are `unknown` — never expanded to phantom piece counts, never satisfy quantified or presence-only needs ("Can't compare" / "unit unknown").
+  - Verdicts: Enough (green, `presenceOnly` variant), Need/Buy X (amber/red), Can't compare, All cooked, — (unquantified, no stock).
+  - UI: All/Need more/Can't compare filter pills, expandable per-meal list (date · recipe · amount · Cooked/To cook), responsive desktop grid / mobile cards, stable counts.
+- **`/plan` page**: widened the existing `recipe_ingredients` fetch to cover all planned days for the summary; weekly tiles + coverage kept their prior logic; no new queries.
+- **Inventory actions**: added `revalidatePath("/plan")` to add/consume/restore/update/delete so pantry edits live-update the summary.
+
+**Verified**: `npx tsc --noEmit` clean; pre-push hook green; ad-hoc aggregation cases (mixed units, presenceOnly, bare numbers, piece nouns, incompatible packaging) pass.
+
+**Durable notes**
+- Recipe `quantity_text` starting with digit/`.` counts as quantified; blank/"to taste" count as meals but never produce shortages.
+- `stock_holds` ignored in the summary (compare total remaining demand to total stock).
+- No meal-plan scaling (yields display-only); the summary never auto-adds to the grocery list.
+
 ## 2026-11-12 — Supabase DB backup workflow (repo-committed encrypted dumps)
 
 **Shipped and pushed (`819faca`)**
