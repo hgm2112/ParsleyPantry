@@ -157,7 +157,7 @@ export function MadeConfirmContent({
     if (rows.length === 0) return null;
     return (
       <section className="space-y-1">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center justify-between px-2 sm:px-3">
           <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
             {title}
           </h3>
